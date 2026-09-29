@@ -25,6 +25,12 @@ endif()
 # --- core: device protocol, data model, maths. No QtWidgets. ---
 qt_add_library(tinysa_core STATIC
     src/core/units.cpp
+    src/core/model.cpp
+    src/core/protocol.cpp
+    src/core/sweepconfig.cpp
+    src/core/simdevice.cpp
+    src/core/link.cpp
+    src/core/session.cpp
 )
 target_include_directories(tinysa_core PUBLIC src/core)
 target_link_libraries(tinysa_core PUBLIC Qt6::Core Qt6::Gui Qt6::SerialPort)
@@ -40,8 +46,10 @@ endif()
 # --- the application; screens are Qt Designer .ui files in src/ui ---
 qt_add_executable(tinySA-App WIN32
     src/main.cpp
+    src/ui/autotest.cpp
     src/ui/mainwindow.cpp
     src/ui/mainwindow.ui
+    src/ui/spectrumview.cpp
     res/tinySA-App.rc
 )
 target_include_directories(tinySA-App PRIVATE src/ui)

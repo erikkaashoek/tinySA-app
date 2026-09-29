@@ -1,5 +1,7 @@
+#include "autotest.h"
 #include "mainwindow.h"
 #include <QApplication>
+#include <QCommandLineParser>
 
 int main(int argc, char **argv)
 {
@@ -7,7 +9,24 @@ int main(int argc, char **argv)
     app.setApplicationName("tinySA-App");
     app.setApplicationVersion("2.0.0");
 
-    MainWindow win;
+    QCommandLineParser cli;
+    cli.addHelpOption();
+    cli.addVersionOption();
+    cli.addOptions({
+        {"sim", "Offer simulated tinySA units in the port list."},
+        {"port", "Connect to this port at start (COMx, sim:basic, sim:ultra).", "port"},
+        {"script", "Run an autotest script, then exit with the number of failures.", "file"},
+        {"out", "Autotest output directory.", "dir", "test/out"},
+    });
+    cli.process(app);
+
+    MainWindow win(cli.isSet("sim") || cli.value("port").startsWith("sim:"));
     win.show();
+    if (cli.isSet("port"))
+        win.connectTo(cli.value("port"));
+    if (cli.isSet("script")) {
+        auto *t = new AutoTest(&win, cli.value("script"), cli.value("out"), &app);
+        t->start();
+    }
     return app.exec();
 }

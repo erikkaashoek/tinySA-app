@@ -1,0 +1,48 @@
+# Step 1 smoke test on both simulated models:
+#   build\tinySA-App.exe --sim --script test\smoke.txt --out test\out
+# Sim carriers: 100 MHz -30 dBm, 250 MHz -50, 433.92 MHz -40, 868 MHz -45 (+2.4/5.8 GHz Ultra).
+
+do connect sim:basic
+waitfor connected == 1
+check model == tinySA
+set startEdit 50
+set stopEdit 150
+set pointsCombo 101
+check start == 50000000
+check stop == 150000000
+click onceButton
+waitfor sweeps >= 1
+check points == 101
+# 100 MHz lands exactly on point 50 of the firmware-correct grid
+check peak.hz == 100000000
+check peak.dbm ~ -30 2
+shot smoke_basic.png
+dump trace smoke_basic.csv
+# range clamps to the basic model's LOW input (350 MHz)
+set stopEdit 900
+check stop == 350000000
+click connectButton
+waitfor connected == 0
+
+do connect sim:ultra
+waitfor connected == 1
+check model == tinySA Ultra+
+set startEdit 400
+set stopEdit 1000
+set pointsCombo 450
+click scanButton
+waitfor sweeps >= 4
+check scan == 2
+check peak.hz ~ 433920000 700000
+check peak.dbm ~ -40 3
+# center/span edits keep the other anchor
+set spanEdit 20
+set centerEdit 433.92
+check start == 423920000
+check stop == 443920000
+waitfor sweeps >= 7
+check peak.hz ~ 433920000 50000
+shot smoke_ultra.png
+click scanButton
+waitfor scan == 0
+quit

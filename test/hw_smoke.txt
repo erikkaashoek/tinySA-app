@@ -1,0 +1,29 @@
+# Hardware smoke test (real tinySA, any model):
+#   build\tinySA-App.exe --port COM20 --script test\hw_smoke.txt --out test\out
+# Sends only non-persistent commands (no saveconfig/clearconfig/zero N).
+waitfor connected == 1 10000
+check model contains tinySA
+set startEdit 1
+set stopEdit 300
+set pointsCombo 450
+click onceButton
+waitfor sweeps >= 1 20000
+check points == 450
+shot hw_450.png
+dump trace hw_450.csv
+set pointsCombo 1000
+click onceButton
+waitfor sweeps >= 2 30000
+check points == 1000
+set pointsCombo 30000
+click onceButton
+waitfor sweeps >= 3 120000
+check points == 30000
+shot hw_30000.png
+set pointsCombo 450
+click scanButton
+waitfor sweeps >= 8 30000
+check scan == 2
+click scanButton
+waitfor scan == 0 20000
+quit

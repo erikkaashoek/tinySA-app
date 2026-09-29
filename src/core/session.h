@@ -1,0 +1,45 @@
+#pragma once
+// GUI-thread facade: owns the DeviceLink and its thread, keeps the current
+// SweepConfig and device info. Controllers talk only to this class.
+#include "link.h"
+#include <QThread>
+
+class Session : public QObject {
+    Q_OBJECT
+public:
+    explicit Session(QObject *parent = nullptr);
+    ~Session() override;
+
+    void connectDevice(const QString &port);  // "COMx" / "sim:basic" / "sim:ultra"
+    void disconnectDevice();
+    bool isConnected() const { return m_connected; }
+    const DeviceInfo &device() const { return m_info; }
+
+    SweepConfig config() const { return m_config; }
+    void setConfig(const SweepConfig &c);  // clamped to the connected model
+    int scanMode() const { return m_scan; }
+    void setScan(int mode);                // DeviceLink::Off / Once / Continuous
+    void send(const QString &command);
+    void capture();
+    void simTouch();
+
+signals:
+    void connected(const DeviceInfo &info);
+    void disconnected(const QString &reason);
+    void configChanged(const SweepConfig &c);
+    void frame(const SweepFrame &f);
+    void scanChanged(int mode);
+    void reply(const QString &command, const QStringList &lines);
+    void battery(int mV);
+    void screen(const QImage &img);
+    void traffic(bool sent, const QString &text);
+    void message(const QString &text);
+
+private:
+    QThread m_thread;
+    DeviceLink *m_link;
+    DeviceInfo m_info;
+    bool m_connected = false;
+    SweepConfig m_config;
+    int m_scan = DeviceLink::Off;
+};

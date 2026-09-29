@@ -6,7 +6,19 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 
 ## Status
 - **Step 0 DONE**: branch, legacy/ move, CMake (core lib + app + tst_core), build.bat, QCustomPlot vendored.
-- Next: Step 1 — live spectrum (model, protocol, link, sim, session, minimal main window, SpectrumView).
+- **Step 1 DONE**: live spectrum. tst_core 29 tests; `test/smoke.txt` (sim basic + ultra) PASS;
+  `test/hw_smoke.txt` PASS on real tinySA Ultra ZS405 (fw tinySA4_v1.4-241) on COM20, 450/1000/30000 pts.
+- Next: Step 2 — device controls (RBW/atten/mode/LNA, range from device), settings + geometry.
+
+## Steps (approved plan)
+0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
+4 markers · 5 settings/battery/console/screen-capture windows · 6 firmware upload · 7 parity + remove legacy/.
+
+## Tests
+- `build.bat` runs `tst_core` (per-class logs: build/tst_<Class>.log; QTest stdout is not visible from Git Bash).
+- GUI scripts: `build\tinySA-App.exe --sim --script test\smoke.txt --out test\out` → exit code = failures,
+  log in test/out/log.txt, screenshots there too. DSL documented in src/ui/autotest.h.
+- Hardware: `--port COM20 --script test\hw_smoke.txt` (tinySA must be plugged in; COM number varies).
 
 ## Build / test
 `build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/, copies runtime DLLs, runs ctest).
@@ -16,8 +28,16 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 | File | Role |
 |---|---|
 | src/core/units.h | `FreqRange` (all range edits/zoom/pan + clamping), `ScanGrid` (firmware-correct grid), `niceStep`, `formatHz`, `parseHz` |
-| src/ui/mainwindow.* | main window (Designer form + thin controller) |
-| src/main.cpp | entry point |
+| src/core/model.h | `ModelDesc` table (basic / Ultra / Ultra+), `detectModel(info, version)`, `DeviceInfo`, help/zero parsing |
+| src/core/protocol.h | `RxParser`: bytes → events (echo, lines, prompt, scanraw data, capture pixels, refresh regions); RGB565 BE decoders |
+| src/core/sweepconfig.h | `SweepConfig` value + `configCommands()` diff vs `AppliedConfig`, `clampConfig()` |
+| src/core/link.h | `DeviceLink` (own thread): handshake, 1 command in flight, per-sweep scanraw loop, battery poll, timeouts/resync, `SweepFrame` |
+| src/core/simdevice.h | `SimTransport` QIODevice: firmware-exact simulated tinySA (carriers 100/250/433.92/868 MHz, 2.4/5.8 GHz) |
+| src/core/session.h | GUI-thread facade owning the link thread; the only API controllers use |
+| src/ui/mainwindow.* | main window (Designer form + thin controller); implements TestHost queries/actions |
+| src/ui/spectrumview.* | `SpectrumView` (QCustomPlot subclass, promoted in the .ui), `FreqTicker` |
+| src/ui/autotest.* | script runner + `TestHost` interface |
+| src/main.cpp | CLI: --sim, --port, --script, --out |
 | test/tst_core.cpp | Qt Test unit tests for core, one class per module |
 | vendor/qcustomplot/ | QCustomPlot 2.1.1 — never read these files |
 | res/ | icon + version resource |

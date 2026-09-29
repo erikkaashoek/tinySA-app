@@ -13,9 +13,258 @@
   <property name="windowTitle">
    <string>tinySA-App</string>
   </property>
-  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="centralLayout">
+    <property name="leftMargin">
+     <number>4</number>
+    </property>
+    <property name="topMargin">
+     <number>4</number>
+    </property>
+    <property name="rightMargin">
+     <number>4</number>
+    </property>
+    <property name="bottomMargin">
+     <number>4</number>
+    </property>
+    <item>
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
+       <enum>Qt::Orientation::Horizontal</enum>
+      </property>
+      <property name="childrenCollapsible">
+       <bool>false</bool>
+      </property>
+      <widget class="QScrollArea" name="controlsScroll">
+       <property name="minimumSize">
+        <size>
+         <width>230</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="frameShape">
+        <enum>QFrame::Shape::NoFrame</enum>
+       </property>
+       <property name="horizontalScrollBarPolicy">
+        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+       </property>
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="controlsPanel">
+        <layout class="QVBoxLayout" name="controlsLayout">
+         <item>
+          <widget class="QGroupBox" name="deviceGroup">
+           <property name="title">
+            <string>Device</string>
+           </property>
+           <layout class="QVBoxLayout" name="deviceLayout">
+            <item>
+             <widget class="QComboBox" name="portCombo">
+              <property name="toolTip">
+               <string>Serial port of the tinySA. A connected tinySA is selected automatically.</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="connectButton">
+              <property name="text">
+               <string>Connect</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="deviceLabel">
+              <property name="text">
+               <string>Not connected</string>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="sweepGroup">
+           <property name="title">
+            <string>Sweep</string>
+           </property>
+           <layout class="QFormLayout" name="sweepLayout">
+            <item row="0" column="0">
+             <widget class="QLabel" name="startLabel">
+              <property name="text">
+               <string>Start (MHz)</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QLineEdit" name="startEdit"/>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="stopLabel">
+              <property name="text">
+               <string>Stop (MHz)</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLineEdit" name="stopEdit"/>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="centerLabel">
+              <property name="text">
+               <string>Center (MHz)</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QLineEdit" name="centerEdit"/>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="spanLabel">
+              <property name="text">
+               <string>Span (MHz)</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QLineEdit" name="spanEdit"/>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="pointsLabel">
+              <property name="text">
+               <string>Points</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="QComboBox" name="pointsCombo">
+              <item>
+               <property name="text">
+                <string>51</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>101</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>145</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>290</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>450</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>1000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>3000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>10000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>30000</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="5" column="0" colspan="2">
+             <layout class="QHBoxLayout" name="scanButtonsLayout">
+              <item>
+               <widget class="QPushButton" name="scanButton">
+                <property name="toolTip">
+                 <string>Sweep continuously</string>
+                </property>
+                <property name="text">
+                 <string>Scan</string>
+                </property>
+                <property name="checkable">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="onceButton">
+                <property name="toolTip">
+                 <string>Sweep once</string>
+                </property>
+                <property name="text">
+                 <string>Once</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <spacer name="controlsSpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+      <widget class="SpectrumView" name="spectrum">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>400</width>
+         <height>300</height>
+        </size>
+       </property>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SpectrumView</class>
+   <extends>QWidget</extends>
+   <header>spectrumview.h</header>
+   <container>0</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
