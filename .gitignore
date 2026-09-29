@@ -1,0 +1,11 @@
+
+__history/
+__astcache/
+Win32/
+*.local
+__recovery/
+tinySA-App.res
+build/
+dist/
+test/out/
+*.zip
