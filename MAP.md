@@ -1,7 +1,8 @@
 # MAP — read this first
 
 tinySA-App 2.0: clean C++20 / Qt 6 rewrite of the C++Builder VCL tinySA-App (old sources in
-`legacy/` = functional spec only, deleted at parity). Branch `qt6`. Plan: see "Steps" below.
+branch `master` / `tinyGTC` = the old app, kept as reference; it was `legacy/` here until step 7).
+Branch `qt6`. Plan: see "Steps" below.
 Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Designer, not in code).
 
 ## Status
@@ -36,7 +37,10 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 - HARDWARE ON HOLD: the user said (2026-09-29) not to use the connected tinySA until they say so.
   Pending hardware checks: DFU (read-only "Save flash" first, then write + verify), RLE8 capture
   once their firmware port is ready (test/hw_screen.txt should then show "RLE8").
-- Next: Step 7 — parity checklist vs legacy, remove legacy/, dist packaging, README.
+- **Step 7 DONE**: parity items (show-markers toggle, step in the status bar, colour alpha, graph
+  text size; legacy `threshold` not applicable to the tinySA), dist packaging (runtime set verified
+  with dumpbin), README; legacy/ removed (the VCL app remains on `master` / `tinyGTC`).
+- Remaining: hardware validation when the user allows it (DFU, RLE8 with their firmware port).
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
@@ -90,7 +94,6 @@ Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g
 | test/tst_core.cpp | Qt Test unit tests for core, one class per module |
 | vendor/qcustomplot/ | QCustomPlot 2.1.1 — never read these files |
 | res/ | icon + version resource |
-| legacy/ | old VCL app, reference only (Unit1.cpp protocol, Graphs.cpp look, *.dfm layouts) |
 
 ## Device facts (verified in firmware source C:\work\VNA\tinySA)
 - Shell: commands end `\r` (`\n` ignored); echo = typed chars + `\r\n`; prompt exactly `ch> `;
