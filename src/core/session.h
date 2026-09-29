@@ -1,7 +1,8 @@
 #pragma once
 // GUI-thread facade: owns the DeviceLink and its thread, keeps the current
-// SweepConfig and device info. Controllers talk only to this class.
+// SweepConfig, device info and processed traces. Controllers talk only to this class.
 #include "link.h"
+#include "traces.h"
 #include <QThread>
 
 class Session : public QObject {
@@ -24,7 +25,10 @@ public:
     void capture();
     void simTouch();
 
+    TraceSet &traces() { return m_traces; }  // emit tracesChanged() after editing it
+
 signals:
+    void tracesChanged(bool sweepComplete);  // live trace updated (and memories if edited)
     void connected(const DeviceInfo &info);
     void disconnected(const QString &reason);
     void configChanged(const SweepConfig &c);
@@ -45,4 +49,5 @@ private:
     SweepConfig m_config;
     int m_scan = DeviceLink::Off;
     bool m_busy = false;
+    TraceSet m_traces;
 };

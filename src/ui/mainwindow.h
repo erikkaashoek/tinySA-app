@@ -3,7 +3,9 @@
 // go to Session setters; Session signals go to the small render functions below.
 #include "appsettings.h"
 #include "autotest.h"
+#include "csvio.h"
 #include "session.h"
+#include "spectrumview.h"
 #include <QElapsedTimer>
 #include <QMainWindow>
 #include <QTimer>
@@ -12,6 +14,7 @@
 namespace Ui { class MainWindow; }
 class QLabel;
 class QLineEdit;
+class QToolButton;
 
 class MainWindow : public QMainWindow, public TestHost {
     Q_OBJECT
@@ -40,11 +43,23 @@ private:
     void showConfig(const SweepConfig &c);
     void editRange(QLineEdit *edit);
     void editConfig(const std::function<void(SweepConfig &)> &change);
+    void applyRangeOp(SpectrumView::RangeOp op, double a, double b);
+
+    void renderTraces(bool memories);  // TraceSet -> SpectrumView
+    void setupMemoryButton(int m, QToolButton *b);
+    bool saveCsv(const QString &path);
+    bool saveImage(const QString &path);
+    bool loadMemory(int m, const QString &path);
+    QString imageHeader() const;
+    QString memoryFile(int m) const;  // persisted memories next to the settings
+    void setRecording(bool on);
+    void error(const QString &what);
 
     std::unique_ptr<Ui::MainWindow> ui;
     Session m_session;
     QString m_settingsPath;
     AppSettings m_settings;
+    SweepRecorder m_recorder;
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;

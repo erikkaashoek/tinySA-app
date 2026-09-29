@@ -4,7 +4,7 @@
 // app state through the host's named queries/actions.
 //
 //   set <widget> <value>          line edit (typed + Enter), combo (text), check box, spin box
-//   click <widget>                button
+//   click <widget|action>         button, or menu/toolbar action (e.g. actionRecord)
 //   key <widget> <key>            QKeySequence name: Return, Escape, PgUp, Left, Del ...
 //   wait <ms>
 //   waitfor <query> <op> <value> [timeoutMs=5000]

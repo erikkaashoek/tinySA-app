@@ -32,6 +32,8 @@ qt_add_library(tinysa_core STATIC
     src/core/link.cpp
     src/core/session.cpp
     src/core/appsettings.cpp
+    src/core/traces.cpp
+    src/core/csvio.cpp
 )
 target_include_directories(tinysa_core PUBLIC src/core)
 target_link_libraries(tinysa_core PUBLIC Qt6::Core Qt6::Gui Qt6::SerialPort)
@@ -50,7 +52,10 @@ qt_add_executable(tinySA-App WIN32
     src/ui/autotest.cpp
     src/ui/mainwindow.cpp
     src/ui/mainwindow.ui
+    src/ui/mainfiles.cpp
+    src/ui/maintest.cpp
     src/ui/spectrumview.cpp
+    src/ui/spectrummouse.cpp
     res/tinySA-App.rc
 )
 target_include_directories(tinySA-App PRIVATE src/ui)

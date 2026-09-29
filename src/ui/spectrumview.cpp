@@ -1,74 +1,382 @@
+// SpectrumView: traces, scaling, hover readout, image export, context menu.
+// Mouse and wheel handling is in spectrummouse.cpp.
 #include "spectrumview.h"
 #include "units.h"
+#include <QInputDialog>
 #include <cmath>
 
-double FreqTicker::getTickStep(const QCPRange &range)
+static const char *kTraceNames[SpectrumView::kTraces] = {"Live", "M1", "M2", "M3"};
+
+double SiTicker::getTickStep(const QCPRange &range)
 {
+    static const struct { double unit; const char *prefix; } kPrefixes[] = {
+        {1e9, "G"}, {1e6, "M"}, {1e3, "k"}, {1, ""}, {1e-3, "m"}, {1e-6, "µ"}, {1e-9, "n"},
+        {1e-12, "p"}, {1e-15, "f"}};
     m_step = niceStep(range.size() / std::max(2, mTickCount));
     const double a = std::max(std::abs(range.lower), std::abs(range.upper));
-    if (a >= 1e9) m_unit = 1e9, m_suffix = "G";
-    else if (a >= 1e6) m_unit = 1e6, m_suffix = "M";
-    else if (a >= 1e3) m_unit = 1e3, m_suffix = "k";
-    else m_unit = 1, m_suffix = "";
+    m_unit = 1;
+    m_prefix.clear();
+    for (const auto &p : kPrefixes)
+        if (a >= p.unit) {
+            m_unit = p.unit;
+            m_prefix = QString::fromUtf8(p.prefix);
+            break;
+        }
     return m_step;
 }
 
-QString FreqTicker::getTickLabel(double tick, const QLocale &, QChar, int)
+QString SiTicker::getTickLabel(double tick, const QLocale &, QChar, int)
 {
     int decimals = 0;  // enough to show the step exactly (2.5 MHz steps need one)
     const double s = m_step / m_unit;
     while (decimals < 9 && std::abs(s * std::pow(10, decimals) - std::round(s * std::pow(10, decimals))) > 1e-6)
         ++decimals;
-    return QString::number(tick / m_unit, 'f', decimals) + m_suffix;
+    return QString::number(tick / m_unit, 'f', decimals) + m_prefix;
 }
 
 SpectrumView::SpectrumView(QWidget *parent) : QCustomPlot(parent)
 {
-    const QColor bg(0x10, 0x10, 0x14), fg(0xc8, 0xc8, 0xc8), grid(0x50, 0x50, 0x58);
-    setBackground(bg);
-    for (QCPAxis *ax : {xAxis, yAxis}) {
-        ax->setBasePen(QPen(fg));
-        ax->setTickPen(QPen(fg));
-        ax->setSubTickPen(Qt::NoPen);
-        ax->setTickLabelColor(fg);
-        ax->setLabelColor(fg);
-        ax->grid()->setPen(QPen(grid, 1, Qt::DashLine));
+    xAxis->setTicker(QSharedPointer<SiTicker>::create());
+    xAxis->setLabel("Frequency (Hz)");
+    for (int i = kTraces - 1; i >= 0; --i) {  // added last = drawn on top: the live trace
+        m_graph[i] = addGraph();
+        m_graph[i]->setName(kTraceNames[i]);
     }
-    xAxis->setTicker(QSharedPointer<FreqTicker>::create());
-    xAxis->setLabel("Hz");
-    auto yt = QSharedPointer<QCPAxisTicker>::create();
-    yt->setTickCount(10);
-    yAxis->setTicker(yt);
-    yAxis->setLabel("dBm");
-
-    m_live = addGraph();
-    m_live->setObjectName("live");
-    m_live->setPen(QPen(QColor(0xff, 0xe0, 0x40), 1));
-    setAntialiasedElements(QCP::aePlottables);
+    m_hoverLine = new QCPItemStraightLine(this);
+    m_hoverLine->setVisible(false);
+    m_hoverText = new QCPItemText(this);
+    m_hoverText->position->setType(QCPItemPosition::ptAxisRectRatio);
+    m_hoverText->position->setCoords(0.01, 0.01);
+    m_hoverText->setPositionAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_hoverText->setPadding(QMargins(6, 3, 6, 3));
+    m_hoverText->setVisible(false);
+    legend->setVisible(false);
+    setAntialiasedElements(QCP::aePlottables | QCP::aeItems);
     setNotAntialiasedElements(QCP::aeGrid | QCP::aeAxes);
-    setLevels(-120, 0);
+    setMouseTracking(true);
+    setTheme(Theme{});
+    setView(ViewSettings{});
     setSpan(0, 350e6);
+}
+
+void SpectrumView::setTheme(const Theme &t)
+{
+    m_theme = t;
+    setBackground(t.background);
+    for (QCPAxis *ax : {xAxis, yAxis}) {
+        ax->setBasePen(QPen(t.text));
+        ax->setTickPen(QPen(t.text));
+        ax->setSubTickPen(Qt::NoPen);
+        ax->setTickLabelColor(t.text);
+        ax->setLabelColor(t.text);
+        ax->grid()->setPen(QPen(t.grid, 1, Qt::DashLine));
+    }
+    for (int i = 0; i < kTraces; ++i)
+        m_graph[i]->setPen(QPen(t.trace[i], t.lineWidth));
+    m_hoverLine->setPen(QPen(t.text, 1, Qt::DotLine));
+    m_hoverText->setColor(t.text);
+    QColor box = t.background;
+    box.setAlpha(200);
+    m_hoverText->setBrush(box);
+    legend->setBrush(box);
+    legend->setTextColor(t.text);
+    legend->setBorderPen(QPen(t.grid));
+    replot(rpQueuedReplot);
+}
+
+void SpectrumView::setView(const ViewSettings &v)
+{
+    m_view = v;
+    setLinear(v.linear);
+}
+
+void SpectrumView::setLinear(bool on)
+{
+    m_view.linear = on;
+    if (on) {
+        yAxis->setTicker(QSharedPointer<SiTicker>::create());
+    } else {
+        auto t = QSharedPointer<QCPAxisTicker>::create();
+        t->setTickCount(10);
+        yAxis->setTicker(t);
+    }
+    yAxis->setLabel(on ? (m_normalized ? "Ratio" : "Power (W)") : (m_normalized ? "dB" : "dBm"));
+    for (int i = 0; i < kTraces; ++i)
+        redraw(i);
+    applyLevels();
+}
+
+void SpectrumView::setNormalized(bool on)
+{
+    m_normalized = on;
+    setLinear(m_view.linear);  // labels and values change meaning
 }
 
 void SpectrumView::setSpan(double startHz, double stopHz)
 {
+    if (m_drag == Zone::XStart || m_drag == Zone::XPan || m_drag == Zone::XStop)
+        return;  // the user is dragging the axis
     xAxis->setRange(startHz, stopHz);
+    for (int i = 0; i < kTraces; ++i)
+        redraw(i);  // spline density depends on the span
     replot(rpQueuedReplot);
 }
 
-void SpectrumView::setLevels(double minDbm, double maxDbm)
+void SpectrumView::setTrace(int i, const Trace &t)
 {
-    yAxis->setRange(minDbm, maxDbm);
+    m_trace[i] = t;
+    redraw(i);
+    if (m_view.autoMin || m_view.autoMax)
+        applyLevels();
     replot(rpQueuedReplot);
 }
 
-void SpectrumView::setFrame(const SweepFrame &f)
+void SpectrumView::setShown(int i, bool on)
 {
-    m_frame = f;
-    const int n = f.dBm.size();
-    QVector<double> x(n);
-    for (int i = 0; i < n; ++i)
-        x[i] = f.grid.freq(i);
-    m_live->setData(x, f.dBm, true);
+    m_view.show[i] = on;
+    redraw(i);
+    applyLevels();
+}
+
+double SpectrumView::plotValue(double dBm) const
+{
+    if (!m_view.linear)
+        return dBm;
+    return std::pow(10.0, (m_normalized ? dBm : dBm - 30) / 10);  // ratio, or W
+}
+
+QString SpectrumView::levelText(double dBm) const
+{
+    if (std::isnan(dBm))
+        return "-";
+    if (!m_view.linear)
+        return QString("%1 %2").arg(dBm, 0, 'f', 1).arg(m_normalized ? "dB" : "dBm");
+    const double v = plotValue(dBm);
+    static const struct { double unit; const char *prefix; } kPrefixes[] = {
+        {1, ""}, {1e-3, "m"}, {1e-6, "µ"}, {1e-9, "n"}, {1e-12, "p"}, {1e-15, "f"}, {1e-18, "a"}};
+    for (const auto &p : kPrefixes)
+        if (v >= p.unit || p.unit == 1e-18)
+            return QString("%1 %2%3").arg(v / p.unit, 0, 'g', 3).arg(QString::fromUtf8(p.prefix))
+                .arg(m_normalized ? "" : "W");
+    return {};
+}
+
+void SpectrumView::redraw(int i)
+{
+    const Trace &t = m_trace[i];
+    const int n = t.dBm.size();
+    QVector<double> x, y;
+    const bool spline = m_view.spline && n >= 4 && axisRect()->width() >= 3 * n;
+    if (spline) {  // Catmull-Rom through the points, 8 segments per interval
+        const int sub = 8;
+        auto p = [&](int k) { return plotValue(t.dBm[std::clamp(k, 0, n - 1)]); };
+        for (int k = 0; k < n - 1; ++k) {
+            const double p0 = p(k - 1), p1 = p(k), p2 = p(k + 1), p3 = p(k + 2);
+            for (int s = 0; s < sub; ++s) {
+                const double u = double(s) / sub;
+                x << t.grid.freq(k) + t.grid.step() * u;
+                y << 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u
+                            + (3 * p1 - p0 - 3 * p2 + p3) * u * u * u);
+            }
+        }
+        x << t.grid.freq(n - 1);
+        y << p(n - 1);
+    } else {
+        x.resize(n);
+        y.resize(n);
+        for (int k = 0; k < n; ++k) {
+            x[k] = t.grid.freq(k);
+            y[k] = plotValue(t.dBm[k]);
+        }
+    }
+    QCPGraph *g = m_graph[i];
+    g->setData(x, y, true);
+    g->setVisible(m_view.show[i] && n > 0);
+    g->setScatterStyle(m_view.points ? QCPScatterStyle(QCPScatterStyle::ssDisc, 4) : QCPScatterStyle());
+    g->setScatterSkip(spline ? 7 : 0);  // dots only at the measured points (every 8th spline sample)
+    int shown = 0;
+    for (int k = 0; k < kTraces; ++k)
+        shown += m_graph[k]->visible();
+    legend->setVisible(shown > 1);
+    for (int k = 0; k < kTraces; ++k)
+        if (m_graph[k]->visible())
+            m_graph[k]->addToLegend();
+        else
+            m_graph[k]->removeFromLegend();
+}
+
+void SpectrumView::applyLevels()
+{
+    double lo = m_view.linear ? m_view.linMin : m_view.logMin;
+    double hi = m_view.linear ? m_view.linMax : m_view.logMax;
+    if (m_view.autoMin || m_view.autoMax) {
+        double vmin = qInf(), vmax = -qInf();
+        for (int i = 0; i < kTraces; ++i)
+            if (m_graph[i]->visible())
+                for (double d : m_trace[i].dBm)
+                    if (!std::isnan(d)) {
+                        vmin = std::min(vmin, plotValue(d));
+                        vmax = std::max(vmax, plotValue(d));
+                    }
+        if (vmin <= vmax) {
+            if (m_view.autoMax)
+                hi = m_view.linear ? vmax * 1.1 : std::ceil(vmax / 5) * 5 + 5;
+            if (m_view.autoMin)
+                lo = m_view.linear ? 0 : std::floor(vmin / 5) * 5 - 5;
+        }
+    }
+    if (!(hi > lo))
+        hi = m_view.linear ? lo * 2 + 1e-12 : lo + 10;
+    yAxis->setRange(lo, hi);
+    storeLevels();
     replot(rpQueuedReplot);
+}
+
+void SpectrumView::storeLevels()
+{
+    (m_view.linear ? m_view.linMin : m_view.logMin) = yAxis->range().lower;
+    (m_view.linear ? m_view.linMax : m_view.logMax) = yAxis->range().upper;
+}
+
+void SpectrumView::autoScale()
+{
+    const bool amin = m_view.autoMin, amax = m_view.autoMax;
+    m_view.autoMin = m_view.autoMax = true;
+    applyLevels();
+    m_view.autoMin = amin;
+    m_view.autoMax = amax;
+}
+
+void SpectrumView::updateHover(QPointF p)
+{
+    int ref = -1;  // the live trace, else the first shown memory
+    for (int i = 0; i < kTraces && ref < 0; ++i)
+        if (m_graph[i]->visible())
+            ref = i;
+    if (ref < 0)
+        return hideHover();
+    const Trace &t = m_trace[ref];
+    const int k = t.grid.nearest(xAxis->pixelToCoord(p.x()));
+    const double f = t.grid.freq(k);
+    QString text = formatHz(f, t.grid.step());
+    for (int i = 0; i < kTraces; ++i)
+        if (m_graph[i]->visible())
+            text += QString("   %1 %2").arg(kTraceNames[i], levelText(i == ref ? t.dBm[k] : m_trace[i].at(f)));
+    m_hoverLine->point1->setCoords(f, 0);
+    m_hoverLine->point2->setCoords(f, 1);
+    m_hoverLine->setVisible(true);
+    m_hoverText->setText(text);
+    m_hoverText->setVisible(true);
+    replot(rpQueuedReplot);
+}
+
+void SpectrumView::hideHover()
+{
+    if (!m_hoverText->visible())
+        return;
+    m_hoverLine->setVisible(false);
+    m_hoverText->setVisible(false);
+    replot(rpQueuedReplot);
+}
+
+QString SpectrumView::hoverText() const
+{
+    return m_hoverText->visible() ? m_hoverText->text() : QString("");
+}
+
+QImage SpectrumView::image(const QString &header)
+{
+    const bool hover = m_hoverText->visible();
+    m_hoverLine->setVisible(false);
+    m_hoverText->setVisible(false);
+    const QPixmap pm = toPixmap(width(), height());
+    m_hoverLine->setVisible(hover);
+    m_hoverText->setVisible(hover);
+    if (header.isEmpty())
+        return pm.toImage();
+    const int hh = fontMetrics().height() + 10;
+    QImage img(pm.width(), pm.height() + hh, QImage::Format_RGB32);
+    img.fill(m_theme.background);
+    QPainter p(&img);
+    p.setPen(m_theme.text);
+    p.drawText(QRect(8, 0, img.width() - 16, hh), Qt::AlignVCenter | Qt::AlignLeft, header);
+    p.drawPixmap(0, hh, pm);
+    return img;
+}
+
+QList<QAction *> SpectrumView::menuActions(QPointF pos, QObject *owner)
+{
+    const double hz = xAxis->pixelToCoord(pos.x());
+    const double res = niceStep(xAxis->range().size() / 1000);
+    QList<QAction *> list;
+    auto add = [&](const QString &text, auto fn) {
+        auto *a = new QAction(text, owner);
+        connect(a, &QAction::triggered, this, fn);
+        list << a;
+        return a;
+    };
+    auto sep = [&] {
+        auto *a = new QAction(owner);
+        a->setSeparator(true);
+        list << a;
+    };
+    auto toggle = [&](const QString &text, bool &flag) {
+        QAction *a = add(text, [this, &flag](bool on) {
+            flag = on;
+            for (int i = 0; i < kTraces; ++i)
+                redraw(i);
+            applyLevels();
+            emit viewChanged();
+        });
+        a->setCheckable(true);
+        a->setChecked(flag);
+    };
+    const QString f = formatHz(roundTo(hz, res), res);
+    add("Start here (" + f + ")", [this, hz] { emit rangeRequested(RangeOp::Start, hz, 0); });
+    add("Center here (" + f + ")", [this, hz] { emit rangeRequested(RangeOp::Center, hz, 0); });
+    add("Stop here (" + f + ")", [this, hz] { emit rangeRequested(RangeOp::Stop, hz, 0); });
+    sep();
+    add("Auto scale now", [this] { autoScale(); emit viewChanged(); });
+    toggle("Auto scale top", m_view.autoMax);
+    toggle("Auto scale bottom", m_view.autoMin);
+    auto askLevel = [this](bool top) {
+        const QString unit = m_view.linear ? "W" : m_normalized ? "dB" : "dBm";
+        bool ok = false;
+        const double cur = top ? yAxis->range().upper : yAxis->range().lower;
+        const double v = QInputDialog::getDouble(this, top ? "Graph top" : "Graph bottom", unit, cur,
+                                                 -1e9, 1e9, m_view.linear ? 12 : 1, &ok);
+        if (!ok)
+            return;
+        (top ? m_view.autoMax : m_view.autoMin) = false;
+        yAxis->setRange(top ? yAxis->range().lower : v, top ? v : yAxis->range().upper);
+        storeLevels();
+        replot(rpQueuedReplot);
+        emit viewChanged();
+    };
+    add("Set top...", [askLevel] { askLevel(true); });
+    add("Set bottom...", [askLevel] { askLevel(false); });
+    sep();
+    toggle("Spline", m_view.spline);
+    toggle("Show points", m_view.points);
+    sep();
+    add("Save image...", [this] { emit saveImageRequested(); });
+    add("Copy image", [this] { emit copyImageRequested(); });
+    return list;
+}
+
+void SpectrumView::contextMenuEvent(QContextMenuEvent *e)
+{
+    QMenu menu(this);
+    menu.addActions(menuActions(e->pos(), &menu));
+    menu.exec(e->globalPos());
+}
+
+QPointF SpectrumView::pointFor(const QString &zone, double hz, double level) const
+{
+    const QRect r = axisRect()->rect();
+    if (zone == "xaxis")
+        return {xAxis->coordToPixel(hz), r.bottom() + 12.0};
+    if (zone == "yaxis")
+        return {r.left() - 25.0, yAxis->coordToPixel(level)};
+    return {xAxis->coordToPixel(hz), yAxis->coordToPixel(level)};
 }

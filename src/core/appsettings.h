@@ -1,14 +1,39 @@
 #pragma once
 // Persistent application settings. visit() lists every setting once and drives
 // both load() and save(), so adding a setting is one line.
+#include "csvio.h"
 #include "sweepconfig.h"
+#include <QColor>
 #include <QString>
 
 class QSettings;
 
+// Graph view state (SpectrumView applies and reports it).
+struct ViewSettings {
+    bool linear = false;       // linear power (W) instead of dBm
+    double logMin = -110, logMax = -10, linMin = 0, linMax = 1e-6;
+    bool autoMin = false, autoMax = false;
+    bool spline = false, points = false;
+    bool show[4] = {true, true, true, true};  // live, M1, M2, M3
+};
+
+struct Theme {
+    QColor background{0x10, 0x10, 0x14}, grid{0x50, 0x50, 0x58}, text{0xc8, 0xc8, 0xc8};
+    QColor trace[4] = {{0xff, 0xe0, 0x40}, {0x40, 0xd0, 0xff}, {0xff, 0x60, 0xd0}, {0x60, 0xff, 0x80}};
+    QColor marker{0xff, 0xff, 0xff}, selected{0xff, 0x80, 0x20};
+    int lineWidth = 1;
+};
+
 struct AppSettings {
     SweepConfig config;
-    QString port;       // last connected port
+    QString port;                 // last connected port
+    int hold = 0;                 // Hold enum
+    int average = 1;              // sweeps
+    ViewSettings view;
+    Theme theme;
+    QString sweepName;            // header of saved images and CSV files
+    QString recordFolder;         // default: Documents/tinySA-App
+    CsvFormat csv;
 
     template <class V> void visit(V &&v)
     {
@@ -18,8 +43,37 @@ struct AppSettings {
         v("device/rbw_khz", config.rbwKHz);
         v("device/atten_db", config.atten);
         v("device/lna", config.lna);
-        v("device/high_input", highInput);
+        v("device/high_input", m_highInput);
         v("device/port", port);
+        v("trace/hold", hold);
+        v("trace/average", average);
+        v("view/linear", view.linear);
+        v("view/log_min", view.logMin);
+        v("view/log_max", view.logMax);
+        v("view/lin_min", view.linMin);
+        v("view/lin_max", view.linMax);
+        v("view/auto_min", view.autoMin);
+        v("view/auto_max", view.autoMax);
+        v("view/spline", view.spline);
+        v("view/points", view.points);
+        v("view/show_live", view.show[0]);
+        v("view/show_m1", view.show[1]);
+        v("view/show_m2", view.show[2]);
+        v("view/show_m3", view.show[3]);
+        v("theme/background", theme.background);
+        v("theme/grid", theme.grid);
+        v("theme/text", theme.text);
+        v("theme/live", theme.trace[0]);
+        v("theme/m1", theme.trace[1]);
+        v("theme/m2", theme.trace[2]);
+        v("theme/m3", theme.trace[3]);
+        v("theme/marker", theme.marker);
+        v("theme/selected", theme.selected);
+        v("theme/line_width", theme.lineWidth);
+        v("file/sweep_name", sweepName);
+        v("file/record_folder", recordFolder);
+        v("file/csv_separator", m_csvSeparator);
+        v("file/csv_decimal_comma", csv.decimalComma);
     }
 
     void load(QSettings &s);
@@ -30,5 +84,6 @@ struct AppSettings {
     static QString defaultPath();
 
 private:
-    bool highInput = false;  // InputMode as stored value
+    bool m_highInput = false;  // stored forms of enum / char fields
+    QString m_csvSeparator = ";";
 };

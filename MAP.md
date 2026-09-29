@@ -14,7 +14,13 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   CAL→RF cable: 110 MHz harmonic exactly on its grid point (neighbours −46 dB) → firmware-grid fix
   verified. Decisions: no scanraw streaming (sweep-to-sweep overhead < 1 ms); Stop sends `abort`
   (shell reads it within 5 s); pause state tracked when sent, shutdown always resumes the unit.
-- Next: Step 3 — traces & graph interaction (hold/avg/normalise, memories, CSV, y-scale, mouse/keys, image).
+- **Step 3 DONE**: TraceSet (power averaging, min/max hold, sweep-cursor partial updates, memories M1-M3
+  persisted as CSV next to the ini, interpolated normalisation), CSV save/load/record (log10 fixed),
+  SpectrumView = all graph drawing + interaction (hover, axis-strip drags, wheel, keys, context menu,
+  log/linear W, auto scale, spline/points, image with header, clipboard). Compact left panel (fits 700 px):
+  File actions moved to menu bar + toolbar. Sim step3.txt + full regression and hw_step2 PASS.
+  (Max/min peak markers moved to step 4: they are markers.)
+- Next: Step 4 — markers (MarkerSet in core, list, drag/delta, peak markers with parabolic interpolation).
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
@@ -44,9 +50,11 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 | src/core/link.h | `DeviceLink` (own thread): handshake, 1 command in flight, per-sweep scanraw loop, battery poll, timeouts/resync, `SweepFrame` |
 | src/core/simdevice.h | `SimTransport` QIODevice: firmware-exact simulated tinySA (carriers 100/250/433.92/868 MHz, 2.4/5.8 GHz) |
 | src/core/session.h | GUI-thread facade owning the link thread; the only API controllers use |
-| src/core/appsettings.h | `AppSettings`: every persistent setting listed once in `visit()` (load + save) |
-| src/ui/mainwindow.* | main window (Designer form + thin controller); implements TestHost queries/actions |
-| src/ui/spectrumview.* | `SpectrumView` (QCustomPlot subclass, promoted in the .ui), `FreqTicker` |
+| src/core/appsettings.h | `AppSettings` (+ `ViewSettings`, `Theme`): every persistent setting listed once in `visit()` |
+| src/core/traces.h | `Trace` (grid + dBm, interpolating `at()`), `TraceSet`: average/hold/memories/normalisation |
+| src/core/csvio.h | trace CSV write/read (separator + decimal detection), `SweepRecorder` |
+| src/ui/mainwindow.* | main window: Designer form + controller (wiring, device, config); mainfiles.cpp = traces/memories/files; maintest.cpp = TestHost |
+| src/ui/spectrumview.* | `SpectrumView` (QCustomPlot subclass, promoted in the .ui): traces, levels, hover, menu, image; spectrummouse.cpp = mouse/wheel/keys; `SiTicker` |
 | src/ui/autotest.* | script runner + `TestHost` interface |
 | src/main.cpp | CLI: --sim, --port, --script, --out |
 | test/tst_core.cpp | Qt Test unit tests for core, one class per module |

@@ -1,6 +1,7 @@
 #include "autotest.h"
 #include <QAbstractButton>
 #include <QAbstractSlider>
+#include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QDateTime>
@@ -144,10 +145,12 @@ bool AutoTest::exec(const QStringList &tok)
             fail("set: unsupported widget " + arg);
         }
     } else if (cmd == "click") {
-        if (auto *b = qobject_cast<QAbstractButton *>(find(arg)))
+        if (auto *a = m_host->testWindow()->findChild<QAction *>(arg))
+            a->trigger();  // menu / toolbar action
+        else if (auto *b = qobject_cast<QAbstractButton *>(find(arg)))
             b->click();
         else
-            fail("click: not a button: " + arg);
+            fail("click: not a button or action: " + arg);
     } else if (cmd == "key") {
         if (QWidget *w = find(arg)) {
             const QKeyCombination k = QKeySequence::fromString(tok.value(2))[0];

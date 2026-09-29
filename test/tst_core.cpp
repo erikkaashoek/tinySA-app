@@ -1,10 +1,14 @@
 // Unit tests for src/core. One executable, one test class per module.
+#include "csvio.h"
 #include "link.h"
 #include "model.h"
 #include "protocol.h"
 #include "simdevice.h"
 #include "sweepconfig.h"
+#include "traces.h"
 #include "units.h"
+#include <QDir>
+#include <QFile>
 #include <QElapsedTimer>
 #include <QPointer>
 #include <QRandomGenerator>
@@ -404,6 +408,109 @@ private slots:
     }
 };
 
+// ---------------------------------------------------------------------------
+
+static SweepFrame frame(const ScanGrid &g, QVector<double> dBm, bool complete = true, int received = -1)
+{
+    SweepFrame f{1, g, dBm};
+    f.received = received < 0 ? int(dBm.size()) : received;
+    f.complete = complete;
+    return f;
+}
+
+class TstTraces : public QObject {
+    Q_OBJECT
+private slots:
+    void averagesPower()
+    {
+        const ScanGrid g{0, 100, 2};
+        TraceSet t;
+        t.setAverage(2);
+        t.add(frame(g, {-40, -40}));
+        t.add(frame(g, {-30, -30}));
+        QVERIFY(std::abs(t.live().dBm[0] - 10 * std::log10((1e-4 + 1e-3) / 2)) < 1e-9);
+        t.add(frame(g, {-30, -30}));  // window of 2: the -40 sweep has left
+        QVERIFY(std::abs(t.live().dBm[0] - -30) < 1e-9);
+    }
+    void holdsAndRestarts()
+    {
+        const ScanGrid g{0, 100, 3};
+        TraceSet t;
+        t.setHold(Hold::Max);
+        t.add(frame(g, {-50, -20, -60}));
+        t.add(frame(g, {-40, -30, -70}));
+        QCOMPARE(t.live().dBm, QVector<double>({-40, -20, -60}));
+        t.setHold(Hold::Min);
+        t.add(frame(g, {-40, -30, -70}));
+        t.add(frame(g, {-45, -10, -65}));
+        QCOMPARE(t.live().dBm, QVector<double>({-45, -30, -70}));
+        t.add(frame({0, 200, 3}, {-1, -2, -3}));  // new range: history restarts
+        QCOMPARE(t.live().dBm, QVector<double>({-1, -2, -3}));
+    }
+    void partialFramesKeepThePreviousSweep()
+    {
+        const ScanGrid g{0, 100, 3};
+        TraceSet t;
+        t.add(frame(g, {-50, -50, -50}));
+        t.add(frame(g, {-10, qQNaN(), qQNaN()}, false, 1));  // sweep cursor at point 1
+        QCOMPARE(t.live().dBm, QVector<double>({-10, -50, -50}));
+    }
+    void normalizesAgainstTheReference()
+    {
+        TraceSet t;
+        t.add(frame({0, 100, 3}, {-50, -40, -30}));
+        t.setNormalize(true);
+        QCOMPARE(t.normalizedView(t.live()).dBm, QVector<double>({0, 0, 0}));
+        const Trace other{{0, 50, 3}, {-50, -45, -40}};  // reference interpolated: -50 -45 -40
+        QCOMPARE(t.normalizedView(other).dBm, QVector<double>({0, 0, 0}));
+        t.setNormalize(false);
+        QCOMPARE(t.normalizedView(other).dBm, other.dBm);
+        QVERIFY(std::isnan(other.at(60)));
+        QCOMPARE(other.at(37.5), -42.5);
+    }
+    void memoriesAreCopies()
+    {
+        TraceSet t;
+        t.add(frame({0, 100, 2}, {-50, -40}));
+        t.store(1);
+        t.add(frame({0, 100, 2}, {-20, -20}));
+        QCOMPARE(t.memory(1).dBm, QVector<double>({-50, -40}));
+        QVERIFY(t.memory(0).isEmpty());
+    }
+};
+
+class TstCsv : public QObject {
+    Q_OBJECT
+private slots:
+    void roundTripBothFormats()
+    {
+        const Trace t{{100e6, 200e6, 3}, {-45.25, qQNaN(), -30}};
+        for (const CsvFormat fmt : {CsvFormat{';', true}, CsvFormat{',', false}, CsvFormat{'\t', false}}) {
+            const QString path = QDir::tempPath() + "/tst_trace.csv";
+            QString err;
+            QVERIFY(writeTraceCsv(path, t, fmt, &err, "title"));
+            const auto back = readTraceCsv(path, &err);
+            QVERIFY2(back.has_value(), qPrintable(err));
+            QCOMPARE(back->grid, t.grid);
+            QCOMPARE(back->dBm[0], -45.25);
+            QVERIFY(std::isnan(back->dBm[1]));
+            QFile::remove(path);
+        }
+    }
+    void rejectsUnevenFrequencies()
+    {
+        const QString path = QDir::tempPath() + "/tst_uneven.csv";
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("1000;-10\n2000;-11\n3500;-12\n");
+        f.close();
+        QString err;
+        QVERIFY(!readTraceCsv(path, &err));
+        QVERIFY(err.contains("evenly"));
+        QFile::remove(path);
+    }
+};
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -422,6 +529,10 @@ int main(int argc, char **argv)
     run(&model);
     TstLink link;
     run(&link);
+    TstTraces traces;
+    run(&traces);
+    TstCsv csv;
+    run(&csv);
     return fails;
 }
 

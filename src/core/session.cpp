@@ -26,7 +26,11 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink)
         m_busy = busy;
         emit busyChanged(busy);
     });
-    connect(m_link, &DeviceLink::frame, this, &Session::frame);
+    connect(m_link, &DeviceLink::frame, this, [this](const SweepFrame &f) {
+        m_traces.add(f);
+        emit frame(f);
+        emit tracesChanged(f.complete);
+    });
     connect(m_link, &DeviceLink::reply, this, &Session::reply);
     connect(m_link, &DeviceLink::battery, this, &Session::battery);
     connect(m_link, &DeviceLink::screen, this, &Session::screen);

@@ -1,10 +1,13 @@
+// MainWindow: construction, wiring, connection and sweep configuration.
+// Traces/files: mainfiles.cpp. Test hooks: maintest.cpp.
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QCloseEvent>
 #include <QLabel>
-#include <QRegularExpression>
+#include <QMessageBox>
 #include <QSerialPortInfo>
 #include <QSettings>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <cmath>
 
@@ -31,7 +34,7 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     for (QLabel *l : {m_sweepsLabel, m_rateLabel, m_batteryLabel})
         statusBar()->addPermanentWidget(l);
 
-    // --- widgets -> session ---
+    // --- sweep and device widgets -> session ---
     connect(ui->connectButton, &QPushButton::clicked, this, &MainWindow::onConnectClicked);
     connect(ui->scanButton, &QPushButton::clicked, this, [this](bool on) {
         m_session.setScan(on ? DeviceLink::Continuous : DeviceLink::Off);
@@ -66,11 +69,62 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
             editConfig([g](SweepConfig &c) { c.grid = g; });
     });
 
+    // --- trace and file widgets ---
+    connect(ui->calcCombo, &QComboBox::activated, this, [this](int i) {
+        m_session.traces().setHold(Hold(i));
+        renderTraces(false);
+    });
+    connect(ui->avgCombo, &QComboBox::activated, this, [this](int i) {
+        m_session.traces().setAverage(1 << i);
+        renderTraces(false);
+    });
+    connect(ui->scaleCombo, &QComboBox::activated, this, [this](int i) { ui->spectrum->setLinear(i == 1); });
+    connect(ui->liveButton, &QToolButton::toggled, this, [this](bool on) { ui->spectrum->setShown(0, on); });
+    setupMemoryButton(0, ui->m1Button);
+    setupMemoryButton(1, ui->m2Button);
+    setupMemoryButton(2, ui->m3Button);
+    connect(ui->normButton, &QPushButton::toggled, this, [this](bool on) {
+        m_session.traces().setNormalize(on);
+        ui->spectrum->setNormalized(on);
+        renderTraces(true);
+        ui->spectrum->autoScale();
+    });
+    connect(ui->autoScaleButton, &QPushButton::clicked, ui->spectrum, &SpectrumView::autoScale);
+    connect(ui->sweepNameEdit, &QLineEdit::textChanged, this, [this](const QString &t) { m_settings.sweepName = t; });
+    connect(ui->actionSaveCsv, &QAction::triggered, this, [this] { saveCsv({}); });
+    connect(ui->actionSaveImage, &QAction::triggered, this, [this] { saveImage({}); });
+    connect(ui->actionCopyImage, &QAction::triggered, this, [this] { saveImage("clipboard:"); });
+    connect(ui->actionRecord, &QAction::toggled, this, &MainWindow::setRecording);
+    connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
+    connect(ui->actionAbout, &QAction::triggered, this, [this] {
+        QMessageBox::about(this, "About tinySA-App",
+                           QString("<b>tinySA-App %1</b><p>PC software for the tinySA spectrum analyzers.</p>"
+                                   "<p>GPL-3.0-or-later. Built with Qt %2 and QCustomPlot.</p>")
+                               .arg(QCoreApplication::applicationVersion(), qVersion()));
+    });
+
+    // --- graph intents ---
+    connect(ui->spectrum, &SpectrumView::rangeRequested, this, &MainWindow::applyRangeOp);
+    connect(ui->spectrum, &SpectrumView::saveImageRequested, this, [this] { saveImage({}); });
+    connect(ui->spectrum, &SpectrumView::copyImageRequested, this, [this] { saveImage("clipboard:"); });
+    connect(ui->spectrum, &SpectrumView::stopRequested, this, [this] { m_session.setScan(DeviceLink::Off); });
+    auto shortcut = [this](QKeySequence k, auto fn) {
+        connect(new QShortcut(k, this), &QShortcut::activated, this, fn);
+    };
+    const auto zoom = [this](double f) {
+        const SweepConfig c = m_session.config();
+        applyRangeOp(SpectrumView::RangeOp::Zoom, f, (c.grid.startHz + c.grid.stopHz) / 2);
+    };
+    shortcut(Qt::Key_PageUp, [zoom] { zoom(1 / 1.5); });
+    shortcut(Qt::Key_PageDown, [zoom] { zoom(1.5); });
+    shortcut(Qt::Key_Escape, [this] { m_session.setScan(DeviceLink::Off); });
+
     // --- session -> render ---
     connect(&m_session, &Session::connected, this, &MainWindow::onConnected);
     connect(&m_session, &Session::disconnected, this, &MainWindow::onDisconnected);
     connect(&m_session, &Session::configChanged, this, &MainWindow::showConfig);
     connect(&m_session, &Session::frame, this, &MainWindow::onFrame);
+    connect(&m_session, &Session::tracesChanged, this, [this] { renderTraces(false); });
     connect(&m_session, &Session::scanChanged, this, &MainWindow::onScanChanged);
     connect(&m_session, &Session::message, this, [this](const QString &m) {
         statusBar()->showMessage(m, 5000);
@@ -90,6 +144,21 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     m_settings.load(qs);
     restoreGeometry(qs.value("window/geometry").toByteArray());
     ui->splitter->restoreState(qs.value("window/splitter").toByteArray());
+    ui->spectrum->setTheme(m_settings.theme);
+    ui->spectrum->setView(m_settings.view);
+    ui->scaleCombo->setCurrentIndex(m_settings.view.linear ? 1 : 0);
+    ui->liveButton->setChecked(m_settings.view.show[0]);
+    ui->m1Button->setChecked(m_settings.view.show[1]);
+    ui->m2Button->setChecked(m_settings.view.show[2]);
+    ui->m3Button->setChecked(m_settings.view.show[3]);
+    m_session.traces().setHold(Hold(std::clamp(m_settings.hold, 0, 2)));
+    m_session.traces().setAverage(m_settings.average);
+    ui->calcCombo->setCurrentIndex(std::clamp(m_settings.hold, 0, 2));
+    ui->avgCombo->setCurrentIndex(std::clamp(int(std::log2(std::max(1, m_settings.average))), 0, 6));
+    ui->sweepNameEdit->setText(m_settings.sweepName);
+    for (int m = 0; m < TraceSet::kMemories; ++m)
+        if (QFile::exists(memoryFile(m)))
+            loadMemory(m, memoryFile(m));
     applyModel(nullptr);
     m_session.setConfig(m_settings.config);
     showConfig(m_session.config());
@@ -104,11 +173,23 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent *e)
 {
+    setRecording(false);
     QSettings qs(m_settingsPath, QSettings::IniFormat);
     m_settings.config = m_session.config();
+    m_settings.view = ui->spectrum->view();
+    m_settings.hold = int(m_session.traces().hold());
+    m_settings.average = m_session.traces().average();
     m_settings.save(qs);
     qs.setValue("window/geometry", saveGeometry());
     qs.setValue("window/splitter", ui->splitter->saveState());
+    QString err;
+    for (int m = 0; m < TraceSet::kMemories; ++m) {
+        const Trace &t = m_session.traces().memory(m);
+        if (t.isEmpty())
+            QFile::remove(memoryFile(m));
+        else
+            writeTraceCsv(memoryFile(m), t, CsvFormat{}, &err, QString("M%1").arg(m + 1));
+    }
     e->accept();
 }
 
@@ -231,7 +312,6 @@ void MainWindow::onScanChanged(int mode)
 
 void MainWindow::onFrame(const SweepFrame &f)
 {
-    ui->spectrum->setFrame(f);
     if (!f.complete)
         return;
     ++m_sweeps;
@@ -243,6 +323,9 @@ void MainWindow::onFrame(const SweepFrame &f)
     m_sweepsLabel->setText(QString("Sweeps %1").arg(m_sweeps));
     if (f.seconds > 0)
         m_rateLabel->setText(QString("%1 points/s").arg(std::lround(f.grid.points / f.seconds)));
+    QString err;
+    if (m_recorder.active() && !m_recorder.add(m_session.traces().live(), &err))
+        error("Recording stopped: " + err);
 }
 
 void MainWindow::showConfig(const SweepConfig &c)
@@ -275,79 +358,51 @@ void MainWindow::editRange(QLineEdit *edit)
     const auto hz = parseHz(edit->text(), 1e6);
     if (!hz)
         return showConfig(m_session.config());  // revert invalid input
-    editConfig([&](SweepConfig &c) {
-        const ModelDesc *m = m_session.device().model;
+    SpectrumView::RangeOp op = edit == ui->startEdit ? SpectrumView::RangeOp::Start
+                               : edit == ui->stopEdit ? SpectrumView::RangeOp::Stop
+                               : edit == ui->centerEdit ? SpectrumView::RangeOp::Center
+                                                        : SpectrumView::RangeOp::Zoom;
+    if (op == SpectrumView::RangeOp::Zoom) {  // span: zoom about the center to the typed span
+        const SweepConfig c = m_session.config();
+        const double span = c.grid.stopHz - c.grid.startHz;
+        return applyRangeOp(op, span > 0 ? *hz / span : 1, (c.grid.startHz + c.grid.stopHz) / 2);
+    }
+    editConfig([&](SweepConfig &c) {  // typed values are taken as they are, no rounding
         FreqRange r(c.grid.startHz, c.grid.stopHz);
+        const ModelDesc *m = m_session.device().model;
         r.setLimits(m ? m->lowLimit(c.input) : 0, m ? m->highLimit(c.input) : 100e9);
-        if (edit == ui->startEdit) r.setStart(*hz);
-        else if (edit == ui->stopEdit) r.setStop(*hz);
-        else if (edit == ui->centerEdit) r.setCenter(*hz);
-        else r.setSpan(*hz);
+        if (op == SpectrumView::RangeOp::Start) r.setStart(*hz);
+        else if (op == SpectrumView::RangeOp::Stop) r.setStop(*hz);
+        else r.setCenter(*hz);
         c.grid.startHz = r.start();
         c.grid.stopHz = r.stop();
     });
 }
 
-std::optional<QString> MainWindow::testQuery(const QString &name)
+// All graph and keyboard range changes: clamped by FreqRange, rounded to a resolution
+// that fits the span (so zooming does not produce 433.9173 MHz edges).
+void MainWindow::applyRangeOp(SpectrumView::RangeOp op, double a, double b)
 {
-    const SweepFrame &f = ui->spectrum->frame();
-    const SweepConfig c = m_session.config();
-    auto peak = [&] {
-        int best = -1;
-        for (int i = 0; i < f.dBm.size(); ++i)
-            if (!std::isnan(f.dBm[i]) && (best < 0 || f.dBm[i] > f.dBm[best]))
-                best = i;
-        return best;
-    };
-    if (name == "connected") return m_session.isConnected() ? "1" : "0";
-    if (name == "model") return m_session.device().model ? m_session.device().model->name : "";
-    if (name == "sweeps") return QString::number(m_sweeps);
-    if (name == "sweeps.new") return QString::number(m_sweeps - m_sweepsMark);  // since "do mark"
-    if (name == "scan") return QString::number(m_session.scanMode());
-    if (name == "idle") return m_session.scanMode() == DeviceLink::Off && !m_session.isBusy() ? "1" : "0";
-    if (name == "start") return QString::number(c.grid.startHz, 'f', 0);
-    if (name == "stop") return QString::number(c.grid.stopHz, 'f', 0);
-    if (name == "rbw") return QString::number(c.rbwKHz);
-    if (name == "atten") return QString::number(c.atten);
-    if (name == "lna") return c.lna ? "1" : "0";
-    if (name == "input") return c.input == InputMode::High ? "high" : "low";
-    if (name == "points") return QString::number(f.grid.points);
-    if (name == "sweepms") return QString::number(m_sweepMs, 'f', 1);
-    if (name == "cyclems") return QString::number(m_cycleMs, 'f', 1);
-    if (name == "messages") return m_messages.join('|');
-    if (name == "sent") return QStringList(m_sent).filter(QRegularExpression("^(?!vbat$)")).join('|');
-    if (name == "peak.hz") return peak() < 0 ? "" : QString::number(f.grid.freq(peak()), 'f', 0);
-    if (name == "peak.dbm") return peak() < 0 ? "" : QString::number(f.dBm[peak()], 'f', 2);
-    if (name == "trace") {
-        QString csv;
-        for (int i = 0; i < f.dBm.size(); ++i)
-            csv += QString("%1,%2\n").arg(f.grid.freq(i), 0, 'f', 0).arg(f.dBm[i], 0, 'f', 2);
-        return csv;
-    }
-    return {};
+    editConfig([&](SweepConfig &c) {
+        FreqRange r(c.grid.startHz, c.grid.stopHz);
+        const ModelDesc *m = m_session.device().model;
+        r.setLimits(m ? m->lowLimit(c.input) : 0, m ? m->highLimit(c.input) : 100e9);
+        switch (op) {
+        case SpectrumView::RangeOp::Set: r.set(a, b); break;
+        case SpectrumView::RangeOp::Start: r.setStart(a); break;
+        case SpectrumView::RangeOp::Stop: r.setStop(a); break;
+        case SpectrumView::RangeOp::Center: r.setCenter(a); break;
+        case SpectrumView::RangeOp::Zoom: r.zoom(a, b); break;
+        }
+        const double res = niceStep(r.span() / 1000);
+        r.set(roundTo(r.start(), res), roundTo(r.stop(), res));
+        c.grid.startHz = r.start();
+        c.grid.stopHz = r.stop();
+    });
 }
 
-bool MainWindow::testAction(const QString &name, const QStringList &args)
+void MainWindow::error(const QString &what)
 {
-    if (name == "connect" && args.size() == 1) {
-        connectTo(args[0]);
-        return true;
-    }
-    if (name == "touch") {
-        m_session.simTouch();
-        return true;
-    }
-    if (name == "clearsent") {
-        m_sent.clear();
-        return true;
-    }
-    if (name == "mark") {
-        m_sweepsMark = m_sweeps;
-        return true;
-    }
-    if (name == "send" && !args.isEmpty()) {  // raw command, e.g. "caloutput 10"
-        m_session.send(args.join(' '));
-        return true;
-    }
-    return false;
+    statusBar()->showMessage(what, 8000);
+    m_messages << what;
 }
