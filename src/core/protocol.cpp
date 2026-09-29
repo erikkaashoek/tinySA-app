@@ -158,6 +158,17 @@ bool RxParser::textStep(QVector<RxEvent> &out)
     m_pos = nl + 1;
     if (line.endsWith('\r'))
         line.chop(1);
+    // The unit echoes typed characters one by one while another thread pushes screen
+    // regions, so a push can land inside a line ("re" + "bulk..." + "fresh off"):
+    // keep the fragment and finish the line after the push.
+    if (line.endsWith("bulk") || line.endsWith("fill")) {
+        m_fragment += line.left(line.size() - 4);
+        m_regionFill = line.endsWith("fill");
+        m_state = State::RegionHeader;
+        return true;
+    }
+    line.prepend(m_fragment);
+    m_fragment.clear();
 
     if (!m_echo.isEmpty() && line.endsWith(m_echo)) {
         m_echo.clear();
@@ -166,11 +177,6 @@ bool RxParser::textStep(QVector<RxEvent> &out)
             m_state = State::ScanStart;
         else if (m_body == Body::Capture)
             m_state = State::CaptureHead;
-        return true;
-    }
-    if (line == "bulk" || line == "fill") {
-        m_regionFill = line == "fill";
-        m_state = State::RegionHeader;
         return true;
     }
     out.append({RxEvent::Line, line});

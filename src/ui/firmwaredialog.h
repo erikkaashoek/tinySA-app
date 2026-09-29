@@ -14,9 +14,14 @@ class FirmwareDialog : public QDialog {
 public:
     explicit FirmwareDialog(QWidget *parent = nullptr);
     ~FirmwareDialog() override;
-    void setConnected(bool connected);  // the tinySA can be sent to DFU mode
+    void setConnected(bool connected, bool dfuCommand);  // can the unit be sent to DFU mode
     QString logText() const;
     int deviceCount() const { return int(m_devices.size()); }
+    bool busy() const { return m_busy; }
+    // the buttons use these after their file dialog / confirmation (tests call them directly)
+    bool startWrite(const QString &file, bool verify);
+    bool startRead(const QString &file);
+    bool startLeave();
 
 signals:
     void enterDfuRequested();
@@ -36,5 +41,5 @@ private:
     FirmwareUpdater *m_worker;
     QList<DfuDevice> m_devices;
     QTimer m_poll;
-    bool m_busy = false, m_connected = false;
+    bool m_busy = false, m_canEnterDfu = false;
 };

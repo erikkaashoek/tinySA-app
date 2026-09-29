@@ -6,8 +6,14 @@
 #include <cmath>
 
 DeviceLink::DeviceLink(QObject *parent)
-    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_screenTimer(this)
+    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_screenTimer(this), m_touchTimer(this)
 {
+    m_touchTimer.setInterval(30);
+    connect(&m_touchTimer, &QTimer::timeout, this, [this] {
+        if (m_pendingTouch.isEmpty())
+            m_touchTimer.stop();
+        flushTouch();
+    });
     m_screenTimer.setSingleShot(true);
     connect(&m_screenTimer, &QTimer::timeout, this, [this] { emit screen(m_screen); });
     m_timeout.setSingleShot(true);
@@ -158,6 +164,8 @@ void DeviceLink::shutdown(const QString &reason)
     m_cur.reset();
     m_rx.reset();
     m_ready = m_paused = m_draining = m_remote = false;
+    m_touchTimer.stop();
+    m_pendingTouch.clear();
     if (m_mode != Off) {
         m_mode = Off;
         emit scanChanged(Off);
@@ -240,20 +248,41 @@ void DeviceLink::capture()
     }});
 }
 
+// While the unit streams screen pushes it still echoes typed commands, but from another
+// thread: a push can land inside the echo. So in remote mode touches and `refresh off`
+// are sent without waiting for echo and prompt, and input is drained afterwards.
 void DeviceLink::setRemote(bool on)
 {
     if (!m_ready || on == m_remote)
         return;
-    m_remote = on;
     if (on) {
+        m_remote = true;
         m_modeBeforeRemote = m_mode;
         setMode(Off);  // resumes the unit's own sweeping and display
         capture();     // full picture first, then only the changes
         enqueue({"refresh on"});
     } else {
-        enqueue({"refresh off"});
+        enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {  // after anything in flight
+            flushTouch();
+            m_touchTimer.stop();
+            writeDirect("refresh off");
+            m_remote = false;
+            resync();  // pushes still in the pipe; their echo too
+        }});
         setMode(m_modeBeforeRemote);
     }
+}
+
+void DeviceLink::writeDirect(const QByteArray &line)
+{
+    m_io->write(line + "\r");
+    emit traffic(true, QString::fromLatin1(line), false);
+}
+
+void DeviceLink::flushTouch()
+{
+    if (!m_pendingTouch.isEmpty() && m_io)
+        writeDirect(std::exchange(m_pendingTouch, {}));
 }
 
 void DeviceLink::touch(QPoint lcd, bool down)
@@ -262,6 +291,18 @@ void DeviceLink::touch(QPoint lcd, bool down)
         return;
     const QByteArray line = down ? "touch " + QByteArray::number(lcd.x()) + " " + QByteArray::number(lcd.y())
                                  : QByteArray("release");
+    if (m_remote) {  // live screen: no echo wait; drags at most every 30 ms
+        if (!down) {
+            flushTouch();
+            writeDirect(line);
+        } else if (!m_touchTimer.isActive()) {
+            writeDirect(line);
+            m_touchTimer.start();
+        } else {
+            m_pendingTouch = line;
+        }
+        return;
+    }
     if (down)  // dragging: update a touch that is still waiting instead of queueing more
         for (Cmd &c : m_queue)
             if (c.line.startsWith("touch ")) {
@@ -306,7 +347,7 @@ void DeviceLink::pumpStep()
         return transmit(m_queue.takeFirst());
     if (!m_ready)
         return;
-    if (m_batteryDue) {
+    if (m_batteryDue && !m_remote) {  // no polls while the screen streams
         m_batteryDue = false;
         return enqueue({"vbat", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
             static const QRegularExpression re(R"((\d+)\s*mV)");

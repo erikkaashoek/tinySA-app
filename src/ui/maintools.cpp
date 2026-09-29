@@ -52,8 +52,10 @@ void MainWindow::setupTools()
     m_firmwareDialog->setObjectName("firmwareDialog");
     connect(ui->actionFirmware, &QAction::triggered, this, [this] { showTool(m_firmwareDialog); });
     connect(m_firmwareDialog, &FirmwareDialog::enterDfuRequested, this, [this] { m_session.send("reset dfu"); });
-    connect(&m_session, &Session::connected, m_firmwareDialog, [this] { m_firmwareDialog->setConnected(true); });
-    connect(&m_session, &Session::disconnected, m_firmwareDialog, [this] { m_firmwareDialog->setConnected(false); });
+    connect(&m_session, &Session::connected, m_firmwareDialog, [this](const DeviceInfo &info) {
+        m_firmwareDialog->setConnected(true, info.model && info.model->dfuCommand);
+    });
+    connect(&m_session, &Session::disconnected, m_firmwareDialog, [this] { m_firmwareDialog->setConnected(false, false); });
 
     QSettings qs(m_settingsPath, QSettings::IniFormat);
     m_console->restoreGeometry(qs.value("tools/console_geometry").toByteArray());

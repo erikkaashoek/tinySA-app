@@ -85,6 +85,8 @@ private:
     void finish(bool ok);
     void onTimeout();
     void resync();  // discard input until quiet, then continue with the queue
+    void writeDirect(const QByteArray &line);  // remote mode: no echo/prompt wait
+    void flushTouch();
     void fail(const QString &reason);
     void shutdown(const QString &reason);
     void handshake();
@@ -116,4 +118,6 @@ private:
     QTimer m_screenTimer;     // throttles screen() while regions stream in
     bool m_remote = false;
     int m_modeBeforeRemote = Off;
+    QByteArray m_pendingTouch;  // latest drag position, sent at most every 30 ms
+    QTimer m_touchTimer;
 };

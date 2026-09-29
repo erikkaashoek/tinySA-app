@@ -18,6 +18,7 @@ struct ModelDesc {
     double highMinHz, highMaxHz;  // HIGH input, if hasInputMode
     QVector<double> rbwKHz;     // selectable RBW values ("auto" is implicit)
     int maxAtten;               // dB
+    bool dfuCommand;            // `reset dfu` enters the bootloader (firmware: TINYSA3 only)
 
     double lowLimit(InputMode m) const { return m == InputMode::High && hasInputMode ? highMinHz : minHz; }
     double highLimit(InputMode m) const { return m == InputMode::High && hasInputMode ? highMaxHz : maxHz; }

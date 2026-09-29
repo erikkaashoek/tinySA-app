@@ -44,11 +44,8 @@ FirmwareDialog::FirmwareDialog(QWidget *parent)
         }
         if (QMessageBox::question(this, "Firmware update",
                                   "Write " + QFileInfo(file).fileName() + " to the tinySA?")
-            != QMessageBox::Yes)
-            return;
-        setBusy(true);
-        const bool verify = ui->verifyCheck->isChecked();
-        QMetaObject::invokeMethod(m_worker, [w = m_worker, dev = *d, file, verify] { w->write(dev, file, verify); });
+            == QMessageBox::Yes)
+            startWrite(file, ui->verifyCheck->isChecked());
     });
     connect(ui->saveFlashButton, &QPushButton::clicked, this, [this] {
         const DfuDevice *d = device();
@@ -57,17 +54,10 @@ FirmwareDialog::FirmwareDialog(QWidget *parent)
         const QString file = QFileDialog::getSaveFileName(
             this, "Save flash", "tinySA flash " + QDateTime::currentDateTime().toString("yyyy-MM-dd hh-mm") + ".bin",
             "Binary (*.bin)");
-        if (file.isEmpty())
-            return;
-        setBusy(true);
-        QMetaObject::invokeMethod(m_worker, [w = m_worker, dev = *d, file] { w->read(dev, file); });
+        if (!file.isEmpty())
+            startRead(file);
     });
-    connect(ui->leaveDfuButton, &QPushButton::clicked, this, [this] {
-        if (const DfuDevice *d = device()) {
-            setBusy(true);
-            QMetaObject::invokeMethod(m_worker, [w = m_worker, dev = *d] { w->leave(dev); });
-        }
-    });
+    connect(ui->leaveDfuButton, &QPushButton::clicked, this, &FirmwareDialog::startLeave);
     connect(&m_poll, &QTimer::timeout, this, &FirmwareDialog::refresh);
     setBusy(false);
 }
@@ -76,6 +66,36 @@ FirmwareDialog::~FirmwareDialog()
 {
     m_thread.quit();
     m_thread.wait();
+}
+
+bool FirmwareDialog::startWrite(const QString &file, bool verify)
+{
+    const DfuDevice *d = device();
+    if (!d || m_busy)
+        return false;
+    setBusy(true);
+    QMetaObject::invokeMethod(m_worker, [w = m_worker, dev = *d, file, verify] { w->write(dev, file, verify); });
+    return true;
+}
+
+bool FirmwareDialog::startRead(const QString &file)
+{
+    const DfuDevice *d = device();
+    if (!d || m_busy)
+        return false;
+    setBusy(true);
+    QMetaObject::invokeMethod(m_worker, [w = m_worker, dev = *d, file] { w->read(dev, file); });
+    return true;
+}
+
+bool FirmwareDialog::startLeave()
+{
+    const DfuDevice *d = device();
+    if (!d || m_busy)
+        return false;
+    setBusy(true);
+    QMetaObject::invokeMethod(m_worker, [w = m_worker, dev = *d] { w->leave(dev); });
+    return true;
 }
 
 void FirmwareDialog::showEvent(QShowEvent *e)
@@ -91,9 +111,13 @@ void FirmwareDialog::hideEvent(QHideEvent *e)
     QDialog::hideEvent(e);
 }
 
-void FirmwareDialog::setConnected(bool connected)
+void FirmwareDialog::setConnected(bool connected, bool dfuCommand)
 {
-    m_connected = connected;
+    m_canEnterDfu = connected && dfuCommand;
+    ui->enterDfuButton->setToolTip(connected && !dfuCommand
+                                       ? "The tinySA Ultra has no DFU command: switch it off, hold the jog "
+                                         "switch pressed and switch it on"
+                                       : QString());
     setBusy(m_busy);
 }
 
@@ -131,6 +155,8 @@ void FirmwareDialog::refresh()
         ui->dfuDeviceCombo->addItem(d.label());
         log("Found " + d.label());
     }
+    if (!m_devices.isEmpty())  // with a placeholder text Qt does not select the first item
+        ui->dfuDeviceCombo->setCurrentIndex(0);
     setBusy(false);
 }
 
@@ -142,7 +168,7 @@ void FirmwareDialog::setBusy(bool busy)
     ui->saveFlashButton->setEnabled(dev);
     ui->leaveDfuButton->setEnabled(dev);
     ui->dfuDeviceCombo->setEnabled(!busy);
-    ui->enterDfuButton->setEnabled(!busy && m_connected);
+    ui->enterDfuButton->setEnabled(!busy && m_canEnterDfu);
     if (!busy)
         ui->dfuProgress->setFormat("%p%");
 }

@@ -1,0 +1,13 @@
+# DFU, read-only, on hardware. Put the tinySA in DFU mode first (basic: the app's button or
+# menu; Ultra: switch off, hold the jog switch, switch on).
+#   tinySA-App.exe --ini test\out\hw.ini --script test\hw_dfu_read.txt --out test\out\dfu
+click actionFirmware
+waitfor dfu.devices >= 1 30000
+dump dfu.log found.log
+do dfuread test/out/dfu/flash.bin
+wait 500
+waitfor dfu.busy == 0 90000
+dump dfu.log read.log
+check dfu.log contains Saved
+shotw firmwareDialog dfu_read.png
+quit

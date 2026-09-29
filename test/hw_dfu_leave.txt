@@ -1,0 +1,13 @@
+# Leave DFU on hardware: the tinySA must start its firmware and come back as a serial port.
+click actionFirmware
+waitfor dfu.devices >= 1 30000
+do dfuleave
+wait 500
+waitfor dfu.busy == 0 20000
+waitfor dfu.devices == 0 20000
+dump dfu.log leave.log
+wait 3000
+do connect COM20
+waitfor connected == 1 15000
+check model contains tinySA
+quit

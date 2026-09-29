@@ -5,17 +5,17 @@
 static const ModelDesc kBasic{
     "tinySA", {320, 240}, 128, false, true,
     0, 350e6, 240e6, 960e6,
-    {3, 10, 30, 100, 300, 600}, 30};
+    {3, 10, 30, 100, 300, 600}, 30, true};
 
 static const ModelDesc kUltra{
     "tinySA Ultra", {480, 320}, 174, true, false,
     0, 9.9e9, 0, 0,
-    {0.2, 1, 3, 10, 30, 100, 300, 600, 850}, 30};
+    {0.2, 1, 3, 10, 30, 100, 300, 600, 850}, 30, false};
 
 static const ModelDesc kUltraPlus{
     "tinySA Ultra+", {480, 320}, 174, true, false,
     0, 9.9e9, 0, 0,
-    {0.2, 1, 3, 10, 30, 100, 300, 600, 850}, 30};
+    {0.2, 1, 3, 10, 30, 100, 300, 600, 850}, 30, false};
 
 const ModelDesc *detectModel(const QString &info, const QString &version)
 {

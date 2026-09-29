@@ -60,6 +60,7 @@ private:
     QByteArray m_buf;
     qsizetype m_pos = 0;        // read position in m_buf (compacted after each feed)
     QByteArray m_echo;          // expected echo line ("" = none pending)
+    QByteArray m_fragment;      // start of a line interrupted by a screen push
     Body m_body = Body::Text;
     int m_captureBytes = 0;
     QByteArray m_rle;           // RLE8 capture being collected

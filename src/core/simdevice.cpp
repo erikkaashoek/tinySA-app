@@ -201,6 +201,8 @@ void SimTransport::processInput()
         } else if (c >= ' ') {
             m_line += c;
             out(QByteArray(1, c));
+            if (m_pushTimer.isActive() && m_line.size() == 2)
+                pushTick();  // a screen push inside the echo, as the firmware's threads allow
         }
     }
 }

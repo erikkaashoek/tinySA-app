@@ -252,6 +252,15 @@ private slots:
         QCOMPARE(describe(raw), QString("E:capture rle PX:8 P"));
         QVERIFY(!raw[1].rle8);
     }
+    void pushInsideAnEcho()
+    {
+        const QByteArray push = "bulk\r\n" + QByteArray("\x00\x00\x00\x00\x01\x00\x01\x00", 8) + "AB" + "ch> ";
+        for (int chunk : {0, 1, 5}) {
+            const auto ev = play({{"refresh off", RxParser::Body::Text, 0,
+                                   "ref" + push + "resh off\r\nch> "}}, chunk);
+            QCOMPARE(describe(ev), QString("R:0,0,1,1,0,2 E:refresh off P"));
+        }
+    }
     void rgb565IsBigEndian()
     {
         QImage img(2, 1, QImage::Format_RGB16);

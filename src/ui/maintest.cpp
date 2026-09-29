@@ -59,6 +59,7 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "battery.samples") return num(m_battery->samples());
     if (name == "dfu.devices") return num(m_firmwareDialog->deviceCount());
     if (name == "dfu.log") return m_firmwareDialog->logText();
+    if (name == "dfu.busy") return m_firmwareDialog->busy() ? "1" : "0";
     if (name == "theme.linewidth") return num(m_settings.theme.lineWidth);
     if (name == "theme.background") return m_settings.theme.background.name();
     if (name == "csv.separator") return QString(m_settings.csv.separator);
@@ -142,6 +143,12 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
                           t == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(v, &e);
         }
+    } else if (name == "dfuread") {  // dfuread <file>: Save flash without the file dialog
+        return m_firmwareDialog->startRead(a0);
+    } else if (name == "dfuwrite") {  // dfuwrite <file>: Upload + verify without confirmation
+        return m_firmwareDialog->startWrite(a0, true);
+    } else if (name == "dfuleave") {
+        return m_firmwareDialog->startLeave();
     } else if (name == "recordfolder") {  // keep tests out of the user's documents
         m_settings.recordFolder = a0;
     } else if (name == "levels") {  // levels <bottom> <top>: fixed graph levels
