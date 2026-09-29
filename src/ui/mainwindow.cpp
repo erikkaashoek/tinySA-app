@@ -302,6 +302,7 @@ void MainWindow::onDisconnected(const QString &reason)
     m_batteryLabel->clear();
     onScanChanged(DeviceLink::Off);
     statusBar()->showMessage(reason, 5000);
+    m_messages << reason;
 }
 
 void MainWindow::applyModel(const ModelDesc *m)

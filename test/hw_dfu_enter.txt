@@ -1,11 +1,23 @@
-# Restart the connected tinySA in DFU mode by command (`reset dfu`); it stays in DFU mode for
-# hw_dfu_read / hw_dfu_write, and hw_dfu_leave brings it back:
+# Restart the connected tinySA in DFU mode by command (`reset dfu`) while the app scans, so the
+# port vanishes mid-session as with an unplug (this crashed the app once: the clean-up wrote to
+# the dead port and its error re-entered). The unit stays in DFU mode for hw_dfu_read, and
+# hw_dfu_leave brings it back:
 #   tinySA-App.exe --port COM20 --ini test\out\hw.ini --script test\hw_dfu_enter.txt --out test\out\dfu
 waitfor connected == 1 10000
+set pointsCombo 450
+click scanButton
+waitfor sweeps >= 3 20000
+check scan == 2
 click actionFirmware
 click enterDfuButton
 waitfor dfu.devices >= 1 20000
+waitfor connected == 0 5000
+check scan == 0
 check sent contains reset dfu
-check connected == 0
+wait 2000
+check dfu.devices >= 1
+# one disconnect reported, by whichever noticed first (serial error or port poll)
+check messages !contains |
 dump dfu.log enter.log
+dump messages messages.txt
 quit

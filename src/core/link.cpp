@@ -1,9 +1,11 @@
 #include "link.h"
 #include "simdevice.h"
+#include <QPointer>
 #include <QRegularExpression>
 #include <QSerialPort>
 #include <QSerialPortInfo>
 #include <cmath>
+#include <utility>
 
 DeviceLink::DeviceLink(QObject *parent)
     : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_screenTimer(this), m_touchTimer(this)
@@ -64,10 +66,12 @@ void DeviceLink::open(const QString &port)
             emit closed(QString("Cannot open %1: %2").arg(port, err));
             return;
         }
-        connect(sp, &QSerialPort::errorOccurred, this, [this](QSerialPort::SerialPortError e) {
-            if (e == QSerialPort::ResourceError || e == QSerialPort::PermissionError)
+        // Queued: a failing write reports its error from inside write() or waitForBytesWritten(),
+        // where closing the port would pull it from under the caller.
+        connect(sp, &QSerialPort::errorOccurred, this, [this, port = QPointer<QSerialPort>(sp)](QSerialPort::SerialPortError e) {
+            if ((e == QSerialPort::ResourceError || e == QSerialPort::PermissionError) && port && m_io == port)
                 fail("Connection lost");
-        });
+        }, Qt::QueuedConnection);
         sp->clear(QSerialPort::Input);
         m_io = sp;
     }
@@ -144,21 +148,27 @@ void DeviceLink::shutdown(const QString &reason)
     m_timeout.stop();
     m_battery.stop();
     m_drain.stop();
-    if (m_io) {
+    const bool wasOpen = m_io != nullptr;
+    if (QIODevice *io = std::exchange(m_io, nullptr)) {
+        io->disconnect(this);  // nothing from the port gets back in here while it closes
+        auto *sp = qobject_cast<QSerialPort *>(io);
+        const bool gone = sp && (sp->error() == QSerialPort::ResourceError
+                                 || sp->error() == QSerialPort::PermissionError);
         // Leave the unit sweeping on its own: stop our scan (the shell reads the abort
         // within 5 s) and undo our pause. Both wait in the unit's input buffer if needed.
-        if (m_cur && m_cur->body == RxParser::Body::ScanRaw && !m_scanDone && !m_aborting)
-            m_io->write("abort\r");
-        if (m_remote)
-            m_io->write("refresh off\r");
-        if (m_paused && m_ready)
-            m_io->write("resume\r");
-        if (auto *sp = qobject_cast<QSerialPort *>(m_io))
-            sp->waitForBytesWritten(200);
-        m_io->disconnect(this);
-        m_io->close();
-        m_io->deleteLater();
-        m_io = nullptr;
+        // Not when the unit has left USB (unplugged, restarting in DFU mode).
+        if (!gone) {
+            if (m_cur && m_cur->body == RxParser::Body::ScanRaw && !m_scanDone && !m_aborting)
+                io->write("abort\r");
+            if (m_remote)
+                io->write("refresh off\r");
+            if (m_paused && m_ready)
+                io->write("resume\r");
+            if (sp)
+                sp->waitForBytesWritten(200);
+        }
+        io->close();
+        io->deleteLater();
     }
     m_queue.clear();
     m_cur.reset();
@@ -171,7 +181,7 @@ void DeviceLink::shutdown(const QString &reason)
         emit scanChanged(Off);
     }
     updateBusy();
-    if (!reason.isEmpty())
+    if (wasOpen && !reason.isEmpty())  // once: the port poll may ask again after a lost connection
         emit closed(reason);
 }
 

@@ -141,3 +141,6 @@ Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g
 - core/ has no QtWidgets; UI controllers stay thin (widgets → Session setters, Session signals → render).
 - .cpp ≤ ~450 lines, headers are the contract. Every interactive widget has an objectName (autotest).
 - Never small-read QSerialPort on Windows: bulk readAll into a buffer, parse from the buffer.
+- QSerialPort emits errorOccurred synchronously from inside write()/waitForBytesWritten(): handle it
+  queued, and DeviceLink::shutdown() detaches + disconnects the port before its goodbye writes (a
+  direct handler recursed until the stack overflowed when `reset dfu` removed the port mid-scan).
