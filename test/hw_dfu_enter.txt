@@ -1,4 +1,5 @@
-# Enter DFU by command and leave it again, on hardware (no flash read or write):
+# Restart the connected tinySA in DFU mode by command (`reset dfu`); it stays in DFU mode for
+# hw_dfu_read / hw_dfu_write, and hw_dfu_leave brings it back:
 #   tinySA-App.exe --port COM20 --ini test\out\hw.ini --script test\hw_dfu_enter.txt --out test\out\dfu
 waitfor connected == 1 10000
 click actionFirmware
@@ -7,13 +8,4 @@ waitfor dfu.devices >= 1 20000
 check sent contains reset dfu
 check connected == 0
 dump dfu.log enter.log
-do dfuleave
-wait 500
-waitfor dfu.busy == 0 20000
-waitfor dfu.devices == 0 20000
-wait 3000
-do connect COM20
-waitfor connected == 1 15000
-check model contains tinySA
-dump dfu.log leave.log
 quit

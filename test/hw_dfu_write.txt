@@ -1,0 +1,18 @@
+# DFU write on hardware (reflashes the unit: only with the owner's go-ahead). The tinySA must be
+# in DFU mode (hw_dfu_enter) and test/out/dfu/fw.bin the firmware to write, e.g. the part below
+# the config area (0x0803C000 on the tinySA4) of a hw_dfu_read backup. Reads the whole flash back
+# to after.bin, to compare with the backup; the unit stays in DFU mode (then hw_dfu_leave).
+#   tinySA-App.exe --ini test\out\hw.ini --script test\hw_dfu_write.txt --out test\out\dfu
+click actionFirmware
+waitfor dfu.devices >= 1 30000
+do dfuwrite test/out/dfu/fw.bin
+wait 500
+waitfor dfu.busy == 0 180000
+dump dfu.log write.log
+check dfu.log contains Firmware written and verified
+do dfuread test/out/dfu/after.bin
+wait 500
+waitfor dfu.busy == 0 90000
+check dfu.log contains Saved
+shotw firmwareDialog dfu_write.png
+quit

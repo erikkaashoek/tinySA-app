@@ -26,6 +26,7 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     auto num = [](double x, int dec = 0) { return QString::number(x, 'f', dec); };
     if (name == "connected") return m_session.isConnected() ? "1" : "0";
     if (name == "model") return m_session.device().model ? m_session.device().model->name : "";
+    if (name == "version") return m_session.device().version;
     if (name == "sweeps") return num(m_sweeps);
     if (name == "sweeps.new") return num(m_sweeps - m_sweepsMark);  // since "do mark"
     if (name == "scan") return num(m_session.scanMode());

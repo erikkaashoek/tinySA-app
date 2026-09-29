@@ -33,16 +33,23 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   transport interface; transports for the driver Windows bound to 0483:DF11 — WinUSB, libusb-win32
   (\\.\libusb0-NNNN), libusbK (libusb0 IOCTLs, untested) and legacy STTub30. Only the pages the
   image covers are erased (the unit keeps its stored config). Unit tests against a fake bootloader;
-  sim step6.txt covers the dialog. Hardware (Ultra, WinUSB "STM32 BOOTLOADER"): hw_dfu_read (256 KB
-  in ~13 s), hw_dfu_leave and hw_dfu_enter (`reset dfu` → bootloader in ~1 s → leave → reconnect)
-  PASS. NOT yet on hardware: a DFU write (ask the user first), the libusb-win32/libusbK/STTub30 paths.
+  sim step6.txt covers the dialog. Hardware scripts chain: hw_dfu_enter (`reset dfu`, bootloader in
+  ~1 s) → hw_dfu_read (256 KB in ~13 s) / hw_dfu_write → hw_dfu_leave (restart + reconnect +
+  version). On the Ultra over WinUSB "STM32 BOOTLOADER": enter, read, leave PASS. NOT yet on
+  hardware: hw_dfu_write (never run: the auto-mode permission check blocks the flash erase, so the
+  user must run it or allow it), the libusb-win32/libusbK/STTub30 paths.
+  tinySA4 flash: firmware `flash0` 0x08000000 (240 KB), config + settings `flash7` 0x0803C000–
+  0x08040000 (only the 4 KB config is used). The unit's v1.4-244 image appears to end at 0x0802F020
+  (erased up to the page end after it); 0x0802F800–0x08039AB0 is identical in the v1.4-241 and
+  v1.4-244 dumps, probably left over from an older image.
 - **Step 7 DONE**: parity items (show-markers toggle, step in the status bar, colour alpha, graph
   text size; legacy `threshold` not applicable to the tinySA), dist packaging (runtime set verified
   with dumpbin), README; legacy/ removed (the VCL app remains on `master` / `tinyGTC`).
 - Hardware 2026-09-29 (Ultra ZS405, the user's fw tinySA4_v1.4-244-g650f538-dirty with RLE8 and
   `reset dfu`): hw_smoke, hw_screen (RLE8 ~30 KB in ~250 ms vs raw 307 KB in ~345 ms; pixel-exact
   vs raw), hw_dfu_enter PASS. The remote-mode push-inside-echo race was found and fixed there.
-- Remaining: a DFU write on hardware (only with the user's go-ahead).
+- Remaining: a DFU write on hardware (the user said yes on 2026-09-29, but the permission check
+  blocked it; test/out/dfu/flash.bin is the backup of the v1.4-244 unit, fw.bin its first 0x39AB0 bytes).
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·

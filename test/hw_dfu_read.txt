@@ -1,5 +1,5 @@
-# DFU, read-only, on hardware. Put the tinySA in DFU mode first (basic: the app's button or
-# menu; Ultra: switch off, hold the jog switch, switch on).
+# DFU, read-only, on hardware. Put the tinySA in DFU mode first (hw_dfu_enter, or switch it
+# off, hold the jog switch pressed and switch it on).
 #   tinySA-App.exe --ini test\out\hw.ini --script test\hw_dfu_read.txt --out test\out\dfu
 click actionFirmware
 waitfor dfu.devices >= 1 30000

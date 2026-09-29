@@ -10,4 +10,5 @@ wait 3000
 do connect COM20
 waitfor connected == 1 15000
 check model contains tinySA
+dump version version.txt
 quit
