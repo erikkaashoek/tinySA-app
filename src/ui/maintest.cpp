@@ -1,6 +1,8 @@
 // MainWindow: TestHost queries and actions for the script runner (autotest.h).
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "batterywindow.h"
+#include "consolewindow.h"
 #include <QApplication>
 #include <QMenu>
 #include <QRegularExpression>
@@ -50,6 +52,8 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
         return m >= 0 && m < TraceSet::kMemories ? num(m_session.traces().memory(m).dBm.size()) : "";
     }
     if (name == "markers") return num(m_session.markers().count());
+    if (name == "console.log") return m_console->logText();
+    if (name == "battery.samples") return num(m_battery->samples());
     if (name == "selected") return num(m_session.markers().selected());
     if (name.startsWith("peak.max.") || name.startsWith("peak.min.")) {  // interpolated peak markers
         const QPointF pk = ui->spectrum->peak(name.startsWith("peak.max"));
@@ -104,6 +108,14 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
                 return true;
             }
         return false;
+    } else if (name == "macro") {  // macro <1..4> <name> <command|command...>
+        QStringList names = m_console->macroNames(), cmds = m_console->macroCommands();
+        const int i = a0.toInt() - 1;
+        if (i < 0 || i >= names.size())
+            return false;
+        names[i] = a1;
+        cmds[i] = args.mid(2).join(' ').split('|').join('\n');
+        m_console->setMacros(names, cmds);
     } else if (name == "recordfolder") {  // keep tests out of the user's documents
         m_settings.recordFolder = a0;
     } else if (name == "levels") {  // levels <bottom> <top>: fixed graph levels

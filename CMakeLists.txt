@@ -60,6 +60,11 @@ qt_add_executable(tinySA-App WIN32
     src/ui/spectrummarkers.cpp
     src/ui/markermodel.cpp
     src/ui/mainmarkers.cpp
+    src/ui/maintools.cpp
+    src/ui/consolewindow.cpp
+    src/ui/consolewindow.ui
+    src/ui/batterywindow.cpp
+    src/ui/batterywindow.ui
     res/tinySA-App.rc
 )
 target_include_directories(tinySA-App PRIVATE src/ui)

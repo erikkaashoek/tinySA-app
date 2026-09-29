@@ -15,7 +15,10 @@ namespace Ui { class MainWindow; }
 class QLabel;
 class QLineEdit;
 class QToolButton;
+class QSettings;
 class MarkerModel;
+class ConsoleWindow;
+class BatteryWindow;
 
 class MainWindow : public QMainWindow, public TestHost {
     Q_OBJECT
@@ -58,6 +61,9 @@ private:
     void renderMarkers();  // MarkerSet + shown live trace -> graph marks and table
     void markerToPeak(bool addNew);
     double snap(double hz) const;  // nearest point of the shown live trace
+    void setupTools();             // console, battery (maintools.cpp)
+    void showTool(QWidget *w);
+    void saveTools(QSettings &qs);
     void error(const QString &what);
 
     std::unique_ptr<Ui::MainWindow> ui;
@@ -66,6 +72,8 @@ private:
     AppSettings m_settings;
     SweepRecorder m_recorder;
     MarkerModel *m_markerModel = nullptr;
+    ConsoleWindow *m_console = nullptr;
+    BatteryWindow *m_battery = nullptr;
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;

@@ -812,8 +812,16 @@
     </property>
     <addaction name="actionAbout"/>
    </widget>
+   <widget class="QMenu" name="menuTools">
+    <property name="title">
+     <string>&amp;Tools</string>
+    </property>
+    <addaction name="actionConsole"/>
+    <addaction name="actionBattery"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuView"/>
+   <addaction name="menuTools"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
@@ -836,6 +844,9 @@
    <addaction name="actionSaveImage"/>
    <addaction name="actionCopyImage"/>
    <addaction name="actionRecord"/>
+   <addaction name="separator"/>
+   <addaction name="actionConsole"/>
+   <addaction name="actionBattery"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSaveCsv">
@@ -893,6 +904,22 @@
    </property>
    <property name="text">
     <string>Marker list</string>
+   </property>
+  </action>
+  <action name="actionConsole">
+   <property name="text">
+    <string>Console</string>
+   </property>
+   <property name="toolTip">
+    <string>Type tinySA commands and see the traffic</string>
+   </property>
+  </action>
+  <action name="actionBattery">
+   <property name="text">
+    <string>Battery</string>
+   </property>
+   <property name="toolTip">
+    <string>Battery voltage over time</string>
    </property>
   </action>
   <action name="actionAbout">

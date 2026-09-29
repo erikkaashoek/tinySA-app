@@ -40,7 +40,7 @@ signals:
     void reply(const QString &command, const QStringList &lines);
     void battery(int mV);
     void screen(const QImage &img);
-    void traffic(bool sent, const QString &text);
+    void traffic(bool sent, const QString &text, bool user);
     void message(const QString &text);
 
 private:

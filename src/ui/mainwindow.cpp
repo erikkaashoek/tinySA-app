@@ -1,6 +1,8 @@
 // MainWindow: construction, wiring, connection and sweep configuration.
 // Traces/files: mainfiles.cpp. Test hooks: maintest.cpp.
 #include "mainwindow.h"
+#include "batterywindow.h"
+#include "consolewindow.h"
 #include "ui_mainwindow.h"
 #include <QCloseEvent>
 #include <QLabel>
@@ -104,6 +106,7 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     });
 
     setupMarkers();
+    setupTools();
 
     // --- graph intents ---
     connect(ui->spectrum, &SpectrumView::rangeRequested, this, &MainWindow::applyRangeOp);
@@ -158,6 +161,9 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     ui->calcCombo->setCurrentIndex(std::clamp(m_settings.hold, 0, 2));
     ui->avgCombo->setCurrentIndex(std::clamp(int(std::log2(std::max(1, m_settings.average))), 0, 6));
     ui->sweepNameEdit->setText(m_settings.sweepName);
+    m_console->setMacros(m_settings.macroNames, m_settings.macroCommands);
+    m_console->setHistory(m_settings.history);
+    m_battery->setTheme(m_settings.theme);
     restoreState(qs.value("window/state").toByteArray());
     ui->graphSplitter->restoreState(qs.value("window/graph_splitter").toByteArray());
     ui->actionShowMarkers->setChecked(qs.value("window/show_markers", true).toBool());
@@ -186,12 +192,16 @@ void MainWindow::closeEvent(QCloseEvent *e)
     m_settings.hold = int(m_session.traces().hold());
     m_settings.average = m_session.traces().average();
     m_settings.markers = m_session.markers().serialize();
+    m_settings.macroNames = m_console->macroNames();
+    m_settings.macroCommands = m_console->macroCommands();
+    m_settings.history = m_console->history();
     m_settings.save(qs);
     qs.setValue("window/geometry", saveGeometry());
     qs.setValue("window/splitter", ui->splitter->saveState());
     qs.setValue("window/state", saveState());
     qs.setValue("window/graph_splitter", ui->graphSplitter->saveState());
     qs.setValue("window/show_markers", ui->actionShowMarkers->isChecked());
+    saveTools(qs);
     QString err;
     for (int m = 0; m < TraceSet::kMemories; ++m) {
         const Trace &t = m_session.traces().memory(m);

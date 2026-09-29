@@ -59,7 +59,7 @@ signals:
     void reply(const QString &command, const QStringList &lines);
     void battery(int mV);
     void screen(const QImage &img);
-    void traffic(bool sent, const QString &text);  // command lines and reply lines, for the console
+    void traffic(bool sent, const QString &text, bool user);  // console log; user = from send()
     void message(const QString &text);
 
 private:
@@ -69,6 +69,7 @@ private:
         int bytes = 0;    // capture size
         int timeoutMs = 3000;
         std::function<void(bool ok, const QStringList &lines)> done;
+        bool user = false;  // typed by the user (console, dialogs), not the app's own traffic
     };
     void enqueue(Cmd c);
     void pump();      // send the next command, or start the next sweep

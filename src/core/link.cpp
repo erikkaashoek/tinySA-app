@@ -199,6 +199,7 @@ void DeviceLink::send(const QString &command)
     if (command.trimmed() == "capture" && m_info.model)
         return capture();
     c.done = [this, command](bool, const QStringList &lines) { emit reply(command, lines); };
+    c.user = true;
     enqueue(c);
 }
 
@@ -316,7 +317,7 @@ void DeviceLink::transmit(Cmd c)
     if (c.line == "pause" || c.line == "resume")  // the unit's state from now on
         m_paused = c.line == "pause";
     if (c.body != RxParser::Body::ScanRaw)
-        emit traffic(true, QString::fromLatin1(c.line));
+        emit traffic(true, QString::fromLatin1(c.line), c.user);
     m_timeout.start(c.timeoutMs);
     m_cur = std::move(c);
 }
@@ -346,7 +347,7 @@ void DeviceLink::handle(const RxEvent &e)
         m_echoSeen = true;
         break;
     case RxEvent::Line:
-        emit traffic(false, QString::fromLatin1(e.data));
+        emit traffic(false, QString::fromLatin1(e.data), m_cur && m_cur->user && m_echoSeen);
         if (m_cur && m_echoSeen)
             m_lines << QString::fromLatin1(e.data);
         break;

@@ -1,0 +1,23 @@
+# Step 5a: console (commands, history, macros) and battery window (simulated Ultra).
+#   tinySA-App.exe --sim --ini test\out\step5.ini --script test\step5a.txt --out test\out\step5a
+do connect sim:ultra
+waitfor connected == 1
+click actionConsole
+set commandEdit version
+waitfor console.log contains tinySA4_v1.4-sim 3000
+check console.log contains > version
+# the app's own traffic (sweep settings, battery polls) is hidden unless asked for
+check console.log !contains vbat
+set commandEdit info
+waitfor console.log contains ZS407 3000
+do macro 1 Levels rbw 30|attenuate 5|sweep
+click macro1Button
+wait 1000
+check console.log contains > sweep
+check sent contains rbw 30
+check sent contains attenuate 5
+shotw consoleWindow step5_console.png
+click actionBattery
+waitfor battery.samples >= 1 8000
+shotw batteryWindow step5_battery.png
+quit

@@ -5,6 +5,7 @@
 #include "sweepconfig.h"
 #include <QColor>
 #include <QString>
+#include <QStringList>
 
 class QSettings;
 
@@ -37,6 +38,7 @@ struct AppSettings {
     QString sweepName;            // header of saved images and CSV files
     QString recordFolder;         // default: Documents/tinySA-App
     CsvFormat csv;
+    QStringList macroNames, macroCommands, history;  // console
 
     template <class V> void visit(V &&v)
     {
@@ -81,6 +83,9 @@ struct AppSettings {
         v("file/record_folder", recordFolder);
         v("file/csv_separator", m_csvSeparator);
         v("file/csv_decimal_comma", csv.decimalComma);
+        v("console/macro_names", macroNames);
+        v("console/macro_commands", macroCommands);
+        v("console/history", history);
     }
 
     void load(QSettings &s);

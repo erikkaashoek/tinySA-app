@@ -106,6 +106,7 @@ bool AutoTest::compare(const QString &query, const QString &op, const QString &w
     if (op == "==") return okA && okB ? a == b : *got == want;
     if (op == "!=") return okA && okB ? a != b : *got != want;
     if (op == "contains") return got->contains(want);
+    if (op == "!contains") return !got->contains(want);
     if (!okA || !okB) return false;
     if (op == "<") return a < b;
     if (op == "<=") return a <= b;
@@ -168,7 +169,7 @@ bool AutoTest::exec(const QStringList &tok)
         fail(QString("waitfor %1 %2 %3: timed out, got '%4'").arg(arg, tok.value(2), tok.value(3), got));
     } else if (cmd == "check") {
         const QString op = tok.value(2);
-        const bool text = op == "==" || op == "!=" || op == "contains";  // value = rest of line
+        const bool text = op == "==" || op == "!=" || op.endsWith("contains");  // value = rest of line
         const QString want = text ? tok.mid(3).join(' ') : tok.value(3);
         QString got;
         if (!compare(arg, op, want, tok.value(4, "0").toDouble(), &got))
