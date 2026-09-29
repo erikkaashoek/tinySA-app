@@ -14,7 +14,7 @@ static QString winError(DWORD e = GetLastError())
                    nullptr, e, 0, reinterpret_cast<wchar_t *>(&text), 0, nullptr);
     const QString s = text ? QString::fromWCharArray(text).trimmed() : QString("error %1").arg(e);
     LocalFree(text);
-    return s;
+    return e == ERROR_ACCESS_DENIED ? s + " Is another program using the DFU device?" : s;
 }
 
 static const wchar_t *wide(const QString &s)

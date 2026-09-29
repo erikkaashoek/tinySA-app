@@ -33,11 +33,15 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   transport interface; transports for the driver Windows bound to 0483:DF11 — WinUSB, libusb-win32
   (\\.\libusb0-NNNN), libusbK (libusb0 IOCTLs, untested) and legacy STTub30. Only the pages the
   image covers are erased (the unit keeps its stored config). Unit tests against a fake bootloader;
-  sim step6.txt covers the dialog. Hardware scripts chain: hw_dfu_enter (`reset dfu`, bootloader in
-  ~1 s) → hw_dfu_read (256 KB in ~13 s) / hw_dfu_write → hw_dfu_leave (restart + reconnect +
-  version). On the Ultra over WinUSB "STM32 BOOTLOADER": enter, read, leave PASS. NOT yet on
-  hardware: hw_dfu_write (never run: the auto-mode permission check blocks the flash erase, so the
-  user must run it or allow it), the libusb-win32/libusbK/STTub30 paths.
+  sim step6.txt covers the dialog. Hardware scripts: hw_dfu_enter (`reset dfu`, bootloader in
+  ~1 s) → hw_dfu_read (256 KB in ~13 s) → hw_dfu_leave (restart + reconnect + version), run one
+  after the other; hw_dfu_write does enter → write + verify → read back → leave in ONE run and
+  `bail`s before leaving if the write failed. The app is a GUI program: cmd.exe does not wait for
+  it, so never hand the user several commands to paste at once (on 2026-09-29 they ran together;
+  WinUSB allows one handle, so the write got "Access is denied" and wrote nothing).
+  On the Ultra over WinUSB "STM32 BOOTLOADER": enter, read, leave PASS. NOT yet on hardware:
+  hw_dfu_write (the auto-mode permission check blocks the flash erase for Claude, so the user runs
+  it), the libusb-win32/libusbK/STTub30 paths.
   tinySA4 flash: firmware `flash0` 0x08000000 (240 KB), config + settings `flash7` 0x0803C000–
   0x08040000 (only the 4 KB config is used). The unit's v1.4-244 image appears to end at 0x0802F020
   (erased up to the page end after it); 0x0802F800–0x08039AB0 is identical in the v1.4-241 and

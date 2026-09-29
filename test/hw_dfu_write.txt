@@ -1,18 +1,35 @@
-# DFU write on hardware (reflashes the unit: only with the owner's go-ahead). The tinySA must be
-# in DFU mode (hw_dfu_enter) and test/out/dfu/fw.bin the firmware to write, e.g. the part below
-# the config area (0x0803C000 on the tinySA4) of a hw_dfu_read backup. Reads the whole flash back
-# to after.bin, to compare with the backup; the unit stays in DFU mode (then hw_dfu_leave).
-#   tinySA-App.exe --ini test\out\hw.ini --script test\hw_dfu_write.txt --out test\out\dfu
+# DFU write on hardware in one run (reflashes the unit: only with the owner's go-ahead).
+# Restarts the connected tinySA in DFU mode, uploads + verifies test/out/dfu/fw.bin, reads the
+# whole flash back to after.bin (to compare with the hw_dfu_read backup), then starts the firmware
+# and reconnects. fw.bin: e.g. the part of a backup below the config area (0x0803C000, tinySA4).
+# Stops (the unit stays in DFU mode) if anything fails before the firmware is verified.
+#   build\tinySA-App.exe --port COM20 --ini test\out\hw.ini --script test\hw_dfu_write.txt --out test\out\dfu
+# Run it on its own: it is a GUI program, so a command prompt does not wait for it. It is done
+# when its window closes (about a minute); the result is at the end of test\out\dfu\log.txt.
+waitfor connected == 1 10000
+bail
 click actionFirmware
-waitfor dfu.devices >= 1 30000
+click enterDfuButton
+waitfor dfu.devices >= 1 20000
+bail
 do dfuwrite test/out/dfu/fw.bin
 wait 500
 waitfor dfu.busy == 0 180000
 dump dfu.log write.log
 check dfu.log contains Firmware written and verified
+bail
 do dfuread test/out/dfu/after.bin
 wait 500
 waitfor dfu.busy == 0 90000
 check dfu.log contains Saved
 shotw firmwareDialog dfu_write.png
+do dfuleave
+wait 500
+waitfor dfu.busy == 0 20000
+waitfor dfu.devices == 0 20000
+wait 3000
+do connect COM20
+waitfor connected == 1 15000
+dump version version.txt
+dump dfu.log write.log
 quit

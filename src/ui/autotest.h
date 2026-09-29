@@ -15,6 +15,7 @@
 //   shot <file.png>               grab the main window into the out dir
 //   shotw <widget> <file.png>     grab one widget
 //   dump <query> <file>           write a query result (e.g. trace CSV) into the out dir
+//   bail                          quit here if anything failed so far (guards risky steps)
 //   quit                          exit; process exit code = number of failures
 #include <QObject>
 #include <QStringList>

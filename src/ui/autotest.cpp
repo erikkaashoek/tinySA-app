@@ -71,7 +71,10 @@ void AutoTest::step()
     if (m_pc >= m_lines.size())
         m_lines << "quit";
     const QStringList tok = m_lines[m_pc].split(' ', Qt::SkipEmptyParts);
-    if (tok[0] == "quit") {
+    const bool bail = tok[0] == "bail" && m_failures;
+    if (tok[0] == "quit" || bail) {
+        if (bail)
+            log("bail: stopped after a failure");
         log(m_failures ? "RESULT: FAIL" : "RESULT: PASS");
         m_host->testWindow()->close();
         QApplication::exit(m_failures);
@@ -202,6 +205,8 @@ bool AutoTest::exec(const QStringList &tok)
             fail("dump " + arg + " failed");
         else
             f.write(text->toUtf8());
+    } else if (cmd == "bail") {
+        // nothing failed so far (step() ends the script otherwise)
     } else {
         fail("unknown command: " + cmd);
     }
