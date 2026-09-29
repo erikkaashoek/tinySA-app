@@ -206,6 +206,50 @@ private slots:
                              0);
         QCOMPARE(describe(ev), QString("E:scanraw 5 1 2 L:frequency range is invalid P"));
     }
+    void packBitsRoundTrip()
+    {
+        QList<QByteArray> cases{QByteArray(480, 0), QByteArray(1, 7), QByteArray("ab"),
+                                QByteArray(128, 5), QByteArray(129, 5), QByteArray(257, 9)};
+        QByteArray mixed;
+        for (int i = 0; i < 480; ++i)  // runs of 1..9 of changing values
+            mixed += char((i / (1 + i % 9)) & 0x1f);
+        cases << mixed;
+        QByteArray noise;
+        for (int i = 0; i < 480; ++i)
+            noise += char(QRandomGenerator::global()->bounded(256));
+        cases << noise;
+        for (const QByteArray &c : cases) {
+            const QByteArray packed = SimTransport::packBits(c);
+            QCOMPARE(unpackBits(packed.constData(), int(packed.size()), int(c.size())), c);
+        }
+        QVERIFY(SimTransport::packBits(QByteArray(480, 0)).size() <= 8);  // 4 runs of 128/96
+    }
+    void captureRle8OrRawIsDetected()
+    {
+        // 2x2 image, palette {black, red}: rows "0 1" / "1 1"
+        auto le16 = [](int v) { return QByteArray(1, char(v & 0xff)) + char((v >> 8) & 0xff); };
+        QByteArray rle = QByteArray("BM") + le16(2) + le16(2) + char(8) + char(1) + le16(4)
+                         + QByteArray("\x00\x00\xf8\x00", 4);
+        rle += le16(3) + QByteArray("\x01\x00\x01", 3);  // literal 2: 0,1
+        rle += le16(2) + QByteArray("\xff\x01", 2);      // repeat 2: 1
+        for (int chunk : {0, 1, 3, 7}) {
+            const auto ev = play({{"capture rle", RxParser::Body::Capture, 8,
+                                   "capture rle\r\n" + rle + "ch> "}}, chunk);
+            QCOMPARE(describe(ev), QString("E:capture rle PX:%1 P").arg(rle.size()));
+            QVERIFY(ev[1].rle8);
+            QImage img;
+            QVERIFY(decodeRle8(ev[1].data, img));
+            QCOMPARE(img.size(), QSize(2, 2));
+            QCOMPARE(img.pixelColor(0, 0), QColor(Qt::black));
+            QCOMPARE(img.pixelColor(1, 0).red(), 255);
+            QCOMPARE(img.pixelColor(0, 1).red(), 255);
+        }
+        // old firmware ignores "rle" and sends 2x2 raw pixels
+        const auto raw = play({{"capture rle", RxParser::Body::Capture, 8,
+                                "capture rle\r\n" + QByteArray(8, '\x11') + "ch> "}}, 3);
+        QCOMPARE(describe(raw), QString("E:capture rle PX:8 P"));
+        QVERIFY(!raw[1].rle8);
+    }
     void rgb565IsBigEndian()
     {
         QImage img(2, 1, QImage::Format_RGB16);
@@ -348,15 +392,37 @@ private slots:
         QCOMPARE(reply.first().at(1).toStringList(), QStringList({"4101 mV"}));
     }
 
+    void captureDecodesScreen_data()
+    {
+        QTest::addColumn<QString>("port");
+        QTest::addColumn<QSize>("size");
+        QTest::addColumn<bool>("rle");
+        QTest::newRow("ultra, RLE8") << "sim:ultra" << QSize(480, 320) << true;
+        QTest::newRow("basic, raw (old firmware)") << "sim:basic" << QSize(320, 240) << false;
+    }
     void captureDecodesScreen()
     {
+        QFETCH(QString, port);
+        QFETCH(QSize, size);
+        QFETCH(bool, rle);
         DeviceLink link;
-        QSignalSpy opened(&link, &DeviceLink::opened), screen(&link, &DeviceLink::screen);
-        link.open("sim:ultra");
+        QSignalSpy opened(&link, &DeviceLink::opened), screen(&link, &DeviceLink::screen),
+            traffic(&link, &DeviceLink::traffic);
+        link.open(port);
         QVERIFY(opened.wait(3000));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
         link.capture();
         QVERIFY(screen.wait(3000));
-        QCOMPARE(screen.first().first().value<QImage>().size(), QSize(480, 320));
+        const QImage img = screen.first().first().value<QImage>();
+        QCOMPARE(img.size(), size);
+        QImage want(size, QImage::Format_RGB16);
+        blitRgb565BE(want, want.rect(), sim->screenBytes());
+        QCOMPARE(img, want);  // lossless: every sim colour is in the palette
+        bool sawRle = false;
+        for (const auto &t : traffic)
+            sawRle |= t.at(1).toString().contains("RLE8");
+        QCOMPARE(sawRle, rle);
+        QVERIFY(sim->received().contains("capture rle"));
     }
 
     void stopAbortsALongScan()

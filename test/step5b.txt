@@ -1,0 +1,30 @@
+# Step 5b: screen capture (RLE8 on the simulated Ultra) and live remote control.
+#   tinySA-App.exe --sim --ini test\out\step5.ini --script test\step5b.txt --out test\out\step5b
+do connect sim:ultra
+waitfor connected == 1
+do mark
+click scanButton
+waitfor sweeps.new >= 1
+click actionScreen
+waitfor screen.width == 480 3000
+set pollCheck 1
+click captureButton
+wait 500
+check console.log contains RLE8
+# remote control: our scanning pauses, the unit streams its screen changes
+set remoteCheck 1
+waitfor scan == 0 3000
+waitfor screen.updates >= 4 5000
+check sent contains refresh on
+do screentouch 200 100
+waitfor screen.pixel@200,100 == #ffffff 3000
+check sent contains touch 200 100
+check sent contains release
+# ending remote control resumes the sweep that was running
+set remoteCheck 0
+waitfor scan == 2 3000
+check sent contains refresh off
+do mark
+waitfor sweeps.new >= 2 5000
+shotw screenWindow step5_screen.png
+quit

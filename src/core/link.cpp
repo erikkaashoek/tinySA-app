@@ -6,8 +6,10 @@
 #include <cmath>
 
 DeviceLink::DeviceLink(QObject *parent)
-    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this)
+    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_screenTimer(this)
 {
+    m_screenTimer.setSingleShot(true);
+    connect(&m_screenTimer, &QTimer::timeout, this, [this] { emit screen(m_screen); });
     m_timeout.setSingleShot(true);
     connect(&m_timeout, &QTimer::timeout, this, &DeviceLink::onTimeout);
     m_battery.setInterval(6000);
@@ -135,6 +137,8 @@ void DeviceLink::shutdown(const QString &reason)
         // within 5 s) and undo our pause. Both wait in the unit's input buffer if needed.
         if (m_cur && m_cur->body == RxParser::Body::ScanRaw && !m_scanDone && !m_aborting)
             m_io->write("abort\r");
+        if (m_remote)
+            m_io->write("refresh off\r");
         if (m_paused && m_ready)
             m_io->write("resume\r");
         if (auto *sp = qobject_cast<QSerialPort *>(m_io))
@@ -147,7 +151,7 @@ void DeviceLink::shutdown(const QString &reason)
     m_queue.clear();
     m_cur.reset();
     m_rx.reset();
-    m_ready = m_paused = m_draining = false;
+    m_ready = m_paused = m_draining = m_remote = false;
     if (m_mode != Off) {
         m_mode = Off;
         emit scanChanged(Off);
@@ -207,15 +211,58 @@ void DeviceLink::capture()
 {
     if (!m_info.model)
         return;
+    // RLE8 (DiSlord) when the firmware has it; older firmware ignores the argument and
+    // sends raw RGB565, which the parser recognises by the missing RLE8 header.
     const QSize lcd = m_info.model->lcd;
-    enqueue({"capture", RxParser::Body::Capture, lcd.width() * lcd.height() * 2, 5000,
+    enqueue({"capture rle", RxParser::Body::Capture, lcd.width() * lcd.height() * 2, 5000,
              [this, lcd](bool ok, const QStringList &) {
-        if (!ok || m_pixels.size() != lcd.width() * lcd.height() * 2)
+        if (!ok)
             return;
         QImage img(lcd, QImage::Format_RGB16);
-        blitRgb565BE(img, img.rect(), m_pixels);
-        emit screen(img);
+        if (m_pixelsRle8) {
+            if (!decodeRle8(m_pixels, img) || img.size() != lcd)
+                return emit message("Screen capture: bad RLE8 data");
+        } else if (m_pixels.size() == lcd.width() * lcd.height() * 2) {
+            blitRgb565BE(img, img.rect(), m_pixels);
+        } else {
+            return;
+        }
+        emit traffic(false, QString("<screen %1x%2, %3 %4 bytes>").arg(lcd.width()).arg(lcd.height())
+                                .arg(m_pixelsRle8 ? "RLE8" : "raw").arg(m_pixels.size()), false);
+        m_screen = img;
+        emit screen(m_screen);
     }});
+}
+
+void DeviceLink::setRemote(bool on)
+{
+    if (!m_ready || on == m_remote)
+        return;
+    m_remote = on;
+    if (on) {
+        m_modeBeforeRemote = m_mode;
+        setMode(Off);  // resumes the unit's own sweeping and display
+        capture();     // full picture first, then only the changes
+        enqueue({"refresh on"});
+    } else {
+        enqueue({"refresh off"});
+        setMode(m_modeBeforeRemote);
+    }
+}
+
+void DeviceLink::touch(QPoint lcd, bool down)
+{
+    if (!m_ready)
+        return;
+    const QByteArray line = down ? "touch " + QByteArray::number(lcd.x()) + " " + QByteArray::number(lcd.y())
+                                 : QByteArray("release");
+    if (down)  // dragging: update a touch that is still waiting instead of queueing more
+        for (Cmd &c : m_queue)
+            if (c.line.startsWith("touch ")) {
+                c.line = line;
+                return;
+            }
+    enqueue({line});
 }
 
 void DeviceLink::simTouch()
@@ -387,8 +434,19 @@ void DeviceLink::handle(const RxEvent &e)
         break;
     case RxEvent::Pixels:
         m_pixels = e.data;
+        m_pixelsRle8 = e.rle8;
         break;
-    case RxEvent::Region:
+    case RxEvent::Region:  // pushed screen change (refresh on)
+        if (m_info.model && m_screen.size() != m_info.model->lcd) {
+            m_screen = QImage(m_info.model->lcd, QImage::Format_RGB16);
+            m_screen.fill(Qt::black);
+        }
+        if (e.fill)
+            fillRgb565BE(m_screen, e.rect, e.data);
+        else
+            blitRgb565BE(m_screen, e.rect, e.data);
+        if (!m_screenTimer.isActive())
+            m_screenTimer.start(40);
         break;
     }
 }

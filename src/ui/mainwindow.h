@@ -19,6 +19,7 @@ class QSettings;
 class MarkerModel;
 class ConsoleWindow;
 class BatteryWindow;
+class ScreenWindow;
 
 class MainWindow : public QMainWindow, public TestHost {
     Q_OBJECT
@@ -74,6 +75,7 @@ private:
     MarkerModel *m_markerModel = nullptr;
     ConsoleWindow *m_console = nullptr;
     BatteryWindow *m_battery = nullptr;
+    ScreenWindow *m_screen = nullptr;
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;

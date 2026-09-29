@@ -24,6 +24,8 @@ public:
     void setScan(int mode);                // DeviceLink::Off / Once / Continuous
     void send(const QString &command);
     void capture();
+    void setRemote(bool on);
+    void touch(QPoint lcd, bool down);
     void simTouch();
 
     TraceSet &traces() { return m_traces; }

@@ -65,6 +65,9 @@ qt_add_executable(tinySA-App WIN32
     src/ui/consolewindow.ui
     src/ui/batterywindow.cpp
     src/ui/batterywindow.ui
+    src/ui/screenview.cpp
+    src/ui/screenwindow.cpp
+    src/ui/screenwindow.ui
     res/tinySA-App.rc
 )
 target_include_directories(tinySA-App PRIVATE src/ui)

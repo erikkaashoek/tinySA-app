@@ -2,6 +2,8 @@
 #include "batterywindow.h"
 #include "consolewindow.h"
 #include "mainwindow.h"
+#include "screenview.h"
+#include "screenwindow.h"
 #include "ui_mainwindow.h"
 #include <QSettings>
 
@@ -17,9 +19,23 @@ void MainWindow::setupTools()
     connect(&m_session, &Session::traffic, m_console, &ConsoleWindow::appendTraffic);
     connect(&m_session, &Session::battery, m_battery, &BatteryWindow::addSample);
 
+    m_screen = new ScreenWindow(this);
+    m_screen->setObjectName("screenWindow");
+    connect(ui->actionScreen, &QAction::triggered, this, [this] {
+        showTool(m_screen);
+        if (m_session.isConnected() && m_screen->view()->image().isNull())
+            m_session.capture();
+    });
+    connect(m_screen, &ScreenWindow::captureRequested, &m_session, &Session::capture);
+    connect(m_screen, &ScreenWindow::remoteRequested, &m_session, &Session::setRemote);
+    connect(m_screen, &ScreenWindow::touchRequested, &m_session, &Session::touch);
+    connect(&m_session, &Session::screen, m_screen, &ScreenWindow::setScreen);
+    connect(&m_session, &Session::disconnected, m_screen, &ScreenWindow::remoteEnded);
+
     QSettings qs(m_settingsPath, QSettings::IniFormat);
     m_console->restoreGeometry(qs.value("tools/console_geometry").toByteArray());
     m_battery->restoreGeometry(qs.value("tools/battery_geometry").toByteArray());
+    m_screen->restoreGeometry(qs.value("tools/screen_geometry").toByteArray());
 }
 
 void MainWindow::showTool(QWidget *w)
@@ -33,4 +49,5 @@ void MainWindow::saveTools(QSettings &qs)
 {
     qs.setValue("tools/console_geometry", m_console->saveGeometry());
     qs.setValue("tools/battery_geometry", m_battery->saveGeometry());
+    qs.setValue("tools/screen_geometry", m_screen->saveGeometry());
 }

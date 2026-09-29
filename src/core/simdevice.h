@@ -6,6 +6,7 @@
 #include <QByteArrayList>
 #include <QElapsedTimer>
 #include <QIODevice>
+#include <QSize>
 #include <QTimer>
 #include <optional>
 
@@ -28,6 +29,9 @@ public:
     QByteArray pendingInput() const { return m_in; }  // written but not yet read by the shell
     double pointsPerSecond = 20000;
     int shellWaitMs = 5000;  // the shell reads input again this long into a scan (firmware)
+    bool rleCapture;         // "capture rle" answered in RLE8 (Ultra) or raw like old firmware (basic)
+    QByteArray screenBytes() const { return m_screen; }  // raw RGB565 big-endian
+    static QByteArray packBits(const QByteArray &data);
 
 protected:
     qint64 readData(char *data, qint64 maxlen) override;
@@ -38,7 +42,8 @@ private:
     void processInput();
     void execute(const QByteArray &line);
     void scanTick();
-    QByteArray capture() const;
+    void pushTick();  // refresh on: stream a changing screen region
+    QByteArray rle8() const;
 
     Kind m_kind;
     QByteArray m_in, m_out, m_line;
@@ -56,4 +61,9 @@ private:
     QTimer m_timer;
     QElapsedTimer m_clock;
     unsigned m_sweeps = 0;
+    QSize m_lcd;
+    QByteArray m_screen;  // RGB565 big-endian, as the LCD is read
+    QTimer m_pushTimer;
+    int m_pushes = 0;
+    void region(bool fill, int x, int y, int w, int h, quint16 colour);  // draw + push if refreshing
 };

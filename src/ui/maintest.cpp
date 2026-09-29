@@ -3,6 +3,8 @@
 #include "ui_mainwindow.h"
 #include "batterywindow.h"
 #include "consolewindow.h"
+#include "screenview.h"
+#include "screenwindow.h"
 #include <QApplication>
 #include <QMenu>
 #include <QRegularExpression>
@@ -54,6 +56,14 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "markers") return num(m_session.markers().count());
     if (name == "console.log") return m_console->logText();
     if (name == "battery.samples") return num(m_battery->samples());
+    if (name == "screen.width") return num(m_screen->view()->image().width());
+    if (name == "screen.updates") return num(m_screen->updates());
+    if (name.startsWith("screen.pixel@")) {  // screen.pixel@x,y -> #rrggbb
+        const QStringList xy = name.mid(13).split(',');
+        const QImage &img = m_screen->view()->image();
+        const QPoint p(xy.value(0).toInt(), xy.value(1).toInt());
+        return img.valid(p) ? img.pixelColor(p).name() : QString("none");
+    }
     if (name == "selected") return num(m_session.markers().selected());
     if (name.startsWith("peak.max.") || name.startsWith("peak.min.")) {  // interpolated peak markers
         const QPointF pk = ui->spectrum->peak(name.startsWith("peak.max"));
@@ -116,6 +126,14 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
         names[i] = a1;
         cmds[i] = args.mid(2).join(' ').split('|').join('\n');
         m_console->setMacros(names, cmds);
+    } else if (name == "screentouch") {  // screentouch x y: click on the screen view at LCD x,y
+        ScreenView *v = m_screen->view();
+        const QPointF p = v->widgetPoint({a0.toInt(), a1.toInt()});
+        for (auto t : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease}) {
+            QMouseEvent e(t, p, v->mapToGlobal(p), Qt::LeftButton,
+                          t == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(v, &e);
+        }
     } else if (name == "recordfolder") {  // keep tests out of the user's documents
         m_settings.recordFolder = a0;
     } else if (name == "levels") {  // levels <bottom> <top>: fixed graph levels

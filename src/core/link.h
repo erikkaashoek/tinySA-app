@@ -48,6 +48,10 @@ public slots:
     void setScan(int mode);
     void send(const QString &command);  // console/dialog command; reply() delivers the answer
     void capture();                     // screen() delivers the image
+    // Remote control: the unit drives its own display (our scanning pauses) and
+    // pushes screen changes; off restores the previous scan mode.
+    void setRemote(bool on);
+    void touch(QPoint lcd, bool down);  // down: press/drag at lcd pixel, else release
     void simTouch();                    // test hook: touch the simulated screen
 
 signals:
@@ -94,6 +98,7 @@ private:
     bool m_echoSeen = false, m_scanDone = false;
     QStringList m_lines;
     QByteArray m_pixels;
+    bool m_pixelsRle8 = false;
     QTimer m_timeout, m_battery, m_drain;
     bool m_draining = false;
 
@@ -107,4 +112,8 @@ private:
     bool m_busy = false, m_batteryDue = false;
     SweepFrame m_frame;
     QElapsedTimer m_sweepClock, m_emitClock, m_drainClock;
+    QImage m_screen;          // last known unit screen (capture + pushed regions)
+    QTimer m_screenTimer;     // throttles screen() while regions stream in
+    bool m_remote = false;
+    int m_modeBeforeRemote = Off;
 };

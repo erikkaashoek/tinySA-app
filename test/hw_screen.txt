@@ -1,0 +1,18 @@
+# Screen capture and live pushes on hardware (does not touch the tinySA screen):
+#   tinySA-App.exe --port COM20 --ini test\out\hw.ini --script test\hw_screen.txt --out test\out\hwscreen
+waitfor connected == 1 10000
+click actionScreen
+set pollCheck 1
+waitfor screen.width == 480 8000
+# firmware without RLE8 ignores "capture rle" and sends raw pixels
+check console.log contains raw 307200
+shotw screenWindow hw_capture.png
+set remoteCheck 1
+waitfor screen.updates >= 4 10000
+shotw screenWindow hw_remote.png
+set remoteCheck 0
+waitfor idle == 1 8000
+check sent contains refresh on
+check sent contains refresh off
+check messages ==
+quit

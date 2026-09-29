@@ -816,6 +816,7 @@
     <property name="title">
      <string>&amp;Tools</string>
     </property>
+    <addaction name="actionScreen"/>
     <addaction name="actionConsole"/>
     <addaction name="actionBattery"/>
    </widget>
@@ -845,6 +846,7 @@
    <addaction name="actionCopyImage"/>
    <addaction name="actionRecord"/>
    <addaction name="separator"/>
+   <addaction name="actionScreen"/>
    <addaction name="actionConsole"/>
    <addaction name="actionBattery"/>
   </widget>
@@ -904,6 +906,14 @@
    </property>
    <property name="text">
     <string>Marker list</string>
+   </property>
+  </action>
+  <action name="actionScreen">
+   <property name="text">
+    <string>Screen</string>
+   </property>
+   <property name="toolTip">
+    <string>The tinySA screen, with live remote control</string>
    </property>
   </action>
   <action name="actionConsole">

@@ -63,6 +63,22 @@ bool RxParser::step(QVector<RxEvent> &out)
         return true;
     case State::ScanPoints:
         return scanStep(out);
+    case State::CaptureHead: {  // RLE8 header, or already the first raw pixels
+        if (avail < 8 && avail < m_captureBytes)
+            return false;
+        auto u16 = [&](int k) { return int(quint8(p[k]) | quint8(p[k + 1]) << 8); };
+        const bool rle = avail >= 8 && p[0] == 'B' && p[1] == 'M' && p[6] == 8 && p[7] == 1
+                         && u16(2) * u16(4) * 2 == m_captureBytes;
+        if (!rle) {
+            m_state = State::Capture;
+            return true;
+        }
+        m_rle = m_buf.mid(m_pos, 8);
+        m_rleRows = u16(4);
+        m_pos += 8;
+        m_state = State::Rle8Palette;
+        return true;
+    }
     case State::Capture:
         if (avail < m_captureBytes)
             return false;
@@ -70,6 +86,30 @@ bool RxParser::step(QVector<RxEvent> &out)
         m_pos += m_captureBytes;
         m_state = State::Text;
         return true;
+    case State::Rle8Palette:
+    case State::Rle8Rows: {  // u16 length + that many bytes: the palette, then each row
+        if (avail < 2)
+            return false;
+        const int n = quint8(p[0]) | quint8(p[1]) << 8;
+        if (n > 4096) {  // not a sane block: give up on this capture
+            m_state = State::Text;
+            return true;
+        }
+        if (avail < 2 + n)
+            return false;
+        m_rle += m_buf.mid(m_pos, 2 + n);
+        m_pos += 2 + n;
+        if (m_state == State::Rle8Palette) {
+            m_state = State::Rle8Rows;
+        } else if (--m_rleRows == 0) {
+            RxEvent e{RxEvent::Pixels, m_rle};
+            e.rle8 = true;
+            out.append(e);
+            m_rle.clear();
+            m_state = State::Text;
+        }
+        return true;
+    }
     case State::RegionHeader: {
         if (avail < 8)
             return false;
@@ -125,7 +165,7 @@ bool RxParser::textStep(QVector<RxEvent> &out)
         if (m_body == Body::ScanRaw)
             m_state = State::ScanStart;
         else if (m_body == Body::Capture)
-            m_state = State::Capture;
+            m_state = State::CaptureHead;
         return true;
     }
     if (line == "bulk" || line == "fill") {
@@ -185,6 +225,24 @@ void RxParser::flushScan(QVector<RxEvent> &out)
     out.append(e);
 }
 
+QByteArray unpackBits(const char *src, int srcLen, int outLen)
+{
+    QByteArray out;
+    out.reserve(outLen);
+    for (int i = 0; i < srcLen && out.size() < outLen;) {
+        const int n = qint8(src[i++]);
+        if (n >= 0) {  // n+1 literal bytes
+            const int k = std::min(n + 1, srcLen - i);
+            out.append(src + i, k);
+            i += k;
+        } else if (n != -128 && i < srcLen) {  // next byte, 1-n times
+            out.append(QByteArray(1 - n, src[i++]));
+        }
+    }
+    out.resize(outLen, 0);
+    return out;
+}
+
 static inline quint16 be16(const char *p)
 {
     return quint16(quint8(p[0]) << 8 | quint8(p[1]));
@@ -212,4 +270,38 @@ void fillRgb565BE(QImage &img, const QRect &r, const QByteArray &colour)
         auto *dst = reinterpret_cast<quint16 *>(img.scanLine(y));
         std::fill(dst + clip.left(), dst + clip.right() + 1, c);
     }
+}
+
+bool decodeRle8(const QByteArray &payload, QImage &img)
+{
+    const char *p = payload.constData();
+    int at = 0;
+    auto u16 = [&](int k) { return int(quint8(p[k]) | quint8(p[k + 1]) << 8); };
+    if (payload.size() < 10 || p[0] != 'B' || p[1] != 'M')
+        return false;
+    const int w = u16(2), h = u16(4), paletteBytes = u16(8);
+    at = 10;
+    if (payload.size() < at + paletteBytes)
+        return false;
+    QVector<quint16> palette;
+    for (int i = 0; i + 1 < paletteBytes; i += 2)
+        palette << be16(p + at + i);  // stored as read from the LCD: big-endian RGB565
+    at += paletteBytes;
+    img = QImage(w, h, QImage::Format_RGB16);
+    for (int y = 0; y < h; ++y) {
+        if (payload.size() < at + 2)
+            return false;
+        const int n = u16(at);
+        at += 2;
+        if (payload.size() < at + n)
+            return false;
+        const QByteArray idx = unpackBits(p + at, n, w);
+        at += n;
+        auto *row = reinterpret_cast<quint16 *>(img.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const int i = quint8(idx[x]);
+            row[x] = i < palette.size() ? palette[i] : 0;
+        }
+    }
+    return true;
 }

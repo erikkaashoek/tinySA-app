@@ -83,6 +83,16 @@ void Session::capture()
     QMetaObject::invokeMethod(m_link, &DeviceLink::capture);
 }
 
+void Session::setRemote(bool on)
+{
+    QMetaObject::invokeMethod(m_link, [l = m_link, on] { l->setRemote(on); });
+}
+
+void Session::touch(QPoint lcd, bool down)
+{
+    QMetaObject::invokeMethod(m_link, [l = m_link, lcd, down] { l->touch(lcd, down); });
+}
+
 void Session::simTouch()
 {
     QMetaObject::invokeMethod(m_link, &DeviceLink::simTouch);
