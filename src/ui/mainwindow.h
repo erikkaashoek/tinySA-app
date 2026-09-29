@@ -84,7 +84,7 @@ private:
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;
-    QLabel *m_sweepsLabel, *m_rateLabel, *m_batteryLabel;
+    QLabel *m_stepLabel, *m_sweepsLabel, *m_rateLabel, *m_batteryLabel;
     int m_sweeps = 0, m_sweepsMark = 0;
     QElapsedTimer m_cycle;
     double m_cycleMs = 0, m_sweepMs = 0;  // last sweep-to-sweep time, last sweep duration

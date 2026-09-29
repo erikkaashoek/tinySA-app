@@ -30,6 +30,8 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     ui->setupUi(this);
     ui->splitter->setStretchFactor(1, 1);
 
+    m_stepLabel = new QLabel(this);
+    statusBar()->addPermanentWidget(m_stepLabel);
     m_sweepsLabel = new QLabel(this);
     m_rateLabel = new QLabel(this);
     m_batteryLabel = new QLabel(this);
@@ -362,6 +364,7 @@ void MainWindow::showConfig(const SweepConfig &c)
     ui->inputCombo->setCurrentIndex(c.input == InputMode::High ? 1 : 0);
     ui->lnaCheck->setChecked(c.lna);
     ui->spectrum->setSpan(c.grid.startHz, c.grid.stopHz);
+    m_stepLabel->setText("Step " + formatHz(c.grid.step(), std::max(1.0, c.grid.step() / 1000)));
 }
 
 void MainWindow::editConfig(const std::function<void(SweepConfig &)> &change)

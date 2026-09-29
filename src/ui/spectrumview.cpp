@@ -64,6 +64,11 @@ SpectrumView::SpectrumView(QWidget *parent) : QCustomPlot(parent)
 void SpectrumView::setTheme(const Theme &t)
 {
     m_theme = t;
+    QFont f = font();
+    f.setPointSize(std::clamp(t.fontPt, 6, 20));
+    setFont(f);  // marker labels use the widget font
+    legend->setFont(f);
+    m_hoverText->setFont(f);
     setBackground(t.background);
     for (QCPAxis *ax : {xAxis, yAxis}) {
         ax->setBasePen(QPen(t.text));
@@ -71,6 +76,8 @@ void SpectrumView::setTheme(const Theme &t)
         ax->setSubTickPen(Qt::NoPen);
         ax->setTickLabelColor(t.text);
         ax->setLabelColor(t.text);
+        ax->setTickLabelFont(f);
+        ax->setLabelFont(f);
         ax->grid()->setPen(QPen(t.grid, 1, Qt::DashLine));
     }
     for (int i = 0; i < kTraces; ++i)
@@ -347,6 +354,7 @@ QList<QAction *> SpectrumView::menuActions(QPointF pos, QObject *owner)
     toggle("Show max marker", m_view.peakMax);
     toggle("Show min marker", m_view.peakMin);
     toggle("Marker readout on graph", m_view.markerText);
+    toggle("Show markers", m_view.showMarkers);
     sep();
     const QString f = formatHz(roundTo(hz, res), res);
     add("Start here (" + f + ")", [this, hz] { emit rangeRequested(RangeOp::Start, hz, 0); });

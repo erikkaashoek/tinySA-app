@@ -18,6 +18,7 @@ struct ViewSettings {
     bool show[4] = {true, true, true, true};  // live, M1, M2, M3
     bool peakMax = true, peakMin = false;     // peak markers on the live trace
     bool markerText = false;                  // marker readout block on the graph
+    bool showMarkers = true;                  // user markers on the graph
 };
 
 struct Theme {
@@ -25,6 +26,7 @@ struct Theme {
     QColor trace[4] = {{0xff, 0xe0, 0x40}, {0x40, 0xd0, 0xff}, {0xff, 0x60, 0xd0}, {0x60, 0xff, 0x80}};
     QColor marker{0xff, 0xff, 0xff}, selected{0xff, 0x80, 0x20};
     int lineWidth = 1;
+    int fontPt = 9;  // graph text size
 
     static Theme dark() { return {}; }
     static Theme light()
@@ -85,6 +87,7 @@ struct AppSettings {
         v("view/peak_max", view.peakMax);
         v("view/peak_min", view.peakMin);
         v("view/marker_text", view.markerText);
+        v("view/show_markers", view.showMarkers);
         v("markers/list", markers);
         v("theme/background", theme.background);
         v("theme/grid", theme.grid);
@@ -96,6 +99,7 @@ struct AppSettings {
         v("theme/marker", theme.marker);
         v("theme/selected", theme.selected);
         v("theme/line_width", theme.lineWidth);
+        v("theme/font_pt", theme.fontPt);
         v("view/color_scheme", colorScheme);
         v("file/sweep_name", sweepName);
         v("file/record_folder", recordFolder);

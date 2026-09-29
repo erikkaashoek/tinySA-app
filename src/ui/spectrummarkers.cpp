@@ -80,7 +80,7 @@ void SpectrumView::drawMarkers(QCPPainter *p)
     };
 
     // user markers: dotted line, triangle on the trace, name above it
-    for (const MarkerMark &m : m_marks) {
+    for (const MarkerMark &m : m_view.showMarkers ? m_marks : QList<MarkerMark>{}) {
         const double x = xAxis->coordToPixel(m.hz);
         if (x < r.left() || x > r.right())
             continue;
@@ -112,7 +112,7 @@ void SpectrumView::drawMarkers(QCPPainter *p)
     }
 
     // readout block, top right
-    if (m_view.markerText && !m_marks.isEmpty()) {
+    if (m_view.markerText && m_view.showMarkers && !m_marks.isEmpty()) {
         QStringList lines;
         for (const MarkerMark &m : m_marks)
             lines << m.readout;

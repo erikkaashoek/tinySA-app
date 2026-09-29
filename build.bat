@@ -18,6 +18,8 @@ for /d %%v in (C:\Qt\6.*) do for /d %%q in (%%v\msvc*_64) do (
   copy /y "%%q\plugins\platforms\qwindows.dll" build\platforms\ >nul
   if not exist build\styles mkdir build\styles
   copy /y "%%q\plugins\styles\qmodernwindowsstyle.dll" build\styles\ >nul
+  if not exist build\imageformats mkdir build\imageformats
+  copy /y "%%q\plugins\imageformats\qjpeg.dll" build\imageformats\ >nul
 )
 for /d %%r in ("%VSROOT%\VC\Redist\MSVC\14.*") do for %%d in (msvcp140 vcruntime140 vcruntime140_1) do copy /y "%%r\x64\Microsoft.VC145.CRT\%%d.dll" build\ >nul
 
@@ -26,9 +28,10 @@ if errorlevel 1 exit /b 1
 
 if /i not "%1"=="dist" exit /b 0
 if exist dist rmdir /s /q dist
-mkdir dist\platforms dist\styles
+mkdir dist\platforms dist\styles dist\imageformats
 copy /y build\tinySA-App.exe dist\ >nul
 for %%d in (Qt6Core Qt6Gui Qt6Widgets Qt6SerialPort Qt6Test Qt6PrintSupport msvcp140 vcruntime140 vcruntime140_1) do copy /y build\%%d.dll dist\ >nul
 copy /y build\platforms\qwindows.dll dist\platforms\ >nul
 copy /y build\styles\qmodernwindowsstyle.dll dist\styles\ >nul
+copy /y build\imageformats\qjpeg.dll dist\imageformats\ >nul
 powershell -NoProfile -Command "Compress-Archive -Path dist\* -DestinationPath tinySA-App.zip -Force" >nul

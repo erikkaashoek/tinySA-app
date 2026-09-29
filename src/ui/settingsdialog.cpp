@@ -22,18 +22,19 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent), ui(new Ui::Se
     };
     for (auto &[button, field] : m_colours)
         connect(button, &QPushButton::clicked, this, [this, button = button, field = field] {
-            const QColor c = QColorDialog::getColor(field(m_theme), this, button->text());
+            const QColor c = QColorDialog::getColor(field(m_theme), this, button->text(),
+                                                    QColorDialog::ShowAlphaChannel);
             if (c.isValid()) {
                 field(m_theme) = c;
                 showTheme();
             }
         });
     connect(ui->darkPresetButton, &QPushButton::clicked, this, [this] {
-        m_theme = Theme::dark();
+        m_theme = Theme::dark();  // colours only; width and text size stay
         showTheme();
     });
     connect(ui->lightPresetButton, &QPushButton::clicked, this, [this] {
-        m_theme = Theme::light();
+        m_theme = Theme::light();  // colours only; width and text size stay
         showTheme();
     });
     connect(ui->browseFolderButton, &QPushButton::clicked, this, [this] {
@@ -74,6 +75,7 @@ void SettingsDialog::load(const AppSettings &s, const DeviceInfo &info, bool con
     ui->schemeCombo->setCurrentIndex(std::clamp(s.colorScheme, 0, 2));
     m_theme = s.theme;
     ui->lineWidthSpin->setValue(s.theme.lineWidth);
+    ui->fontSizeSpin->setValue(s.theme.fontPt);
     showTheme();
     ui->recordFolderEdit->setText(s.recordFolder);
     ui->csvSeparatorCombo->setCurrentIndex(s.csv.separator == ',' ? 1 : s.csv.separator == '\t' ? 2 : 0);
@@ -85,6 +87,7 @@ void SettingsDialog::store(AppSettings &s) const
     s.colorScheme = ui->schemeCombo->currentIndex();
     s.theme = m_theme;
     s.theme.lineWidth = ui->lineWidthSpin->value();
+    s.theme.fontPt = ui->fontSizeSpin->value();
     s.recordFolder = ui->recordFolderEdit->text();
     s.csv.separator = QList<QChar>{';', ',', '\t'}.value(ui->csvSeparatorCombo->currentIndex(), ';');
     s.csv.decimalComma = ui->decimalCommaCheck->isChecked();
