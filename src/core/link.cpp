@@ -109,6 +109,12 @@ void DeviceLink::handshake()
         if (ok && v.size() >= 3)
             m_info.deviceGrid = {v[0].toDouble(), v[1].toDouble(), v[2].toInt()};
     }});
+    enqueue({"vbat_offset", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+        bool num = false;
+        const int v = lines.value(0).trimmed().toInt(&num);
+        if (ok && num)
+            m_info.vbatOffset = v;
+    }});
     enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {
         m_want = clampConfig(m_want, *m_info.model);
         m_ready = true;

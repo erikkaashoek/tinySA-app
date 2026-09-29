@@ -56,6 +56,11 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "markers") return num(m_session.markers().count());
     if (name == "console.log") return m_console->logText();
     if (name == "battery.samples") return num(m_battery->samples());
+    if (name == "theme.linewidth") return num(m_settings.theme.lineWidth);
+    if (name == "theme.background") return m_settings.theme.background.name();
+    if (name == "csv.separator") return QString(m_settings.csv.separator);
+    if (name == "csv.decimalcomma") return m_settings.csv.decimalComma ? "1" : "0";
+    if (name == "scheme") return num(m_settings.colorScheme);
     if (name == "screen.width") return num(m_screen->view()->image().width());
     if (name == "screen.updates") return num(m_screen->updates());
     if (name.startsWith("screen.pixel@")) {  // screen.pixel@x,y -> #rrggbb

@@ -8,7 +8,9 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFile>
+#include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QTest>
 #include <QTextStream>
 #include <QTimer>
@@ -95,7 +97,18 @@ void AutoTest::step()
 bool AutoTest::compare(const QString &query, const QString &op, const QString &want, double tol,
                        QString *got)
 {
-    const std::optional<QString> answer = m_host->testQuery(query);
+    std::optional<QString> answer;
+    if (query.startsWith('@')) {  // @widgetName: what the widget shows
+        QWidget *w = find(query.mid(1));
+        if (auto *e = qobject_cast<QLineEdit *>(w)) answer = e->text();
+        else if (auto *t = qobject_cast<QPlainTextEdit *>(w)) answer = t->toPlainText();
+        else if (auto *c = qobject_cast<QComboBox *>(w)) answer = c->currentText();
+        else if (auto *s = qobject_cast<QAbstractSpinBox *>(w)) answer = s->text();
+        else if (auto *b = qobject_cast<QAbstractButton *>(w)) answer = b->isChecked() ? "1" : "0";
+        else if (auto *l = qobject_cast<QLabel *>(w)) answer = l->text();
+    } else {
+        answer = m_host->testQuery(query);
+    }
     if (!answer) {
         *got = "<unknown query>";
         return false;

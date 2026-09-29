@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SettingsDialog</class>
+ <widget class="QDialog" name="SettingsDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>460</width>
+    <height>420</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Settings</string>
+  </property>
+  <layout class="QVBoxLayout" name="settingsLayout">
+   <item>
+    <widget class="QTabWidget" name="settingsTabs">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="deviceTab">
+      <attribute name="title">
+       <string>Device</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="deviceTabLayout">
+       <item>
+        <widget class="QPlainTextEdit" name="infoText">
+         <property name="readOnly">
+          <bool>true</bool>
+         </property>
+         <property name="placeholderText">
+          <string>Connect a tinySA to see its information</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="vbatLayout">
+         <item>
+          <widget class="QLabel" name="vbatOffsetLabel">
+           <property name="text">
+            <string>Battery voltage offset (mV)</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="vbatOffsetSpin">
+           <property name="minimum">
+            <number>-1000</number>
+           </property>
+           <property name="maximum">
+            <number>1000</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="vbatOffsetButton">
+           <property name="toolTip">
+            <string>Send the offset to the tinySA (Save config keeps it)</string>
+           </property>
+           <property name="text">
+            <string>Set</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="deviceButtons">
+         <item>
+          <widget class="QPushButton" name="setTimeButton">
+           <property name="toolTip">
+            <string>Set the tinySA clock to the PC's date and time</string>
+           </property>
+           <property name="text">
+            <string>Set clock to PC time</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="saveConfigButton">
+           <property name="toolTip">
+            <string>Store the tinySA configuration permanently</string>
+           </property>
+           <property name="text">
+            <string>Save config</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="clearConfigButton">
+           <property name="toolTip">
+            <string>Reset the tinySA configuration to factory defaults</string>
+           </property>
+           <property name="text">
+            <string>Clear config...</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="appearanceTab">
+      <attribute name="title">
+       <string>Appearance</string>
+      </attribute>
+      <layout class="QGridLayout" name="appearanceLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="schemeLabel">
+         <property name="text">
+          <string>Application</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1" colspan="2">
+        <widget class="QComboBox" name="schemeCombo">
+         <item>
+          <property name="text">
+           <string>System colours</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Light</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Dark</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="1" column="0" colspan="3">
+        <widget class="QGroupBox" name="coloursGroup">
+         <property name="title">
+          <string>Graph colours (click to change)</string>
+         </property>
+         <layout class="QGridLayout" name="coloursLayout">
+          <item row="0" column="0">
+           <widget class="QPushButton" name="backgroundColour">
+            <property name="text">
+             <string>Background</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QPushButton" name="gridColour">
+            <property name="text">
+             <string>Grid</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QPushButton" name="textColour">
+            <property name="text">
+             <string>Text</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QPushButton" name="liveColour">
+            <property name="text">
+             <string>Live</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QPushButton" name="m1Colour">
+            <property name="text">
+             <string>M1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QPushButton" name="m2Colour">
+            <property name="text">
+             <string>M2</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QPushButton" name="m3Colour">
+            <property name="text">
+             <string>M3</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QPushButton" name="markerColour">
+            <property name="text">
+             <string>Marker</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QPushButton" name="selectedColour">
+            <property name="text">
+             <string>Selected</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="lineWidthLabel">
+         <property name="text">
+          <string>Trace width</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QSpinBox" name="lineWidthSpin">
+         <property name="minimum">
+          <number>1</number>
+         </property>
+         <property name="maximum">
+          <number>4</number>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0" colspan="3">
+        <layout class="QHBoxLayout" name="presetLayout">
+         <item>
+          <widget class="QPushButton" name="darkPresetButton">
+           <property name="text">
+            <string>Dark graph</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="lightPresetButton">
+           <property name="text">
+            <string>Light graph</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="4" column="0">
+        <spacer name="appearanceSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>0</width>
+           <height>10</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="filesTab">
+      <attribute name="title">
+       <string>Files</string>
+      </attribute>
+      <layout class="QFormLayout" name="filesLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="recordFolderLabel">
+         <property name="text">
+          <string>Record / save folder</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <layout class="QHBoxLayout" name="recordFolderLayout">
+         <item>
+          <widget class="QLineEdit" name="recordFolderEdit"/>
+         </item>
+         <item>
+          <widget class="QPushButton" name="browseFolderButton">
+           <property name="text">
+            <string>Browse...</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="csvSeparatorLabel">
+         <property name="text">
+          <string>CSV field separator</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QComboBox" name="csvSeparatorCombo">
+         <item>
+          <property name="text">
+           <string>; semicolon</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>, comma</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Tab</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QCheckBox" name="decimalCommaCheck">
+         <property name="text">
+          <string>Decimal comma in CSV levels (1,5 instead of 1.5)</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>SettingsDialog</receiver>
+   <slot>accept()</slot>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>SettingsDialog</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>

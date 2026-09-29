@@ -149,7 +149,6 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     m_settings.load(qs);
     restoreGeometry(qs.value("window/geometry").toByteArray());
     ui->splitter->restoreState(qs.value("window/splitter").toByteArray());
-    ui->spectrum->setTheme(m_settings.theme);
     ui->spectrum->setView(m_settings.view);
     ui->scaleCombo->setCurrentIndex(m_settings.view.linear ? 1 : 0);
     ui->liveButton->setChecked(m_settings.view.show[0]);
@@ -163,7 +162,7 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     ui->sweepNameEdit->setText(m_settings.sweepName);
     m_console->setMacros(m_settings.macroNames, m_settings.macroCommands);
     m_console->setHistory(m_settings.history);
-    m_battery->setTheme(m_settings.theme);
+    applyAppearance();
     restoreState(qs.value("window/state").toByteArray());
     ui->graphSplitter->restoreState(qs.value("window/graph_splitter").toByteArray());
     ui->actionShowMarkers->setChecked(qs.value("window/show_markers", true).toBool());

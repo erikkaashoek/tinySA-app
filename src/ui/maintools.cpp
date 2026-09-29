@@ -4,6 +4,10 @@
 #include "mainwindow.h"
 #include "screenview.h"
 #include "screenwindow.h"
+#include "settingsdialog.h"
+#include "spectrumview.h"
+#include <QGuiApplication>
+#include <QStyleHints>
 #include "ui_mainwindow.h"
 #include <QSettings>
 
@@ -32,10 +36,30 @@ void MainWindow::setupTools()
     connect(&m_session, &Session::screen, m_screen, &ScreenWindow::setScreen);
     connect(&m_session, &Session::disconnected, m_screen, &ScreenWindow::remoteEnded);
 
+    m_settingsDialog = new SettingsDialog(this);
+    connect(ui->actionSettings, &QAction::triggered, this, [this] {
+        m_settingsDialog->load(m_settings, m_session.device(), m_session.isConnected());
+        m_settingsDialog->open();
+    });
+    connect(m_settingsDialog, &QDialog::accepted, this, [this] {
+        m_settingsDialog->store(m_settings);
+        applyAppearance();
+    });
+    connect(m_settingsDialog, &SettingsDialog::commandRequested, &m_session, &Session::send);
+
     QSettings qs(m_settingsPath, QSettings::IniFormat);
     m_console->restoreGeometry(qs.value("tools/console_geometry").toByteArray());
     m_battery->restoreGeometry(qs.value("tools/battery_geometry").toByteArray());
     m_screen->restoreGeometry(qs.value("tools/screen_geometry").toByteArray());
+}
+
+void MainWindow::applyAppearance()
+{
+    ui->spectrum->setTheme(m_settings.theme);
+    m_battery->setTheme(m_settings.theme);
+    QGuiApplication::styleHints()->setColorScheme(
+        QList<Qt::ColorScheme>{Qt::ColorScheme::Unknown, Qt::ColorScheme::Light, Qt::ColorScheme::Dark}
+            .value(m_settings.colorScheme, Qt::ColorScheme::Unknown));
 }
 
 void MainWindow::showTool(QWidget *w)

@@ -593,6 +593,21 @@ private slots:
         QCOMPARE(tracePeak(t, false).x(), 1010.0);  // the minimum sits at the edge
         QVERIFY(std::isnan(tracePeak(Trace{}, true).x()));
     }
+    void peakRobustToQuantisedLevels()
+    {
+        // Gaussian RBW response (-3 dB at +-15 kHz) sampled every 10 kHz and rounded to the
+        // unit's 0.5 dB steps, for carriers at several offsets between two points
+        for (double offset : {0.0, 1.5, 3.0, 4.2, 5.0, 6.8}) {
+            const double f0 = 110e6 + offset * 1e3;
+            Trace t{{109.9e6, 110.1e6, 21}, {}};
+            for (int i = 0; i < 21; ++i) {
+                const double x = (t.grid.freq(i) - f0) / 15e3;
+                t.dBm << std::round((-56 - 3.01 * x * x) * 2) / 2;
+            }
+            const double err = tracePeak(t, true).x() - f0;
+            QVERIFY2(std::abs(err) < 1000, qPrintable(QString("offset %1 kHz: error %2 Hz").arg(offset).arg(err)));
+        }
+    }
     void deltaMarkersReferToTheFirstNormalMarker()
     {
         const Trace t{{0, 100, 11}, {-10, -20, -30, -40, -50, -60, -70, -80, -90, -100, -110}};

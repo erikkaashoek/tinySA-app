@@ -20,6 +20,7 @@ class MarkerModel;
 class ConsoleWindow;
 class BatteryWindow;
 class ScreenWindow;
+class SettingsDialog;
 
 class MainWindow : public QMainWindow, public TestHost {
     Q_OBJECT
@@ -65,6 +66,7 @@ private:
     void setupTools();             // console, battery (maintools.cpp)
     void showTool(QWidget *w);
     void saveTools(QSettings &qs);
+    void applyAppearance();  // theme to the graphs, colour scheme to the application
     void error(const QString &what);
 
     std::unique_ptr<Ui::MainWindow> ui;
@@ -76,6 +78,7 @@ private:
     ConsoleWindow *m_console = nullptr;
     BatteryWindow *m_battery = nullptr;
     ScreenWindow *m_screen = nullptr;
+    SettingsDialog *m_settingsDialog = nullptr;
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;

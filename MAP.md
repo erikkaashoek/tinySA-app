@@ -86,6 +86,13 @@ Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g
 - `capture`: W×H×2 bytes RGB565 then prompt. `refresh on` pushes regions:
   `"bulk\r\n"|"fill\r\n"` + x,y,w,h int16 LE + payload + `ch> `.
 - USB: VID 0483 PID 5740, 576000 baud. On open: `abort`, drain.
+- Screen capture: the app always sends `capture rle` = DiSlord NanoVNA-D RLE8 (any argument):
+  "BM" u16 w u16 h u8 8 u8 1, u16 palette bytes + palette (BE RGB565 as read from the LCD),
+  per row u16 length + PackBits (DiSlord `packbits()`) palette indices; then prompt. Firmware
+  without it ignores the argument → raw W*H*2 (parser tells them apart by the header).
+  Non-palette colours become index 0 (tinySA waterfall!). The user is porting RLE8 to the tinySA
+  firmware (their own `rle` branch has a different 9-bit colour `capt`/`refresh rle` scheme,
+  not used). NanoVNA-D region pushes end with "ch> \r\n" (tinySA: "ch> ") — both parse.
 
 ## Rules
 - core/ has no QtWidgets; UI controllers stay thin (widgets → Session setters, Session signals → render).

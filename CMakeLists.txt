@@ -68,6 +68,8 @@ qt_add_executable(tinySA-App WIN32
     src/ui/screenview.cpp
     src/ui/screenwindow.cpp
     src/ui/screenwindow.ui
+    src/ui/settingsdialog.cpp
+    src/ui/settingsdialog.ui
     res/tinySA-App.rc
 )
 target_include_directories(tinySA-App PRIVATE src/ui)

@@ -1,0 +1,30 @@
+# Step 5c: settings dialog (simulated Ultra).
+#   tinySA-App.exe --sim --ini test\out\step5.ini --script test\step5c.txt --out test\out\step5c
+do connect sim:ultra
+waitfor connected == 1
+click actionSettings
+check @infoText contains tinySA ULTRA+ ZS407
+check @vbatOffsetSpin == 300
+set vbatOffsetSpin 250
+click vbatOffsetButton
+click setTimeButton
+set lineWidthSpin 2
+set csvSeparatorCombo , comma
+set decimalCommaCheck 1
+set schemeCombo Dark
+click lightPresetButton
+shotw SettingsDialog step5c_dialog.png
+click settingsOk
+check theme.linewidth == 2
+check theme.background == #ffffff
+check csv.separator == ,
+check csv.decimalcomma == 1
+check scheme == 2
+wait 300
+check sent contains vbat_offset 250
+check sent contains time b 0x
+do mark
+click onceButton
+waitfor sweeps.new >= 1
+shot step5c_light.png
+quit

@@ -38,6 +38,7 @@ struct DeviceInfo {
     QStringList commands;  // from `help`
     int zeroDbm = 0;     // scanraw offset: dBm = raw/32 - zeroDbm
     ScanGrid deviceGrid;  // the unit's own sweep settings at connect time
+    int vbatOffset = 0;   // mV, from `vbat_offset`
     QString title() const;  // "tinySA Ultra+ ZS407 - tinySA4_v1.4-..."
     bool has(const QString &cmd) const { return commands.contains(cmd); }
 };

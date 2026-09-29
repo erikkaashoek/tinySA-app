@@ -819,6 +819,8 @@
     <addaction name="actionScreen"/>
     <addaction name="actionConsole"/>
     <addaction name="actionBattery"/>
+    <addaction name="separator"/>
+    <addaction name="actionSettings"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuView"/>
@@ -849,6 +851,7 @@
    <addaction name="actionScreen"/>
    <addaction name="actionConsole"/>
    <addaction name="actionBattery"/>
+   <addaction name="actionSettings"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSaveCsv">
@@ -906,6 +909,14 @@
    </property>
    <property name="text">
     <string>Marker list</string>
+   </property>
+  </action>
+  <action name="actionSettings">
+   <property name="text">
+    <string>Settings...</string>
+   </property>
+   <property name="toolTip">
+    <string>tinySA configuration, colours, files</string>
    </property>
   </action>
   <action name="actionScreen">

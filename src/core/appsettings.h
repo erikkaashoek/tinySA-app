@@ -25,6 +25,22 @@ struct Theme {
     QColor trace[4] = {{0xff, 0xe0, 0x40}, {0x40, 0xd0, 0xff}, {0xff, 0x60, 0xd0}, {0x60, 0xff, 0x80}};
     QColor marker{0xff, 0xff, 0xff}, selected{0xff, 0x80, 0x20};
     int lineWidth = 1;
+
+    static Theme dark() { return {}; }
+    static Theme light()
+    {
+        Theme t;
+        t.background = QColor(0xff, 0xff, 0xff);
+        t.grid = QColor(0xc8, 0xc8, 0xd0);
+        t.text = QColor(0x20, 0x20, 0x20);
+        t.trace[0] = QColor(0xc0, 0x70, 0x00);
+        t.trace[1] = QColor(0x00, 0x70, 0xc0);
+        t.trace[2] = QColor(0xc0, 0x00, 0xa0);
+        t.trace[3] = QColor(0x00, 0x90, 0x40);
+        t.marker = QColor(0x00, 0x00, 0x00);
+        t.selected = QColor(0xff, 0x50, 0x00);
+        return t;
+    }
 };
 
 struct AppSettings {
@@ -39,6 +55,7 @@ struct AppSettings {
     QString recordFolder;         // default: Documents/tinySA-App
     CsvFormat csv;
     QStringList macroNames, macroCommands, history;  // console
+    int colorScheme = 0;          // application: 0 system, 1 light, 2 dark
 
     template <class V> void visit(V &&v)
     {
@@ -79,6 +96,7 @@ struct AppSettings {
         v("theme/marker", theme.marker);
         v("theme/selected", theme.selected);
         v("theme/line_width", theme.lineWidth);
+        v("view/color_scheme", colorScheme);
         v("file/sweep_name", sweepName);
         v("file/record_folder", recordFolder);
         v("file/csv_separator", m_csvSeparator);
