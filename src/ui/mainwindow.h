@@ -15,6 +15,7 @@ namespace Ui { class MainWindow; }
 class QLabel;
 class QLineEdit;
 class QToolButton;
+class MarkerModel;
 
 class MainWindow : public QMainWindow, public TestHost {
     Q_OBJECT
@@ -53,6 +54,10 @@ private:
     QString imageHeader() const;
     QString memoryFile(int m) const;  // persisted memories next to the settings
     void setRecording(bool on);
+    void setupMarkers();
+    void renderMarkers();  // MarkerSet + shown live trace -> graph marks and table
+    void markerToPeak(bool addNew);
+    double snap(double hz) const;  // nearest point of the shown live trace
     void error(const QString &what);
 
     std::unique_ptr<Ui::MainWindow> ui;
@@ -60,6 +65,7 @@ private:
     QString m_settingsPath;
     AppSettings m_settings;
     SweepRecorder m_recorder;
+    MarkerModel *m_markerModel = nullptr;
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;

@@ -103,6 +103,8 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
                                .arg(QCoreApplication::applicationVersion(), qVersion()));
     });
 
+    setupMarkers();
+
     // --- graph intents ---
     connect(ui->spectrum, &SpectrumView::rangeRequested, this, &MainWindow::applyRangeOp);
     connect(ui->spectrum, &SpectrumView::saveImageRequested, this, [this] { saveImage({}); });
@@ -156,6 +158,10 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     ui->calcCombo->setCurrentIndex(std::clamp(m_settings.hold, 0, 2));
     ui->avgCombo->setCurrentIndex(std::clamp(int(std::log2(std::max(1, m_settings.average))), 0, 6));
     ui->sweepNameEdit->setText(m_settings.sweepName);
+    restoreState(qs.value("window/state").toByteArray());
+    ui->graphSplitter->restoreState(qs.value("window/graph_splitter").toByteArray());
+    ui->actionShowMarkers->setChecked(qs.value("window/show_markers", true).toBool());
+    m_session.markers().deserialize(m_settings.markers);
     for (int m = 0; m < TraceSet::kMemories; ++m)
         if (QFile::exists(memoryFile(m)))
             loadMemory(m, memoryFile(m));
@@ -179,9 +185,13 @@ void MainWindow::closeEvent(QCloseEvent *e)
     m_settings.view = ui->spectrum->view();
     m_settings.hold = int(m_session.traces().hold());
     m_settings.average = m_session.traces().average();
+    m_settings.markers = m_session.markers().serialize();
     m_settings.save(qs);
     qs.setValue("window/geometry", saveGeometry());
     qs.setValue("window/splitter", ui->splitter->saveState());
+    qs.setValue("window/state", saveState());
+    qs.setValue("window/graph_splitter", ui->graphSplitter->saveState());
+    qs.setValue("window/show_markers", ui->actionShowMarkers->isChecked());
     QString err;
     for (int m = 0; m < TraceSet::kMemories; ++m) {
         const Trace &t = m_session.traces().memory(m);

@@ -15,6 +15,8 @@ struct ViewSettings {
     bool autoMin = false, autoMax = false;
     bool spline = false, points = false;
     bool show[4] = {true, true, true, true};  // live, M1, M2, M3
+    bool peakMax = true, peakMin = false;     // peak markers on the live trace
+    bool markerText = false;                  // marker readout block on the graph
 };
 
 struct Theme {
@@ -31,6 +33,7 @@ struct AppSettings {
     int average = 1;              // sweeps
     ViewSettings view;
     Theme theme;
+    QString markers;              // MarkerSet::serialize()
     QString sweepName;            // header of saved images and CSV files
     QString recordFolder;         // default: Documents/tinySA-App
     CsvFormat csv;
@@ -60,6 +63,10 @@ struct AppSettings {
         v("view/show_m1", view.show[1]);
         v("view/show_m2", view.show[2]);
         v("view/show_m3", view.show[3]);
+        v("view/peak_max", view.peakMax);
+        v("view/peak_min", view.peakMin);
+        v("view/marker_text", view.markerText);
+        v("markers/list", markers);
         v("theme/background", theme.background);
         v("theme/grid", theme.grid);
         v("theme/text", theme.text);

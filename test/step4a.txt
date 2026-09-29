@@ -1,0 +1,58 @@
+# Step 4 part A: markers on the graph and in the dock (simulated Ultra, 0.4 MHz grid).
+#   del test\out\step4.ini & tinySA-App.exe --sim --ini test\out\step4.ini --script test\step4a.txt
+do connect sim:ultra
+waitfor connected == 1
+set startEdit 80
+set stopEdit 120
+set pointsCombo 101
+set rbwCombo Auto
+do mark
+click scanButton
+waitfor sweeps.new >= 2
+check markers == 0
+# peak marker (on by default) is interpolated
+check peak.max.hz ~ 100000000 50000
+
+# double click adds a marker at the nearest point
+do mouse dblclick plot 100100000 -50
+check markers == 1
+check marker1.hz == 100000000
+check marker1.dbm ~ -30 3
+do mouse dblclick plot 110000000 -50
+check markers == 2
+check selected == 1
+key spectrum Right
+check marker2.hz == 110400000
+# delta marker relative to marker 1
+click deltaMarkerButton
+check marker2.dhz == 10400000
+check marker2.ddb < -50
+# drag marker 2 along the trace
+do mouse press plot 110400000 -80
+do mouse move plot 105200000 -80
+do mouse release plot 105200000 -80
+check marker2.hz == 105200000
+# dropping it below the plot deletes it
+do mouse press plot 105200000 -80
+do mouse move xaxis 105200000
+do mouse release xaxis 105200000
+check markers == 1
+# double click on a marker deletes it
+do mouse dblclick plot 100000000 -50
+check markers == 0
+# context menu: add here, then to peak
+do menu 90000000 -50 Add marker here
+check marker1.hz == 90000000
+do menu 90000000 -50 Marker to peak
+check marker1.hz == 100000000
+# over an existing marker the menu offers delete/delta instead of add
+do menu 116000000 -50 Add marker here
+check markers == 2
+do menu 116000000 -50 Delta marker
+check marker2.dhz == 16000000
+do menu 100000000 -50 Show min marker
+do menu 100000000 -50 Marker readout on graph
+click scanButton
+waitfor idle == 1
+shot step4_markers.png
+quit

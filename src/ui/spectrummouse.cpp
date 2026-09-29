@@ -21,6 +21,10 @@ SpectrumView::Zone SpectrumView::zoneAt(QPointF p) const
 void SpectrumView::mousePressEvent(QMouseEvent *e)
 {
     const Zone z = zoneAt(e->position());
+    if (e->button() == Qt::LeftButton && z == Zone::Plot) {  // select / start dragging a marker
+        m_dragMarker = markerAt(e->position());
+        emit markerSelectRequested(m_dragMarker);
+    }
     if (e->button() == Qt::LeftButton && z != Zone::None && z != Zone::Plot) {
         m_drag = z;
         m_pressPos = e->position();
@@ -35,6 +39,10 @@ void SpectrumView::mousePressEvent(QMouseEvent *e)
 void SpectrumView::mouseMoveEvent(QMouseEvent *e)
 {
     const QPointF p = e->position();
+    if (m_dragMarker >= 0 && (e->buttons() & Qt::LeftButton)) {
+        emit markerMoveRequested(m_dragMarker, xAxis->pixelToCoord(p.x()));
+        return;
+    }
     if (m_drag != Zone::None) {  // grab and drag: the grabbed value follows the mouse
         const QRect r = axisRect()->rect();
         const double dx = (p.x() - m_pressPos.x()) * m_pressX.size() / r.width();
@@ -68,6 +76,12 @@ void SpectrumView::mouseMoveEvent(QMouseEvent *e)
 
 void SpectrumView::mouseReleaseEvent(QMouseEvent *e)
 {
+    if (m_dragMarker >= 0) {  // dropped outside the plot: delete
+        const int i = std::exchange(m_dragMarker, -1);
+        if (!axisRect()->rect().contains(e->position().toPoint()))
+            emit markerRemoveRequested(i);
+        return;
+    }
     const Zone z = m_drag;
     if (z == Zone::None)
         return QCustomPlot::mouseReleaseEvent(e);
@@ -111,9 +125,27 @@ void SpectrumView::keyPressEvent(QKeyEvent *e)
     case Qt::Key_PageUp: emit rangeRequested(RangeOp::Zoom, 1 / 1.5, c); break;
     case Qt::Key_PageDown: emit rangeRequested(RangeOp::Zoom, 1.5, c); break;
     case Qt::Key_Escape: emit stopRequested(); break;
+    case Qt::Key_Left: emit markerStepRequested(-1); break;
+    case Qt::Key_Right: emit markerStepRequested(1); break;
+    case Qt::Key_Delete:
+        for (int i = 0; i < m_marks.size(); ++i)
+            if (m_marks[i].selected)
+                emit markerRemoveRequested(i);
+        break;
     default: return QCustomPlot::keyPressEvent(e);
     }
     e->accept();
+}
+
+void SpectrumView::mouseDoubleClickEvent(QMouseEvent *e)
+{
+    if (e->button() != Qt::LeftButton || zoneAt(e->position()) != Zone::Plot)
+        return QCustomPlot::mouseDoubleClickEvent(e);
+    const int i = markerAt(e->position());
+    if (i >= 0)
+        emit markerRemoveRequested(i);
+    else
+        emit markerAddRequested(xAxis->pixelToCoord(e->position().x()));
 }
 
 void SpectrumView::leaveEvent(QEvent *e)

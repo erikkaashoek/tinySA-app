@@ -49,6 +49,20 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
         const int m = name.back().digitValue() - 1;
         return m >= 0 && m < TraceSet::kMemories ? num(m_session.traces().memory(m).dBm.size()) : "";
     }
+    if (name == "markers") return num(m_session.markers().count());
+    if (name == "selected") return num(m_session.markers().selected());
+    if (name.startsWith("peak.max.") || name.startsWith("peak.min.")) {  // interpolated peak markers
+        const QPointF pk = ui->spectrum->peak(name.startsWith("peak.max"));
+        return name.endsWith(".hz") ? num(pk.x()) : num(pk.y(), 2);
+    }
+    if (name.startsWith("marker") && name.contains('.')) {  // marker<N>.hz|dbm|dhz|ddb
+        const int i = name.mid(6, name.indexOf('.') - 6).toInt() - 1;
+        if (i < 0 || i >= m_session.markers().count())
+            return QString("none");
+        const MarkerReading r = m_session.markers().read(i, live);
+        const QString f = name.section('.', 1);
+        return f == "hz" ? num(r.hz) : f == "dbm" ? num(r.dBm, 2) : f == "dhz" ? num(r.dHz) : num(r.dDb, 2);
+    }
     if (name.startsWith("level@")) {  // level of the shown live trace at a frequency
         const double hz = name.mid(6).toDouble();
         return num(live.at(hz), 2);
@@ -100,7 +114,7 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
         ui->spectrum->setView(v);
         ui->spectrum->replot(QCustomPlot::rpImmediateRefresh);
     } else if (name == "mouse") {
-        // mouse <press|move|release|click|wheelup|wheeldown> <plot|xaxis|yaxis> <hz> [level]
+        // mouse <hover|press|move|release|click|dblclick|wheelup|wheeldown> <plot|xaxis|yaxis> <hz> [level]
         SpectrumView *s = ui->spectrum;
         s->replot(QCustomPlot::rpImmediateRefresh);  // pixel positions from the current layout
         const QPointF p = s->pointFor(a1, args.value(2).toDouble(), args.value(3).toDouble());
@@ -112,6 +126,15 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
         else if (a0 == "move") send(QEvent::MouseMove, Qt::NoButton, Qt::LeftButton);
         else if (a0 == "hover") send(QEvent::MouseMove, Qt::NoButton, Qt::NoButton);
         else if (a0 == "release") send(QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton);
+        else if (a0 == "click") {
+            send(QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton);
+            send(QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton);
+        } else if (a0 == "dblclick") {
+            send(QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton);
+            send(QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton);
+            send(QEvent::MouseButtonDblClick, Qt::LeftButton, Qt::LeftButton);
+            send(QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton);
+        }
         else if (a0 == "wheelup" || a0 == "wheeldown") {
             QWheelEvent e(p, s->mapToGlobal(p), {}, {0, a0 == "wheelup" ? 120 : -120}, Qt::NoButton,
                           Qt::NoModifier, Qt::NoScrollPhase, false);

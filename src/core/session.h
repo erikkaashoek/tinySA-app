@@ -2,6 +2,7 @@
 // GUI-thread facade: owns the DeviceLink and its thread, keeps the current
 // SweepConfig, device info and processed traces. Controllers talk only to this class.
 #include "link.h"
+#include "markers.h"
 #include "traces.h"
 #include <QThread>
 
@@ -25,7 +26,8 @@ public:
     void capture();
     void simTouch();
 
-    TraceSet &traces() { return m_traces; }  // emit tracesChanged() after editing it
+    TraceSet &traces() { return m_traces; }
+    MarkerSet &markers() { return m_markers; }
 
 signals:
     void tracesChanged(bool sweepComplete);  // live trace updated (and memories if edited)
@@ -50,4 +52,5 @@ private:
     int m_scan = DeviceLink::Off;
     bool m_busy = false;
     TraceSet m_traces;
+    MarkerSet m_markers;
 };

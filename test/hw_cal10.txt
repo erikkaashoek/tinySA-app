@@ -1,0 +1,32 @@
+# Peak interpolation on hardware (tinySA Ultra, CAL output cabled to RF input):
+#   tinySA-App.exe --port COM20 --ini test\out\hw.ini --script test\hw_cal10.txt --out test\out\cal
+waitfor connected == 1 10000
+do send caloutput 10
+set lnaCheck 0
+set attenCombo Auto
+set rbwCombo 30 kHz
+set pointsCombo 101
+# 10 MHz fundamental on a 10 kHz grid
+set startEdit 9.5
+set stopEdit 10.5
+do mark
+click onceButton
+waitfor sweeps.new >= 1 30000
+check peak.max.hz ~ 10000000 1000
+dump peak.max.hz peak10.txt
+shot hw_cal10.png
+# 110 MHz harmonic between grid points (nearest point is 3 kHz away): interpolation finds it
+set stopEdit 110.503
+set startEdit 109.503
+do mark
+click onceButton
+waitfor sweeps.new >= 1 30000
+check peak.max.hz ~ 110000000 1500
+dump peak.max.hz peak110.txt
+dump trace cal110.csv
+shot hw_cal110.png
+set rbwCombo Auto
+do send caloutput off
+waitfor idle == 1 10000
+check messages ==
+quit

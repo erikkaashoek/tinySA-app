@@ -17,6 +17,7 @@ void MainWindow::renderTraces(bool memories)
     if (memories)
         for (int m = 0; m < TraceSet::kMemories; ++m)
             ui->spectrum->setTrace(m + 1, t.normalizedView(t.memory(m)));
+    renderMarkers();  // readings follow the data
 }
 
 void MainWindow::setupMemoryButton(int m, QToolButton *b)

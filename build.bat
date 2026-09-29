@@ -6,7 +6,7 @@ cd /d %~dp0
 set VSROOT=C:\Program Files\Microsoft Visual Studio\18\Community
 call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" >nul
 set PATH=%PATH%;%VSROOT%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;%VSROOT%\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 if errorlevel 1 exit /b 1
 cmake --build build
 if errorlevel 1 exit /b 1

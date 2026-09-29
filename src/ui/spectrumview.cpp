@@ -6,6 +6,7 @@
 #include <cmath>
 
 static const char *kTraceNames[SpectrumView::kTraces] = {"Live", "M1", "M2", "M3"};
+QCPLayerable *createMarkerOverlay(SpectrumView *v);  // spectrummarkers.cpp
 
 double SiTicker::getTickStep(const QCPRange &range)
 {
@@ -51,6 +52,7 @@ SpectrumView::SpectrumView(QWidget *parent) : QCustomPlot(parent)
     m_hoverText->setPadding(QMargins(6, 3, 6, 3));
     m_hoverText->setVisible(false);
     legend->setVisible(false);
+    m_overlay = createMarkerOverlay(this);
     setAntialiasedElements(QCP::aePlottables | QCP::aeItems);
     setNotAntialiasedElements(QCP::aeGrid | QCP::aeAxes);
     setMouseTracking(true);
@@ -331,6 +333,21 @@ QList<QAction *> SpectrumView::menuActions(QPointF pos, QObject *owner)
         a->setCheckable(true);
         a->setChecked(flag);
     };
+    const int mi = markerAt(pos);
+    if (mi >= 0) {
+        const QString name = m_marks[mi].label;
+        add("Delete marker " + name, [this, mi] { emit markerRemoveRequested(mi); });
+        QAction *d = add("Delta marker " + name, [this, mi] { emit markerDeltaRequested(mi); });
+        d->setCheckable(true);
+        d->setChecked(name.startsWith('D'));
+    } else {
+        add("Add marker here", [this, hz] { emit markerAddRequested(hz); });
+    }
+    add("Marker to peak", [this] { emit markerPeakRequested(); });
+    toggle("Show max marker", m_view.peakMax);
+    toggle("Show min marker", m_view.peakMin);
+    toggle("Marker readout on graph", m_view.markerText);
+    sep();
     const QString f = formatHz(roundTo(hz, res), res);
     add("Start here (" + f + ")", [this, hz] { emit rangeRequested(RangeOp::Start, hz, 0); });
     add("Center here (" + f + ")", [this, hz] { emit rangeRequested(RangeOp::Center, hz, 0); });

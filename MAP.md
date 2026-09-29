@@ -20,7 +20,13 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   log/linear W, auto scale, spline/points, image with header, clipboard). Compact left panel (fits 700 px):
   File actions moved to menu bar + toolbar. Sim step3.txt + full regression and hw_step2 PASS.
   (Max/min peak markers moved to step 4: they are markers.)
-- Next: Step 4 — markers (MarkerSet in core, list, drag/delta, peak markers with parabolic interpolation).
+- **Step 4 DONE**: MarkerSet (normal/delta vs first normal marker, selection, persisted), peak markers
+  (3-point parabolic interpolation, never bin-snapped), one MarkerOverlay layer draws all marks,
+  graph interaction (double click add/delete, click select, drag, drop off-plot deletes, Left/Right,
+  Del, context menu), marker list under the graph (vertical splitter, View > Marker list) so the left
+  panel keeps its full height. Sim step4a/b + full regression PASS; hw_cal10 PASS: CAL harmonics at
+  10.0010 / 110.0013 MHz (unit shows ~+1 kHz response offset; levels quantised to 0.5 dB).
+- Next: Step 5 — Settings dialog, battery window, comms console, screen capture + remote control.
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
@@ -37,7 +43,10 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   vbat filtered), `messages`, `do send <cmd>`, `do clearsent`.
 
 ## Build / test
-`build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/, copies runtime DLLs, runs ctest).
+NOTE: after structural .ui changes (widgets moved between containers) do a clean rebuild
+(delete build/): a stale incremental build once crashed at start-up (objects vs. generated ui header).
+`build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/ as RelWithDebInfo with PDB, copies runtime DLLs, runs ctest).
+Crash stacks: cdb (Windows Kits\Debuggersd\cdb.exe) -g -G -y build -c "kn 20;q" build	inySA-App.exe
 `build.bat dist` also stages dist/ + tinySA-App.zip. Qt auto-detected at `C:/Qt/6.*/msvc*_64`.
 
 ## Files
@@ -53,8 +62,11 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 | src/core/appsettings.h | `AppSettings` (+ `ViewSettings`, `Theme`): every persistent setting listed once in `visit()` |
 | src/core/traces.h | `Trace` (grid + dBm, interpolating `at()`), `TraceSet`: average/hold/memories/normalisation |
 | src/core/csvio.h | trace CSV write/read (separator + decimal detection), `SweepRecorder` |
+| src/core/markers.h | `MarkerSet` (normal/delta, readings at nearest point), `tracePeak`/`interpolatePeak` (parabolic) |
 | src/ui/mainwindow.* | main window: Designer form + controller (wiring, device, config); mainfiles.cpp = traces/memories/files; maintest.cpp = TestHost |
 | src/ui/spectrumview.* | `SpectrumView` (QCustomPlot subclass, promoted in the .ui): traces, levels, hover, menu, image; spectrummouse.cpp = mouse/wheel/keys; `SiTicker` |
+| src/ui/spectrummarkers.cpp | `MarkerOverlay` layerable: user markers, peak markers, readout block |
+| src/ui/markermodel.* / mainmarkers.cpp | marker list table model; marker controller (intents → MarkerSet → render) |
 | src/ui/autotest.* | script runner + `TestHost` interface |
 | src/main.cpp | CLI: --sim, --port, --script, --out |
 | test/tst_core.cpp | Qt Test unit tests for core, one class per module |

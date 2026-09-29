@@ -1,0 +1,10 @@
+# Step 4 part B (second process, same --ini): markers survived the restart.
+check markers == 2
+do connect sim:ultra
+waitfor connected == 1
+do mark
+click onceButton
+waitfor sweeps.new >= 1
+check marker1.hz == 100000000
+check marker2.dhz == 16000000
+quit

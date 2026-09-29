@@ -1,6 +1,7 @@
 // Unit tests for src/core. One executable, one test class per module.
 #include "csvio.h"
 #include "link.h"
+#include "markers.h"
 #include "model.h"
 #include "protocol.h"
 #include "simdevice.h"
@@ -511,6 +512,66 @@ private slots:
     }
 };
 
+class TstMarkers : public QObject {
+    Q_OBJECT
+private slots:
+    void parabolicPeakFindsTheVertex()
+    {
+        // samples of -20 - (f - 1003.3)^2 / 50 at 1000..1010: vertex between points
+        Trace t{{1000, 1010, 11}, {}};
+        for (int i = 0; i < 11; ++i)
+            t.dBm << -20 - std::pow(1000 + i - 1003.3, 2) / 50;
+        const QPointF max = tracePeak(t, true);
+        QVERIFY(std::abs(max.x() - 1003.3) < 1e-6);
+        QVERIFY(std::abs(max.y() - -20) < 1e-9);
+        QCOMPARE(tracePeak(t, false).x(), 1010.0);  // the minimum sits at the edge
+        QVERIFY(std::isnan(tracePeak(Trace{}, true).x()));
+    }
+    void deltaMarkersReferToTheFirstNormalMarker()
+    {
+        const Trace t{{0, 100, 11}, {-10, -20, -30, -40, -50, -60, -70, -80, -90, -100, -110}};
+        MarkerSet ms;
+        ms.add(20);
+        ms.add(52);  // reads the nearest point, 50
+        ms.setDelta(1, true);
+        const MarkerReading r = ms.read(1, t);
+        QCOMPARE(r.name, QString("D2"));
+        QCOMPARE(r.hz, 50.0);
+        QCOMPARE(r.dHz, 30.0);
+        QCOMPARE(r.dDb, -30.0);
+        QVERIFY(std::isnan(ms.read(0, t).dDb));  // normal markers have no delta
+        ms.remove(0);  // no reference left: the delta marker reads absolute only
+        QVERIFY(std::isnan(ms.read(0, t).dDb));
+        QCOMPARE(ms.selected(), 0);
+    }
+    void selectionFollowsRemovals()
+    {
+        MarkerSet ms;
+        ms.add(1);
+        ms.add(2);
+        ms.add(3);
+        ms.select(2);
+        ms.remove(0);
+        QCOMPARE(ms.selected(), 1);
+        ms.remove(1);
+        QCOMPARE(ms.selected(), -1);
+        QCOMPARE(ms.near(1.5, 1), 0);
+        QCOMPARE(ms.near(10, 1), -1);
+    }
+    void serializeRoundTrip()
+    {
+        MarkerSet ms;
+        ms.add(100e6);
+        ms.add(433.92e6);
+        ms.setDelta(1, true);
+        MarkerSet back;
+        back.deserialize(ms.serialize());
+        QCOMPARE(back.count(), 2);
+        QCOMPARE(back.all()[1].hz, 433.92e6);
+        QVERIFY(back.all()[1].delta);
+    }
+};
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -533,6 +594,8 @@ int main(int argc, char **argv)
     run(&traces);
     TstCsv csv;
     run(&csv);
+    TstMarkers markers;
+    run(&markers);
     return fails;
 }
 
