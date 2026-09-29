@@ -160,6 +160,17 @@ void SimTransport::execute(const QByteArray &line)
 
 void SimTransport::scanTick()
 {
+    if (m_clock.elapsed() >= shellWaitMs && m_in.startsWith("abort\r")) {
+        // shell thread: echo + prompt of the direct command, between data chunks;
+        // sweep thread: sees the abort, ends the data with '}' and no prompt
+        m_in.remove(0, 6);
+        m_received << "abort";
+        out("abort\r\nch> }");
+        m_scan.reset();
+        m_timer.stop();
+        processInput();
+        return;
+    }
     Scan &s = *m_scan;
     const int due = std::min<int>(s.points, int(m_clock.elapsed() * pointsPerSecond / 1000) + 1);
     const double step = double(s.stop - s.start) / s.points;  // as firmware: /points

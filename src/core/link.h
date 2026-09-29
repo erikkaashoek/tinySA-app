@@ -55,6 +55,7 @@ signals:
     void closed(const QString &reason);
     void frame(const SweepFrame &f);
     void scanChanged(int mode);
+    void busyChanged(bool busy);  // false = nothing in flight or queued (e.g. a stop has completed)
     void reply(const QString &command, const QStringList &lines);
     void battery(int mV);
     void screen(const QImage &img);
@@ -70,7 +71,9 @@ private:
         std::function<void(bool ok, const QStringList &lines)> done;
     };
     void enqueue(Cmd c);
-    void pump();
+    void pump();      // send the next command, or start the next sweep
+    void pumpStep();
+    void updateBusy();
     void transmit(Cmd c);
     void onReadyRead();
     void handle(const RxEvent &e);
@@ -98,7 +101,9 @@ private:
     SweepConfig m_want;
     AppliedConfig m_have;
     int m_mode = Off;
-    bool m_paused = false, m_batteryDue = false;
+    bool m_paused = false;    // unit paused by us: set when pause/resume is transmitted
+    bool m_aborting = false;  // we sent abort for the scan in flight
+    bool m_busy = false, m_batteryDue = false;
     SweepFrame m_frame;
     QElapsedTimer m_sweepClock, m_emitClock, m_drainClock;
 };

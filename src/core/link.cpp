@@ -102,6 +102,11 @@ void DeviceLink::handshake()
     enqueue({"zero", {}, 0, 3000, [this](bool, const QStringList &lines) {
         m_info.zeroDbm = parseZero(lines, m_info.model->defaultZero);
     }});
+    enqueue({"sweep", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+        const QStringList v = lines.value(0).split(' ', Qt::SkipEmptyParts);  // "start stop points"
+        if (ok && v.size() >= 3)
+            m_info.deviceGrid = {v[0].toDouble(), v[1].toDouble(), v[2].toInt()};
+    }});
     enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {
         m_want = clampConfig(m_want, *m_info.model);
         m_ready = true;
@@ -126,11 +131,14 @@ void DeviceLink::shutdown(const QString &reason)
     m_battery.stop();
     m_drain.stop();
     if (m_io) {
-        if (m_paused && m_ready) {  // let the unit sweep on its own again
+        // Leave the unit sweeping on its own: stop our scan (the shell reads the abort
+        // within 5 s) and undo our pause. Both wait in the unit's input buffer if needed.
+        if (m_cur && m_cur->body == RxParser::Body::ScanRaw && !m_scanDone && !m_aborting)
+            m_io->write("abort\r");
+        if (m_paused && m_ready)
             m_io->write("resume\r");
-            if (auto *sp = qobject_cast<QSerialPort *>(m_io))
-                sp->waitForBytesWritten(200);
-        }
+        if (auto *sp = qobject_cast<QSerialPort *>(m_io))
+            sp->waitForBytesWritten(200);
         m_io->disconnect(this);
         m_io->close();
         m_io->deleteLater();
@@ -144,6 +152,7 @@ void DeviceLink::shutdown(const QString &reason)
         m_mode = Off;
         emit scanChanged(Off);
     }
+    updateBusy();
     if (!reason.isEmpty())
         emit closed(reason);
 }
@@ -165,9 +174,21 @@ void DeviceLink::setMode(int mode)
         return;
     m_mode = mode;
     emit scanChanged(mode);
-    if (mode == Off && m_paused) {
-        m_paused = false;
-        enqueue({"resume"});
+    auto dropQueued = [this](const char *line) {
+        return m_queue.removeIf([line](const Cmd &c) { return c.line == line; }) > 0;
+    };
+    if (mode == Off) {
+        // Stop now rather than after a possibly minutes-long sweep. The shell reads the
+        // abort when the scan ends or within 5 s; its echo inside the data is tolerated.
+        if (m_cur && m_cur->body == RxParser::Body::ScanRaw && !m_scanDone && !m_aborting) {
+            m_aborting = true;
+            m_io->write("abort\r");
+        }
+        dropQueued("pause");
+        if (m_paused)
+            enqueue({"resume"});
+    } else {
+        dropQueued("resume");  // scanning again before the resume went out
     }
     pump();
 }
@@ -210,6 +231,21 @@ void DeviceLink::enqueue(Cmd c)
 
 void DeviceLink::pump()
 {
+    pumpStep();
+    updateBusy();
+}
+
+void DeviceLink::updateBusy()
+{
+    const bool busy = m_cur || !m_queue.isEmpty() || m_draining;
+    if (busy != m_busy) {
+        m_busy = busy;
+        emit busyChanged(busy);
+    }
+}
+
+void DeviceLink::pumpStep()
+{
     if (!m_io || m_cur || m_draining)
         return;
     if (!m_queue.isEmpty())
@@ -227,14 +263,16 @@ void DeviceLink::pump()
     }
     if (m_mode == Off)
         return;
-    if (!m_paused) {  // the unit's own sweeping would compete with scanraw
-        m_paused = true;
+    if (!m_paused)  // the unit's own sweeping would compete with scanraw
         return enqueue({"pause"});
-    }
     const QByteArrayList cmds = configCommands(m_want, m_have, *m_info.model);
     if (!cmds.isEmpty()) {
         for (const QByteArray &c : cmds)
-            m_queue.append({c});
+            m_queue.append({c, {}, 0, 3000, [this, c](bool, const QStringList &lines) {
+                const QString l = lines.value(0);
+                if (l.endsWith('?') || l.startsWith("usage"))  // unknown command / bad value
+                    emit message(QString("tinySA refused '%1': %2").arg(QString::fromLatin1(c), l));
+            }});
         return pump();
     }
     startSweep();
@@ -242,6 +280,7 @@ void DeviceLink::pump()
 
 void DeviceLink::startSweep()
 {
+    m_aborting = false;
     const ScanGrid g = m_want.grid;
     m_frame = SweepFrame{m_frame.seq + 1, g, QVector<double>(g.points, qQNaN())};
     m_sweepClock.start();
@@ -274,6 +313,8 @@ void DeviceLink::transmit(Cmd c)
     m_pixels.clear();
     m_rx.expect(c.line, c.body, c.bytes);
     m_io->write(c.line + "\r");
+    if (c.line == "pause" || c.line == "resume")  // the unit's state from now on
+        m_paused = c.line == "pause";
     if (c.body != RxParser::Body::ScanRaw)
         emit traffic(true, QString::fromLatin1(c.line));
     m_timeout.start(c.timeoutMs);
@@ -328,9 +369,12 @@ void DeviceLink::handle(const RxEvent &e)
     case RxEvent::ScanEnd:
         if (!scanning)
             break;
-        if (e.count < m_frame.grid.points) {  // touch/jog on the unit: no prompt follows
-            emit message("Scan stopped on the tinySA");
-            setMode(Off);
+        if (e.count < m_frame.grid.points) {  // our abort, or touch/jog: no prompt follows
+            m_scanDone = true;
+            if (!m_aborting) {
+                emit message("Scan stopped on the tinySA");
+                setMode(Off);
+            }
             finish(true);
         } else {
             m_frame.complete = true;

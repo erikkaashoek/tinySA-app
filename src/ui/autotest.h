@@ -17,6 +17,7 @@
 //   quit                          exit; process exit code = number of failures
 #include <QObject>
 #include <QStringList>
+#include <optional>
 
 class QWidget;
 
@@ -24,7 +25,7 @@ class TestHost {
 public:
     virtual ~TestHost() = default;
     virtual QWidget *testWindow() = 0;
-    virtual QString testQuery(const QString &name) = 0;  // null QString = unknown query
+    virtual std::optional<QString> testQuery(const QString &name) = 0;  // nullopt = unknown
     virtual bool testAction(const QString &name, const QStringList &args) = 0;
 };
 

@@ -222,6 +222,83 @@
           </widget>
          </item>
          <item>
+          <widget class="QGroupBox" name="receiverGroup">
+           <property name="title">
+            <string>Receiver</string>
+           </property>
+           <layout class="QFormLayout" name="receiverLayout">
+            <item row="0" column="0">
+             <widget class="QLabel" name="rbwLabel">
+              <property name="text">
+               <string>RBW</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QComboBox" name="rbwCombo">
+              <property name="toolTip">
+               <string>Resolution bandwidth</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="attenLabel">
+              <property name="text">
+               <string>Attenuation</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="attenCombo"/>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="inputLabel">
+              <property name="text">
+               <string>Input</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QComboBox" name="inputCombo">
+              <property name="toolTip">
+               <string>tinySA input: LOW 0-350 MHz, HIGH 240-960 MHz</string>
+              </property>
+              <item>
+               <property name="text">
+                <string>Low</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>High</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="3" column="0" colspan="2">
+             <widget class="QCheckBox" name="lnaCheck">
+              <property name="toolTip">
+               <string>Low noise amplifier (tinySA Ultra)</string>
+              </property>
+              <property name="text">
+               <string>LNA</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0" colspan="2">
+             <widget class="QPushButton" name="deviceRangeButton">
+              <property name="toolTip">
+               <string>Sweep the range that was set on the tinySA itself</string>
+              </property>
+              <property name="text">
+               <string>Use tinySA's range</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
           <spacer name="controlsSpacer">
            <property name="orientation">
             <enum>Qt::Orientation::Vertical</enum>

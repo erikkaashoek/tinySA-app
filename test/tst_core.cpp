@@ -5,6 +5,8 @@
 #include "simdevice.h"
 #include "sweepconfig.h"
 #include "units.h"
+#include <QElapsedTimer>
+#include <QPointer>
 #include <QRandomGenerator>
 #include <QSignalSpy>
 #include <QTest>
@@ -350,6 +352,50 @@ private slots:
         link.capture();
         QVERIFY(screen.wait(3000));
         QCOMPARE(screen.first().first().value<QImage>().size(), QSize(480, 320));
+    }
+
+    void stopAbortsALongScan()
+    {
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), frames(&link, &DeviceLink::frame),
+            busy(&link, &DeviceLink::busyChanged), msg(&link, &DeviceLink::message);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        sim->pointsPerSecond = 500;  // 3000 points take 6 s
+        sim->shellWaitMs = 300;
+        SweepConfig c;
+        c.grid = {1e6, 900e6, 3000};
+        link.setConfig(c);
+        link.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), 3000);
+        QElapsedTimer t;
+        t.start();
+        link.setScan(DeviceLink::Off);
+        QTRY_VERIFY_WITH_TIMEOUT(!busy.isEmpty() && !busy.last().first().toBool(), 3000);
+        QVERIFY(t.elapsed() < 2000);  // not the rest of the 6 s sweep
+        QVERIFY(msg.isEmpty());       // our own abort is not reported as a touch
+        QVERIFY(sim->received().contains("abort"));
+        QCOMPARE(sim->received().last(), QByteArray("resume"));
+    }
+
+    void quitRightAfterStopStillResumesTheUnit()
+    {
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), frames(&link, &DeviceLink::frame);
+        link.open("sim:basic");
+        QVERIFY(opened.wait(3000));
+        QPointer<SimTransport> sim = qobject_cast<SimTransport *>(link.transport());
+        sim->pointsPerSecond = 500;
+        SweepConfig c;
+        c.grid = {1e6, 300e6, 3000};
+        link.setConfig(c);
+        link.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), 3000);
+        link.setScan(DeviceLink::Off);  // resume queued behind the running scan...
+        link.close();                   // ...and the app quits at once
+        QVERIFY(sim);                   // deleted later
+        QCOMPARE(sim->pendingInput(), QByteArray("abort\rresume\r"));
     }
 
     void notATinySA()

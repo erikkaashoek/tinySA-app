@@ -1,6 +1,7 @@
 #pragma once
 // Device models. Everything model-specific is one row in the table in model.cpp;
 // code asks the descriptor instead of testing the model type.
+#include "units.h"
 #include <QSize>
 #include <QString>
 #include <QStringList>
@@ -36,6 +37,7 @@ struct DeviceInfo {
     QString info;        // full `info` reply
     QStringList commands;  // from `help`
     int zeroDbm = 0;     // scanraw offset: dBm = raw/32 - zeroDbm
+    ScanGrid deviceGrid;  // the unit's own sweep settings at connect time
     QString title() const;  // "tinySA Ultra+ ZS407 - tinySA4_v1.4-..."
     bool has(const QString &cmd) const { return commands.contains(cmd); }
 };

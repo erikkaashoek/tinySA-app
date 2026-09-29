@@ -31,6 +31,7 @@ qt_add_library(tinysa_core STATIC
     src/core/simdevice.cpp
     src/core/link.cpp
     src/core/session.cpp
+    src/core/appsettings.cpp
 )
 target_include_directories(tinysa_core PUBLIC src/core)
 target_link_libraries(tinysa_core PUBLIC Qt6::Core Qt6::Gui Qt6::SerialPort)

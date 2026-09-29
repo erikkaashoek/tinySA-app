@@ -1,0 +1,84 @@
+# Step 2 on hardware (tinySA Ultra, CAL output cabled to RF input):
+#   tinySA-App.exe --port COM20 --ini test\out\hw.ini --script test\hw_step2.txt --out test\out\hw2
+# Changes only volatile unit state; restores auto settings and caloutput off at the end.
+waitfor connected == 1 10000
+do send caloutput 10
+set rbwCombo Auto
+set attenCombo Auto
+set lnaCheck 0
+
+# 10 MHz comb: the fundamental lands exactly on point 8 of 2..102 MHz / 101 points
+# (start above 0 Hz: the LO feedthrough at 0 Hz is stronger than the comb)
+set startEdit 2
+set stopEdit 102
+set pointsCombo 101
+do mark
+click onceButton
+waitfor sweeps.new >= 1 30000
+check peak.hz == 10000000
+check peak.dbm > -60
+shot hw_cal_2_102.png
+# narrow RBW: the 110 MHz harmonic sits exactly on point 50. Near the end of a span
+# the old /(N-1) grid put the measurement ~50 kHz away from the plotted frequency.
+set stopEdit 115
+set startEdit 105
+set rbwCombo 30 kHz
+do mark
+click onceButton
+waitfor sweeps.new >= 1 30000
+check peak.hz == 110000000
+check peak.dbm > -70
+dump trace cal_105_115.csv
+shot hw_cal_105_115.png
+set rbwCombo Auto
+
+# sweep rate: time between sweeps vs sweep time (pipelining decision)
+set startEdit 1
+set stopEdit 300
+set pointsCombo 450
+do mark
+click scanButton
+waitfor sweeps.new >= 10 60000
+dump sweepms rate_450_sweep.txt
+dump cyclems rate_450_cycle.txt
+click scanButton
+waitfor idle == 1 20000
+
+# explicit settings reach the unit and are accepted
+do clearsent
+set rbwCombo 100 kHz
+set attenCombo 10 dB
+set lnaCheck 1
+do mark
+click onceButton
+waitfor sweeps.new >= 1 30000
+waitfor idle == 1 10000
+check sent contains rbw 100
+check sent contains attenuate 10
+check sent contains lna on
+check messages ==
+
+# stopping a long sweep aborts it instead of waiting for it to finish
+set pointsCombo 30000
+set rbwCombo 3 kHz
+do mark
+click scanButton
+wait 1500
+click scanButton
+waitfor idle == 1 8000
+check sweeps.new == 0
+check messages ==
+
+# back to automatic settings and the unit's own range
+set pointsCombo 450
+set lnaCheck 0
+set attenCombo Auto
+set rbwCombo Auto
+click deviceRangeButton
+do mark
+click onceButton
+waitfor sweeps.new >= 1 30000
+do send caloutput off
+waitfor idle == 1 10000
+check messages ==
+quit

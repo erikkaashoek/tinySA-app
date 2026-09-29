@@ -1,0 +1,14 @@
+# Step 2 part B (second process, same --ini): settings survived the restart.
+check start == 0
+check stop == 800000000
+check rbw == 0.2
+check lna == 1
+check atten == 10
+wait 100
+# connecting to the basic model clamps what it cannot do
+do connect sim:basic
+waitfor connected == 1
+check rbw == 3
+check lna == 0
+check stop == 350000000
+quit

@@ -1,3 +1,4 @@
+#include "appsettings.h"
 #include "autotest.h"
 #include "mainwindow.h"
 #include <QApplication>
@@ -15,12 +16,14 @@ int main(int argc, char **argv)
     cli.addOptions({
         {"sim", "Offer simulated tinySA units in the port list."},
         {"port", "Connect to this port at start (COMx, sim:basic, sim:ultra).", "port"},
+        {"ini", "Settings file (default: next to the exe, else AppData).", "file"},
         {"script", "Run an autotest script, then exit with the number of failures.", "file"},
         {"out", "Autotest output directory.", "dir", "test/out"},
     });
     cli.process(app);
 
-    MainWindow win(cli.isSet("sim") || cli.value("port").startsWith("sim:"));
+    const QString ini = cli.isSet("ini") ? cli.value("ini") : AppSettings::defaultPath();
+    MainWindow win(cli.isSet("sim") || cli.value("port").startsWith("sim:"), ini);
     win.show();
     if (cli.isSet("port"))
         win.connectTo(cli.value("port"));

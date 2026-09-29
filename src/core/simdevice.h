@@ -25,7 +25,9 @@ public:
     // test hooks
     void touchScreen();                       // abort a running scanraw like a touch
     QByteArrayList received() const { return m_received; }
+    QByteArray pendingInput() const { return m_in; }  // written but not yet read by the shell
     double pointsPerSecond = 20000;
+    int shellWaitMs = 5000;  // the shell reads input again this long into a scan (firmware)
 
 protected:
     qint64 readData(char *data, qint64 maxlen) override;

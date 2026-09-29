@@ -18,6 +18,7 @@ public:
     SweepConfig config() const { return m_config; }
     void setConfig(const SweepConfig &c);  // clamped to the connected model
     int scanMode() const { return m_scan; }
+    bool isBusy() const { return m_busy; }  // commands in flight or queued
     void setScan(int mode);                // DeviceLink::Off / Once / Continuous
     void send(const QString &command);
     void capture();
@@ -29,6 +30,7 @@ signals:
     void configChanged(const SweepConfig &c);
     void frame(const SweepFrame &f);
     void scanChanged(int mode);
+    void busyChanged(bool busy);
     void reply(const QString &command, const QStringList &lines);
     void battery(int mV);
     void screen(const QImage &img);
@@ -42,4 +44,5 @@ private:
     bool m_connected = false;
     SweepConfig m_config;
     int m_scan = DeviceLink::Off;
+    bool m_busy = false;
 };

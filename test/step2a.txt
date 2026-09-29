@@ -1,0 +1,51 @@
+# Step 2 part A: device controls reach the unit; settings are saved on exit.
+#   del test\out\step2.ini & tinySA-App.exe --sim --ini test\out\step2.ini --script test\step2a.txt
+do connect sim:basic
+waitfor connected == 1
+set rbwCombo 30 kHz
+set attenCombo 10 dB
+set startEdit 100
+set stopEdit 200
+set pointsCombo 290
+do clearsent
+click onceButton
+waitfor sweeps >= 1
+check sent contains rbw 30
+check sent contains attenuate 10
+check sent contains mode low input
+check sent contains sweep start 100000000
+# switching input selects that input's full range; only changes are sent
+do clearsent
+set inputCombo High
+check input == high
+check start == 240000000
+check stop == 960000000
+click onceButton
+waitfor sweeps >= 2
+check sent == pause|mode high input|attenuate 10|rbw 30|sweep start 240000000|sweep stop 960000000|resume
+do clearsent
+click onceButton
+waitfor sweeps >= 3
+check sent == pause|resume
+set inputCombo Low
+check stop == 350000000
+# the basic model has no LNA; the Ultra's RBW list starts at 200 Hz
+click connectButton
+waitfor connected == 0
+do connect sim:ultra
+waitfor connected == 1
+check lna == 0
+set lnaCheck 1
+set rbwCombo 200 Hz
+do clearsent
+click onceButton
+waitfor sweeps >= 4
+check sent contains lna on
+check sent contains rbw 0.2
+# use the unit's own range (sim Ultra: 0-800 MHz, 450 points)
+click deviceRangeButton
+check start == 0
+check stop == 800000000
+set pointsCombo 1000
+shot step2_ultra.png
+quit

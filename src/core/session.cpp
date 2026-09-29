@@ -22,6 +22,10 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink)
         m_scan = mode;
         emit scanChanged(mode);
     });
+    connect(m_link, &DeviceLink::busyChanged, this, [this](bool busy) {
+        m_busy = busy;
+        emit busyChanged(busy);
+    });
     connect(m_link, &DeviceLink::frame, this, &Session::frame);
     connect(m_link, &DeviceLink::reply, this, &Session::reply);
     connect(m_link, &DeviceLink::battery, this, &Session::battery);

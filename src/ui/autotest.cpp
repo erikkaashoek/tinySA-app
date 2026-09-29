@@ -94,11 +94,12 @@ void AutoTest::step()
 bool AutoTest::compare(const QString &query, const QString &op, const QString &want, double tol,
                        QString *got)
 {
-    *got = m_host->testQuery(query);
-    if (got->isNull()) {
+    const std::optional<QString> answer = m_host->testQuery(query);
+    if (!answer) {
         *got = "<unknown query>";
         return false;
     }
+    *got = *answer;
     bool okA = false, okB = false;
     const double a = got->toDouble(&okA), b = want.toDouble(&okB);
     if (op == "==") return okA && okB ? a == b : *got == want;
@@ -179,11 +180,11 @@ bool AutoTest::exec(const QStringList &tok)
             w->grab().save(m_outDir + "/" + tok.value(2));
     } else if (cmd == "dump") {
         QFile f(m_outDir + "/" + tok.value(2));
-        const QString text = m_host->testQuery(arg);
-        if (text.isNull() || !f.open(QIODevice::WriteOnly | QIODevice::Text))
+        const std::optional<QString> text = m_host->testQuery(arg);
+        if (!text || !f.open(QIODevice::WriteOnly | QIODevice::Text))
             fail("dump " + arg + " failed");
         else
-            f.write(text.toUtf8());
+            f.write(text->toUtf8());
     } else {
         fail("unknown command: " + cmd);
     }
