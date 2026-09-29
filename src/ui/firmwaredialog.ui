@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FirmwareDialog</class>
+ <widget class="QDialog" name="FirmwareDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>560</width>
+    <height>460</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Firmware update</string>
+  </property>
+  <layout class="QVBoxLayout" name="firmwareLayout">
+   <item>
+    <widget class="QLabel" name="firmwareHelp">
+     <property name="text">
+      <string>1. Put the tinySA in DFU mode: use the button below while it is connected, or on the tinySA choose CONFIG, DFU, ENTER DFU. Its screen then shows &quot;DFU: Device Firmware Update Mode&quot;.
+2. Choose the firmware file (.bin, .hex or .dfu) and Upload. Only the flash pages the firmware needs are erased, so the tinySA keeps its stored configuration.
+3. Leave DFU starts the new firmware (or switch the tinySA off and on).</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="enterDfuButton">
+     <property name="text">
+      <string>Restart the connected tinySA in DFU mode</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="firmwareGrid">
+     <item row="0" column="0">
+      <widget class="QLabel" name="dfuDeviceLabel">
+       <property name="text">
+        <string>DFU device</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QComboBox" name="dfuDeviceCombo">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="placeholderText">
+        <string>No tinySA in DFU mode found</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="firmwareFileLabel">
+       <property name="text">
+        <string>Firmware file</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="firmwareEdit"/>
+     </item>
+     <item row="1" column="2">
+      <widget class="QPushButton" name="browseFirmwareButton">
+       <property name="text">
+        <string>Browse...</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="firmwareButtons">
+     <item>
+      <widget class="QPushButton" name="uploadButton">
+       <property name="text">
+        <string>Upload</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="verifyCheck">
+       <property name="text">
+        <string>Verify</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="saveFlashButton">
+       <property name="toolTip">
+        <string>Read the whole flash into a .bin file (a backup before an update)</string>
+       </property>
+       <property name="text">
+        <string>Save flash...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="leaveDfuButton">
+       <property name="text">
+        <string>Leave DFU</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="firmwareSpacer">
+       <property name="orientation">
+        <enum>Qt::Orientation::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>10</width>
+         <height>0</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QProgressBar" name="dfuProgress">
+     <property name="value">
+      <number>0</number>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="dfuLog">
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="firmwareButtonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Close</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>firmwareButtonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>FirmwareDialog</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>

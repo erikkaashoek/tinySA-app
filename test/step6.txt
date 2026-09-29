@@ -1,0 +1,13 @@
+# Step 6: firmware dialog on the simulator (the DfuSe protocol itself is unit-tested
+# against a fake bootloader in tst_core; real DFU tests need the user's go-ahead).
+#   tinySA-App.exe --sim --ini test\out\step6.ini --script test\step6.txt --out test\out\step6
+do connect sim:ultra
+waitfor connected == 1
+click actionFirmware
+check dfu.devices >= 0
+click enterDfuButton
+wait 500
+check sent contains reset dfu
+check dfu.log contains reset dfu
+shotw firmwareDialog step6_dialog.png
+quit

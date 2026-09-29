@@ -39,6 +39,17 @@ qt_add_library(tinysa_core STATIC
 target_include_directories(tinysa_core PUBLIC src/core)
 target_link_libraries(tinysa_core PUBLIC Qt6::Core Qt6::Gui Qt6::SerialPort)
 
+# --- DFU firmware upload: DfuSe protocol + Windows USB transports ---
+add_library(tinysa_dfu STATIC
+    src/dfu/dfufile.cpp
+    src/dfu/dfuse.cpp
+    src/dfu/dfuusb.cpp
+    src/dfu/firmwareupdater.cpp
+)
+target_include_directories(tinysa_dfu PUBLIC src/dfu)
+set_target_properties(tinysa_dfu PROPERTIES AUTOMOC ON)
+target_link_libraries(tinysa_dfu PUBLIC Qt6::Core setupapi winusb)
+
 # --- QCustomPlot 2.1.1 (GPL), vendored unmodified ---
 qt_add_library(qcustomplot STATIC vendor/qcustomplot/qcustomplot.cpp)
 target_include_directories(qcustomplot PUBLIC vendor/qcustomplot)
@@ -70,14 +81,16 @@ qt_add_executable(tinySA-App WIN32
     src/ui/screenwindow.ui
     src/ui/settingsdialog.cpp
     src/ui/settingsdialog.ui
+    src/ui/firmwaredialog.cpp
+    src/ui/firmwaredialog.ui
     res/tinySA-App.rc
 )
 target_include_directories(tinySA-App PRIVATE src/ui)
 set_target_properties(tinySA-App PROPERTIES AUTOUIC_SEARCH_PATHS src/ui)
-target_link_libraries(tinySA-App PRIVATE tinysa_core qcustomplot Qt6::Widgets Qt6::Test)
+target_link_libraries(tinySA-App PRIVATE tinysa_core tinysa_dfu qcustomplot Qt6::Widgets Qt6::Test)
 
 # --- unit tests for core ---
 enable_testing()
 qt_add_executable(tst_core test/tst_core.cpp)
-target_link_libraries(tst_core PRIVATE tinysa_core Qt6::Test)
+target_link_libraries(tst_core PRIVATE tinysa_core tinysa_dfu Qt6::Test)
 add_test(NAME tst_core COMMAND tst_core)

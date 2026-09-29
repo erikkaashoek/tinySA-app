@@ -265,7 +265,7 @@ void SimTransport::execute(const QByteArray &line)
             m_timer.start();
             return;  // '}' + prompt when the scan completes
         }
-    } else if (!(cmd.isEmpty() || cmd == "mode" || cmd == "abort" || cmd == "release"
+    } else if (!(cmd.isEmpty() || cmd == "mode" || cmd == "abort" || cmd == "release" || cmd == "reset"
                  || cmd == "saveconfig"
                  || cmd == "marker" || cmd == "threshold")) {
         out(cmd + "?\r\n");

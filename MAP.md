@@ -26,7 +26,17 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   Del, context menu), marker list under the graph (vertical splitter, View > Marker list) so the left
   panel keeps its full height. Sim step4a/b + full regression PASS; hw_cal10 PASS: CAL harmonics at
   10.0010 / 110.0013 MHz (unit shows ~+1 kHz response offset; levels quantised to 0.5 dB).
-- Next: Step 5 — Settings dialog, battery window, comms console, screen capture + remote control.
+- **Step 5 DONE** (5a console + battery, 5b screen capture + live remote control + DiSlord RLE8
+  capture, 5c settings dialog; peak interpolation now least-squares over the top 6 dB).
+- **Step 6 DONE (hardware validation pending)**: firmware upload. src/dfu: DfuSe engine over a
+  transport interface; transports for the driver Windows bound to 0483:DF11 — WinUSB, libusb-win32
+  (\\.\libusb0-NNNN), libusbK (libusb0 IOCTLs, untested) and legacy STTub30. Only the pages the
+  image covers are erased (the unit keeps its stored config). Unit tests against a fake bootloader;
+  sim step6.txt covers the dialog. NOT yet run on a real tinySA in DFU mode.
+- HARDWARE ON HOLD: the user said (2026-09-29) not to use the connected tinySA until they say so.
+  Pending hardware checks: DFU (read-only "Save flash" first, then write + verify), RLE8 capture
+  once their firmware port is ready (test/hw_screen.txt should then show "RLE8").
+- Next: Step 7 — parity checklist vs legacy, remove legacy/, dist packaging, README.
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
@@ -67,6 +77,14 @@ Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g
 | src/ui/spectrumview.* | `SpectrumView` (QCustomPlot subclass, promoted in the .ui): traces, levels, hover, menu, image; spectrummouse.cpp = mouse/wheel/keys; `SiTicker` |
 | src/ui/spectrummarkers.cpp | `MarkerOverlay` layerable: user markers, peak markers, readout block |
 | src/ui/markermodel.* / mainmarkers.cpp | marker list table model; marker controller (intents → MarkerSet → render) |
+| src/ui/consolewindow.* / batterywindow.* | console (log, history, macros), battery plot |
+| src/ui/screenwindow.* / screenview.* | screen capture + live remote control (touches) |
+| src/ui/settingsdialog.* | device settings, colours, scheme, files |
+| src/ui/firmwaredialog.* | DFU dialog; work runs in src/dfu/firmwareupdater (own thread) |
+| src/ui/maintools.cpp | creates and wires the tool windows/dialogs |
+| src/dfu/dfufile.h | .bin/.hex/.dfu parsing, DfuSe flash layout string |
+| src/dfu/dfuse.h | DfuSe protocol over `DfuTransport` (erase covered pages, write, verify, read, leave) |
+| src/dfu/dfuusb.h | find 0483:DF11 devices + open through the bound driver (WinUSB/libusb0/libusbK/STTub30) |
 | src/ui/autotest.* | script runner + `TestHost` interface |
 | src/main.cpp | CLI: --sim, --port, --script, --out |
 | test/tst_core.cpp | Qt Test unit tests for core, one class per module |

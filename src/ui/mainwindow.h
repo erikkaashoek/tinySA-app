@@ -21,6 +21,7 @@ class ConsoleWindow;
 class BatteryWindow;
 class ScreenWindow;
 class SettingsDialog;
+class FirmwareDialog;
 
 class MainWindow : public QMainWindow, public TestHost {
     Q_OBJECT
@@ -79,6 +80,7 @@ private:
     BatteryWindow *m_battery = nullptr;
     ScreenWindow *m_screen = nullptr;
     SettingsDialog *m_settingsDialog = nullptr;
+    FirmwareDialog *m_firmwareDialog = nullptr;
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;

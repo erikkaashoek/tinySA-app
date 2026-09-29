@@ -1,5 +1,7 @@
 // Unit tests for src/core. One executable, one test class per module.
 #include "csvio.h"
+#include "dfufile.h"
+#include "dfuse.h"
 #include "link.h"
 #include "markers.h"
 #include "model.h"
@@ -653,6 +655,174 @@ private slots:
     }
 };
 
+// A fake STM32 ROM bootloader: DfuSe commands on a flash array. Programming
+// only works on erased (0xFF) bytes, like the real chip.
+class FakeBootloader : public DfuTransport {
+public:
+    FakeBootloader(int pages) : flash(pages * 2048, char(0x5A)) {}
+    QByteArray flash;
+    quint32 base = 0x08000000, pointer = 0;
+    int state = 2, status = 0, busy = 0, erased = 0;
+    QString layoutText = "@Internal Flash  /0x08000000/064*0002Kg";
+
+    bool out(quint8 request, quint16 value, const QByteArray &data) override
+    {
+        if (request == 4 || request == 6) {  // CLRSTATUS, ABORT
+            state = 2, status = 0;
+            return true;
+        }
+        if (request != 1)
+            return false;
+        if (data.isEmpty()) {  // leave
+            state = 7;
+            return true;
+        }
+        if (value == 0) {  // DfuSe command
+            const quint32 a = data.size() >= 5 ? quint32(quint8(data[1])) | quint32(quint8(data[2])) << 8
+                                                   | quint32(quint8(data[3])) << 16 | quint32(quint8(data[4])) << 24
+                                               : 0;
+            if (quint8(data[0]) == 0x21)
+                pointer = a;
+            else if (quint8(data[0]) == 0x41) {
+                if (a < base || a >= base + quint32(flash.size())) {
+                    status = 8, state = 10;  // errADDRESS
+                    return true;
+                }
+                flash.replace(int((a - base) / 2048 * 2048), 2048, QByteArray(2048, char(0xFF)));
+                ++erased;
+            }
+        } else {  // program at pointer + (block - 2) * length
+            const quint32 a = pointer + quint32(value - 2) * quint32(data.size());
+            for (int i = 0; i < data.size(); ++i) {
+                const qsizetype at = qsizetype(a - base) + i;
+                if (at < 0 || at >= flash.size() || flash[at] != char(0xFF)) {
+                    status = 6, state = 10;  // errPROG
+                    return true;
+                }
+                flash[at] = data[i];
+            }
+        }
+        state = 3, busy = 1;
+        return true;
+    }
+    bool in(quint8 request, quint16 value, int length, QByteArray *data) override
+    {
+        if (request == 3) {  // GETSTATUS: DNLOAD-SYNC -> DNBUSY -> DNLOAD-IDLE
+            if (state == 3)
+                state = busy-- > 0 ? 4 : 5;
+            else if (state == 4)
+                state = 5;
+            *data = QByteArray(1, char(status)) + QByteArray("\x01\x00\x00", 3) + char(state) + char(0);
+            return true;
+        }
+        if (request == 2 && value >= 2) {  // UPLOAD
+            const qsizetype at = qsizetype(pointer - base) + qsizetype(value - 2) * length;
+            *data = flash.mid(at, length);
+            state = 9;
+            return true;
+        }
+        return false;
+    }
+    QString layout() override { return layoutText; }
+};
+
+class TstDfu : public QObject {
+    Q_OBJECT
+private slots:
+    void intelHex()
+    {
+        FirmwareImage img;
+        QString err;
+        const QByteArray hex = ":020000040800F2\n"
+                               ":10000000000102030405060708090A0B0C0D0E0F78\n"
+                               ":10001000101112131415161718191A1B1C1D1E1F68\n"
+                               ":00000001FF\n";
+        QVERIFY2(parseIntelHex(hex, &img, &err), qPrintable(err));
+        QCOMPARE(img.segments.size(), 1);
+        QCOMPARE(img.segments[0].address, 0x08000000u);
+        QCOMPARE(img.segments[0].data.size(), 32);
+        QCOMPARE(quint8(img.segments[0].data[31]), quint8(0x1F));
+        FirmwareImage bad;
+        QVERIFY(!parseIntelHex(":10000000000102030405060708090A0B0C0D0E0F79\n", &bad, &err));
+        QVERIFY(err.contains("checksum"));
+    }
+    void dfuSeFile()
+    {
+        auto le32 = [](quint32 v) { return QByteArray(1, char(v)) + char(v >> 8) + char(v >> 16) + char(v >> 24); };
+        const QByteArray payload(1000, char(0x42));
+        QByteArray target = QByteArray("Target") + char(0) + le32(0) + QByteArray(255, 0)
+                            + le32(8 + payload.size()) + le32(1) + le32(0x08004000) + le32(payload.size()) + payload;
+        QByteArray file = QByteArray("DfuSe") + char(1) + le32(0) + char(1) + target;
+        file += QByteArray("\xff\xff\x11\xdf\x83\x04\x1a\x01", 8) + "UFD" + char(16);
+        file += le32(0);
+        const quint32 crc = dfuCrc(file);
+        file.replace(file.size() - 4, 4, le32(crc));
+        FirmwareImage img;
+        QString err;
+        QVERIFY2(parseDfuSe(file, &img, &err), qPrintable(err));
+        QCOMPARE(img.segments[0].address, 0x08004000u);
+        QCOMPARE(img.segments[0].data, payload);
+        file[20] = 'x';  // corrupt: CRC no longer matches
+        QVERIFY(!parseDfuSe(file, &img, &err));
+    }
+    void flashLayout()
+    {
+        bool ok = false;
+        FlashLayout f = parseFlashLayout("@Internal Flash  /0x08000000/128*0002Kg", &ok);
+        QVERIFY(ok);
+        QCOMPARE(f.size(), 256 * 1024);
+        QCOMPARE(f.pageStart(0x08000FFF), 0x08000800u);
+        f = parseFlashLayout("@Internal Flash  /0x08000000/04*016Kg,01*064Kg,07*128Kg", &ok);
+        QCOMPARE(f.pageSize(0x08010000), 64 * 1024);
+        QCOMPARE(f.pageSize(0x08100000), 0);
+        parseFlashLayout("garbage", &ok);
+        QVERIFY(!ok);
+    }
+    void writeVerifyKeepsTheConfigPage()
+    {
+        FakeBootloader boot(64);
+        DfuSe dfu(boot);
+        QCOMPARE(dfu.flash().size(), 128 * 1024);
+        FirmwareImage img;
+        QByteArray fw(5000, 0);
+        for (int i = 0; i < fw.size(); ++i)
+            fw[i] = char(i * 7);
+        img.segments.append({0x08000000, fw});
+        img.segments.append({0x08010100, QByteArray(300, char(0x33))});
+        int lastPercent = 0;
+        DfuSe writer(boot, [&](int p, const QString &) { lastPercent = p; });
+        QVERIFY2(writer.write(img, true), qPrintable(writer.error()));
+        QCOMPARE(lastPercent, 100);
+        QCOMPARE(boot.erased, 4);  // 3 pages for 5000 bytes + 1 for the second segment
+        QCOMPARE(boot.flash.left(5000), fw);
+        QCOMPARE(boot.flash.mid(0x10100, 300), QByteArray(300, char(0x33)));
+        QCOMPARE(boot.flash.right(2048), QByteArray(2048, char(0x5A)));  // "config" page untouched
+        QByteArray all;
+        QVERIFY(dfu.readFlash(&all));
+        QCOMPARE(all, boot.flash);
+        QVERIFY(dfu.leave());
+        QCOMPARE(boot.state, 7);
+    }
+    void errorsAreReported()
+    {
+        FakeBootloader boot(64);
+        DfuSe dfu(boot);
+        FirmwareImage tooBig;
+        tooBig.segments.append({0x08000000, QByteArray(200 * 1024, 1)});
+        QVERIFY(!dfu.write(tooBig, false));
+        QVERIFY(dfu.error().contains("does not fit"));
+        // a bootloader error (erase outside its flash) is reported, not ignored
+        boot.base = 0x08010000;
+        FirmwareImage img;
+        img.segments.append({0x08000000, QByteArray(10, 1)});
+        QVERIFY(!dfu.write(img, false));
+        QVERIFY2(dfu.error().contains("address out of range"), qPrintable(dfu.error()));
+        // unknown layout: the smallest tinySA flash (64 x 2 KB) is assumed
+        boot.layoutText.clear();
+        QCOMPARE(DfuSe(boot).flash().size(), 128 * 1024);
+    }
+};
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -677,6 +847,8 @@ int main(int argc, char **argv)
     run(&csv);
     TstMarkers markers;
     run(&markers);
+    TstDfu dfu;
+    run(&dfu);
     return fails;
 }
 

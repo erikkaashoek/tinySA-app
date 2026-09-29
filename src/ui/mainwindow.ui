@@ -819,6 +819,7 @@
     <addaction name="actionScreen"/>
     <addaction name="actionConsole"/>
     <addaction name="actionBattery"/>
+    <addaction name="actionFirmware"/>
     <addaction name="separator"/>
     <addaction name="actionSettings"/>
    </widget>
@@ -909,6 +910,14 @@
    </property>
    <property name="text">
     <string>Marker list</string>
+   </property>
+  </action>
+  <action name="actionFirmware">
+   <property name="text">
+    <string>Firmware update...</string>
+   </property>
+   <property name="toolTip">
+    <string>Upload new firmware to the tinySA over USB (DFU)</string>
    </property>
   </action>
   <action name="actionSettings">

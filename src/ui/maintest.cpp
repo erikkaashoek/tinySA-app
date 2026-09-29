@@ -3,6 +3,7 @@
 #include "ui_mainwindow.h"
 #include "batterywindow.h"
 #include "consolewindow.h"
+#include "firmwaredialog.h"
 #include "screenview.h"
 #include "screenwindow.h"
 #include <QApplication>
@@ -56,6 +57,8 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "markers") return num(m_session.markers().count());
     if (name == "console.log") return m_console->logText();
     if (name == "battery.samples") return num(m_battery->samples());
+    if (name == "dfu.devices") return num(m_firmwareDialog->deviceCount());
+    if (name == "dfu.log") return m_firmwareDialog->logText();
     if (name == "theme.linewidth") return num(m_settings.theme.lineWidth);
     if (name == "theme.background") return m_settings.theme.background.name();
     if (name == "csv.separator") return QString(m_settings.csv.separator);
