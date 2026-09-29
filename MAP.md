@@ -46,7 +46,7 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 NOTE: after structural .ui changes (widgets moved between containers) do a clean rebuild
 (delete build/): a stale incremental build once crashed at start-up (objects vs. generated ui header).
 `build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/ as RelWithDebInfo with PDB, copies runtime DLLs, runs ctest).
-Crash stacks: cdb (Windows Kits\Debuggersd\cdb.exe) -g -G -y build -c "kn 20;q" build	inySA-App.exe
+Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -y build -c "kn 20;q" C:\work\VNA\NanoVNA-MyApp\build\tinySA-App.exe --sim`
 `build.bat dist` also stages dist/ + tinySA-App.zip. Qt auto-detected at `C:/Qt/6.*/msvc*_64`.
 
 ## Files
