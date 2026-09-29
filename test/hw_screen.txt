@@ -4,8 +4,8 @@ waitfor connected == 1 10000
 click actionScreen
 set pollCheck 1
 waitfor screen.width == 480 8000
-# firmware without RLE8 ignores "capture rle" and sends raw pixels
-check console.log contains raw 307200
+# RLE8 capture (tinySA4 firmware with __CAPTURE_RLE8__); older firmware sends "raw 307200"
+check console.log contains RLE8
 shotw screenWindow hw_capture.png
 set remoteCheck 1
 waitfor screen.updates >= 4 10000
@@ -15,4 +15,5 @@ waitfor idle == 1 8000
 check sent contains refresh on
 check sent contains refresh off
 check messages ==
+dump console.log console.log
 quit

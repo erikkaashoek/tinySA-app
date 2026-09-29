@@ -241,8 +241,9 @@ void DeviceLink::capture()
         } else {
             return;
         }
-        emit traffic(false, QString("<screen %1x%2, %3 %4 bytes>").arg(lcd.width()).arg(lcd.height())
-                                .arg(m_pixelsRle8 ? "RLE8" : "raw").arg(m_pixels.size()), false);
+        emit traffic(false, QString("<screen %1x%2, %3 %4 bytes, %5 ms>").arg(lcd.width()).arg(lcd.height())
+                                .arg(m_pixelsRle8 ? "RLE8" : "raw").arg(m_pixels.size()).arg(m_sentClock.elapsed()),
+                     false);
         m_screen = img;
         emit screen(m_screen);
     }});
@@ -408,6 +409,7 @@ void DeviceLink::transmit(Cmd c)
     m_pixels.clear();
     m_rx.expect(c.line, c.body, c.bytes);
     m_io->write(c.line + "\r");
+    m_sentClock.start();
     if (c.line == "pause" || c.line == "resume")  // the unit's state from now on
         m_paused = c.line == "pause";
     if (c.body != RxParser::Body::ScanRaw)

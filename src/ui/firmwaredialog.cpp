@@ -28,6 +28,12 @@ FirmwareDialog::FirmwareDialog(QWidget *parent)
     connect(ui->enterDfuButton, &QPushButton::clicked, this, [this] {
         log("Sending 'reset dfu' to the connected tinySA");
         emit enterDfuRequested();
+        QTimer::singleShot(10000, this, [this] {  // older tinySA Ultra firmware only restarts
+            refresh();
+            if (m_devices.isEmpty())
+                log("No tinySA in DFU mode appeared. Older tinySA Ultra firmware restarts normally on "
+                    "'reset dfu': switch it off, hold the jog switch pressed and switch it on.");
+        });
     });
     connect(ui->browseFirmwareButton, &QPushButton::clicked, this, [this] {
         const QString path = QFileDialog::getOpenFileName(this, "Firmware file", ui->firmwareEdit->text(),
@@ -111,13 +117,9 @@ void FirmwareDialog::hideEvent(QHideEvent *e)
     QDialog::hideEvent(e);
 }
 
-void FirmwareDialog::setConnected(bool connected, bool dfuCommand)
+void FirmwareDialog::setConnected(bool connected)
 {
-    m_canEnterDfu = connected && dfuCommand;
-    ui->enterDfuButton->setToolTip(connected && !dfuCommand
-                                       ? "The tinySA Ultra has no DFU command: switch it off, hold the jog "
-                                         "switch pressed and switch it on"
-                                       : QString());
+    m_canEnterDfu = connected;
     setBusy(m_busy);
 }
 

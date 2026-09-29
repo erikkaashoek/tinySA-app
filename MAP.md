@@ -29,18 +29,20 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   10.0010 / 110.0013 MHz (unit shows ~+1 kHz response offset; levels quantised to 0.5 dB).
 - **Step 5 DONE** (5a console + battery, 5b screen capture + live remote control + DiSlord RLE8
   capture, 5c settings dialog; peak interpolation now least-squares over the top 6 dB).
-- **Step 6 DONE (hardware validation pending)**: firmware upload. src/dfu: DfuSe engine over a
+- **Step 6 DONE**: firmware upload. src/dfu: DfuSe engine over a
   transport interface; transports for the driver Windows bound to 0483:DF11 — WinUSB, libusb-win32
   (\\.\libusb0-NNNN), libusbK (libusb0 IOCTLs, untested) and legacy STTub30. Only the pages the
   image covers are erased (the unit keeps its stored config). Unit tests against a fake bootloader;
-  sim step6.txt covers the dialog. NOT yet run on a real tinySA in DFU mode.
-- HARDWARE ON HOLD: the user said (2026-09-29) not to use the connected tinySA until they say so.
-  Pending hardware checks: DFU (read-only "Save flash" first, then write + verify), RLE8 capture
-  once their firmware port is ready (test/hw_screen.txt should then show "RLE8").
+  sim step6.txt covers the dialog. Hardware (Ultra, WinUSB "STM32 BOOTLOADER"): hw_dfu_read (256 KB
+  in ~13 s), hw_dfu_leave and hw_dfu_enter (`reset dfu` → bootloader in ~1 s → leave → reconnect)
+  PASS. NOT yet on hardware: a DFU write (ask the user first), the libusb-win32/libusbK/STTub30 paths.
 - **Step 7 DONE**: parity items (show-markers toggle, step in the status bar, colour alpha, graph
   text size; legacy `threshold` not applicable to the tinySA), dist packaging (runtime set verified
   with dumpbin), README; legacy/ removed (the VCL app remains on `master` / `tinyGTC`).
-- Remaining: hardware validation when the user allows it (DFU, RLE8 with their firmware port).
+- Hardware 2026-09-29 (Ultra ZS405, the user's fw tinySA4_v1.4-244-g650f538-dirty with RLE8 and
+  `reset dfu`): hw_smoke, hw_screen (RLE8 ~30 KB in ~250 ms vs raw 307 KB in ~345 ms; pixel-exact
+  vs raw), hw_dfu_enter PASS. The remote-mode push-inside-echo race was found and fixed there.
+- Remaining: a DFU write on hardware (only with the user's go-ahead).
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
@@ -111,9 +113,15 @@ Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g
   "BM" u16 w u16 h u8 8 u8 1, u16 palette bytes + palette (BE RGB565 as read from the LCD),
   per row u16 length + PackBits (DiSlord `packbits()`) palette indices; then prompt. Firmware
   without it ignores the argument → raw W*H*2 (parser tells them apart by the header).
-  Non-palette colours become index 0 (tinySA waterfall!). The user is porting RLE8 to the tinySA
-  firmware (their own `rle` branch has a different 9-bit colour `capt`/`refresh rle` scheme,
+  tinySA4 port (user's `capture-rle8` worktree C:\work\VNA\tinySA-rle8, `__CAPTURE_RLE8__`): sorted
+  palette ≤256 colours incl. waterfall and OR-ed trace colours; other content (image viewer,
+  display test) → the screen is read twice; >256 colours → raw. Time is spent on the unit (~0.8 ms
+  per row: LCD read at DIV4 + lookup/packbits), not on USB (raw is USB-bound at ~890 KB/s).
+  (The older `rle` branch has a different 9-bit colour `capt`/`refresh rle` scheme,
   not used). NanoVNA-D region pushes end with "ch> \r\n" (tinySA: "ch> ") — both parse.
+- `reset dfu`: "Performing reset to DFU mode", then the ROM bootloader (0483:DF11). tinySA basic
+  always; tinySA4 only from the user's 2026-09 firmware — older Ultra firmware just restarts, the
+  firmware dialog says so after 10 s. Otherwise: power on with the jog switch pressed.
 
 ## Rules
 - core/ has no QtWidgets; UI controllers stay thin (widgets → Session setters, Session signals → render).

@@ -17,7 +17,7 @@
    <item>
     <widget class="QLabel" name="firmwareHelp">
      <property name="text">
-      <string>1. Put the tinySA in DFU mode: switch it off, hold the jog switch pressed and switch it on (the screen stays dark). A connected tinySA basic can also be restarted in DFU mode with the button below, or from its menu CONFIG, DFU, ENTER DFU.
+      <string>1. Put the tinySA in DFU mode: restart a connected tinySA with the button below, or switch it off, hold the jog switch pressed and switch it on (the screen stays dark). Older tinySA Ultra firmware only restarts normally on the button; then use the jog switch.
 2. Choose the firmware file (.bin, .hex or .dfu) and Upload. Only the flash pages the firmware needs are erased, so the tinySA keeps its stored configuration.
 3. Leave DFU starts the new firmware (or switch the tinySA off and on).</string>
      </property>

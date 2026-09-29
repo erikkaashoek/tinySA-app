@@ -14,7 +14,7 @@ class FirmwareDialog : public QDialog {
 public:
     explicit FirmwareDialog(QWidget *parent = nullptr);
     ~FirmwareDialog() override;
-    void setConnected(bool connected, bool dfuCommand);  // can the unit be sent to DFU mode
+    void setConnected(bool connected);  // a connected unit can be sent to DFU mode
     QString logText() const;
     int deviceCount() const { return int(m_devices.size()); }
     bool busy() const { return m_busy; }

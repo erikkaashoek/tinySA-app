@@ -114,6 +114,7 @@ private:
     bool m_busy = false, m_batteryDue = false;
     SweepFrame m_frame;
     QElapsedTimer m_sweepClock, m_emitClock, m_drainClock;
+    QElapsedTimer m_sentClock;  // since the command in flight was sent
     QImage m_screen;          // last known unit screen (capture + pushed regions)
     QTimer m_screenTimer;     // throttles screen() while regions stream in
     bool m_remote = false;
