@@ -1,8 +1,8 @@
 # tinySA-App 2
 
 PC software for the **tinySA** spectrum analysers (tinySA basic, tinySA Ultra, tinySA Ultra+),
-rewritten in C++20 / Qt 6. It replaces the C++Builder version of tinySA-App (still on the
-`master` branch); the device is recognised from its `info` reply, so the controls always match
+rewritten in C++20 / Qt 6. It replaces the C++Builder version of tinySA-App; the device is
+recognised from its `info` reply, so the controls always match
 the connected model.
 
 ## Features

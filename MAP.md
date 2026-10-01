@@ -1,12 +1,12 @@
 # MAP — read this first
 
-tinySA-App 2.0: clean C++20 / Qt 6 rewrite of the C++Builder VCL tinySA-App (old sources in
-branch `master` / `tinyGTC` = the old app, kept as reference; it was `legacy/` here until step 7).
-Branch `qt6`. Plan: see "Steps" below.
+tinySA-App 2.0: clean C++20 / Qt 6 rewrite of the C++Builder VCL tinySA-App (the old app stays in the
+private repository erikkaashoek/nanoVNA-myApp, branch `tinyGTC`; this history starts at the rewrite).
+Branch `main`. Plan: see "Steps" below.
 Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Designer, not in code).
 
 ## Status
-- **Step 0 DONE**: branch, legacy/ move, CMake (core lib + app + tst_core), build.bat, QCustomPlot vendored.
+- **Step 0 DONE**: CMake (core lib + app + tst_core), build.bat, QCustomPlot vendored.
 - **Step 1 DONE**: live spectrum. tst_core 29 tests; `test/smoke.txt` (sim basic + ultra) PASS;
   `test/hw_smoke.txt` PASS on real tinySA Ultra ZS405 (fw tinySA4_v1.4-241) on COM20, 450/1000/30000 pts.
 - **Step 2 DONE**: RBW/atten/input/LNA controls (model-driven lists, applyModel), "Use tinySA's range",
@@ -49,8 +49,8 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   (erased up to the page end after it); 0x0802F800–0x08039AB0 is identical in the v1.4-241 and
   v1.4-244 dumps, probably left over from an older image.
 - **Step 7 DONE**: parity items (show-markers toggle, step in the status bar, colour alpha, graph
-  text size; legacy `threshold` not applicable to the tinySA), dist packaging (runtime set verified
-  with dumpbin), README; legacy/ removed (the VCL app remains on `master` / `tinyGTC`).
+  text size; the old app's `threshold` does not apply to the tinySA), dist packaging (runtime set
+  verified with dumpbin), README.
 - Hardware 2026-09-29 (Ultra ZS405, the user's fw tinySA4_v1.4-244-g650f538-dirty with RLE8 and
   `reset dfu`): hw_smoke, hw_screen (RLE8 ~30 KB in ~250 ms vs raw 307 KB in ~345 ms; pixel-exact
   vs raw), hw_dfu_enter/read/write/leave PASS. The remote-mode push-inside-echo race was found and
@@ -60,7 +60,7 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
-4 markers · 5 settings/battery/console/screen-capture windows · 6 firmware upload · 7 parity + remove legacy/.
+4 markers · 5 settings/battery/console/screen-capture windows · 6 firmware upload · 7 parity + packaging.
 
 ## Tests
 - `build.bat` runs `tst_core` (per-class logs: build/tst_<Class>.log; QTest stdout is not visible from Git Bash).
@@ -76,7 +76,7 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 NOTE: after structural .ui changes (widgets moved between containers) do a clean rebuild
 (delete build/): a stale incremental build once crashed at start-up (objects vs. generated ui header).
 `build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/ as RelWithDebInfo with PDB, copies runtime DLLs, runs ctest).
-Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -y build -c "kn 20;q" C:\work\VNA\NanoVNA-MyApp\build\tinySA-App.exe --sim`
+Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -y build -c "kn 20;q" build\tinySA-App.exe --sim`
 `build.bat dist` also stages dist/ + tinySA-App.zip. Qt auto-detected at `C:/Qt/6.*/msvc*_64`.
 
 ## Files
