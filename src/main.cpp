@@ -4,11 +4,15 @@
 #include <QApplication>
 #include <QCommandLineParser>
 
+#ifndef APP_VERSION  // set by CMakeLists.txt from git
+#define APP_VERSION "2.0.0"
+#endif
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
     app.setApplicationName("tinySA-App");
-    app.setApplicationVersion("2.0.0");
+    app.setApplicationVersion(APP_VERSION);
 
     QCommandLineParser cli;
     cli.addHelpOption();

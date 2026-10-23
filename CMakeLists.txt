@@ -89,6 +89,21 @@ target_include_directories(tinySA-App PRIVATE src/ui)
 set_target_properties(tinySA-App PROPERTIES AUTOUIC_SEARCH_PATHS src/ui)
 target_link_libraries(tinySA-App PRIVATE tinysa_core tinysa_dfu qcustomplot Qt6::Widgets Qt6::Test)
 
+# version 2.0.0-<commits>-g<hash>[-dirty] like the firmware's git describe, for the About box,
+# --version and the exe's version info; build.bat configures again on every build
+execute_process(COMMAND git rev-list --count HEAD WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE APP_COMMITS OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND git describe --always --dirty --exclude "*" WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE APP_HASH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT APP_COMMITS)
+    set(APP_COMMITS 0)
+    set(APP_HASH unknown)
+endif()
+set(APP_VERSION "${PROJECT_VERSION}-${APP_COMMITS}-g${APP_HASH}")
+message(STATUS "tinySA-App version ${APP_VERSION}")
+target_compile_definitions(tinySA-App PRIVATE APP_VERSION="${APP_VERSION}"
+    APP_VERSION_NUMBERS=${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},${APP_COMMITS})
+
 # --- unit tests for core ---
 enable_testing()
 qt_add_executable(tst_core test/tst_core.cpp)
