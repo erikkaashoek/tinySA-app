@@ -12,7 +12,8 @@ waitfor screen.updates >= 4 10000
 shotw screenWindow hw_remote.png
 set remoteCheck 0
 waitfor idle == 1 8000
-check sent contains refresh on
+# refresh rle (firmware with __REFRESH_RLE__); older firmware answers usage, then refresh on
+check sent contains refresh rle
 check sent contains refresh off
 check messages ==
 dump console.log console.log

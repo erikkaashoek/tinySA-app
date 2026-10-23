@@ -93,6 +93,7 @@ bool RxParser::step(QVector<RxEvent> &out)
         const int n = quint8(p[0]) | quint8(p[1]) << 8;
         if (n > 4096) {  // not a sane block: give up on this capture
             m_state = State::Text;
+            m_rleRegion = false;
             return true;
         }
         if (avail < 2 + n)
@@ -100,12 +101,32 @@ bool RxParser::step(QVector<RxEvent> &out)
         m_rle += m_buf.mid(m_pos, 2 + n);
         m_pos += 2 + n;
         if (m_state == State::Rle8Palette) {
-            m_state = State::Rle8Rows;
+            m_state = m_rleRegion ? State::Rle8Stream : State::Rle8Rows;
         } else if (--m_rleRows == 0) {
             RxEvent e{RxEvent::Pixels, m_rle};
             e.rle8 = true;
             out.append(e);
             m_rle.clear();
+            m_state = State::Text;
+        }
+        return true;
+    }
+    case State::Rle8Stream: {  // "rle8" push: PackBits blocks until w*h indices
+        const int n = qint8(p[0]);
+        const int need = n >= 0 ? n + 2 : n == -128 ? 1 : 2;
+        if (avail < need)
+            return false;
+        m_rle += m_buf.mid(m_pos, need);
+        m_pos += need;
+        m_rleLeft -= n >= 0 ? n + 1 : n == -128 ? 0 : 1 - n;
+        if (m_rleLeft <= 0) {
+            RxEvent e{RxEvent::Region, m_rle};
+            e.rect = m_region;
+            e.rle8 = true;
+            out.append(e);
+            m_rle.clear();
+            m_rleRegion = false;
+            m_swallowPrompt = true;  // the push ends with its own "ch> "
             m_state = State::Text;
         }
         return true;
@@ -119,16 +140,22 @@ bool RxParser::step(QVector<RxEvent> &out)
         const bool sane = m_region.x() >= 0 && m_region.y() >= 0 && m_region.width() > 0
                           && m_region.height() > 0 && m_region.right() < 1024
                           && m_region.bottom() < 1024;
-        m_state = sane ? State::RegionBody : State::Text;
+        m_state = !sane ? State::Text : m_push == 'r' ? State::Rle8Palette : State::RegionBody;
+        if (sane && m_push == 'r') {  // palette block, then the PackBits stream
+            m_rle.clear();
+            m_rleLeft = m_region.width() * m_region.height();
+            m_rleRegion = true;
+        }
         return true;
     }
     case State::RegionBody: {
-        const int need = m_regionFill ? 2 : m_region.width() * m_region.height() * 2;
+        const int need = m_push == 'b' ? m_region.width() * m_region.height() * 2 : 2;
         if (avail < need)
             return false;
         RxEvent e{RxEvent::Region, m_buf.mid(m_pos, need)};
         e.rect = m_region;
-        e.fill = m_regionFill;
+        e.fill = m_push == 'f';
+        e.scroll = m_push == 's';
         out.append(e);
         m_pos += need;
         m_swallowPrompt = true;  // the push ends with its own "ch> "
@@ -161,12 +188,13 @@ bool RxParser::textStep(QVector<RxEvent> &out)
     // The unit echoes typed characters one by one while another thread pushes screen
     // regions, so a push can land inside a line ("re" + "bulk..." + "fresh off"):
     // keep the fragment and finish the line after the push.
-    if (line.endsWith("bulk") || line.endsWith("fill")) {
-        m_fragment += line.left(line.size() - 4);
-        m_regionFill = line.endsWith("fill");
-        m_state = State::RegionHeader;
-        return true;
-    }
+    for (const char *push : {"bulk", "fill", "rle8", "scrl"})
+        if (line.endsWith(push)) {
+            m_fragment += line.left(line.size() - 4);
+            m_push = push[0];
+            m_state = State::RegionHeader;
+            return true;
+        }
     line.prepend(m_fragment);
     m_fragment.clear();
 
@@ -310,4 +338,34 @@ bool decodeRle8(const QByteArray &payload, QImage &img)
         }
     }
     return true;
+}
+
+bool blitRle8(QImage &img, const QRect &r, const QByteArray &payload)
+{
+    const char *p = payload.constData();
+    const int n = payload.size() >= 2 ? quint8(p[0]) | quint8(p[1]) << 8 : 0;  // palette bytes
+    if (payload.size() < 2 + n)
+        return false;
+    const QByteArray idx = unpackBits(p + 2 + n, int(payload.size()) - 2 - n, r.width() * r.height());
+    const QRect clip = r & img.rect();
+    for (int y = clip.top(); y <= clip.bottom(); ++y) {
+        auto *row = reinterpret_cast<quint16 *>(img.scanLine(y));
+        const char *ix = idx.constData() + (y - r.top()) * r.width() - r.left();
+        for (int x = clip.left(); x <= clip.right(); ++x) {
+            const int i = 2 * quint8(ix[x]);
+            row[x] = i + 1 < n ? be16(p + 2 + i) : 0;  // BE RGB565 as read from the LCD
+        }
+    }
+    return true;
+}
+
+void scrollRgb16(QImage &img, const QRect &r, int dy)
+{
+    const QRect clip = r & img.rect();
+    const int top = std::max(clip.top(), -dy), bottom = std::min(clip.bottom(), img.height() - 1 - dy);
+    for (int i = 0; i <= bottom - top; ++i) {  // bottom-up when moving down, so rows are read before overwritten
+        const int y = dy > 0 ? bottom - i : top + i;
+        std::memcpy(img.scanLine(y + dy) + 2 * clip.left(), img.scanLine(y) + 2 * clip.left(),
+                    size_t(2 * clip.width()));
+    }
 }

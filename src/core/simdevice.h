@@ -31,6 +31,7 @@ public:
     int shellWaitMs = 5000;  // the shell reads input again this long into a scan (firmware)
     bool rleCapture;         // "capture rle" answered in RLE8 (Ultra) or raw like old firmware (basic)
     QByteArray screenBytes() const { return m_screen; }  // raw RGB565 big-endian
+    void stopPushes() { m_pushTimer.stop(); }  // the screen stands still (refresh stays on)
     static QByteArray packBits(const QByteArray &data);
 
 protected:
@@ -42,7 +43,7 @@ private:
     void processInput();
     void execute(const QByteArray &line);
     void scanTick();
-    void pushTick();  // refresh on: stream a changing screen region
+    void pushTick();  // refresh on/rle: stream a changing screen region (rle: and a waterfall)
     QByteArray rle8() const;
 
     Kind m_kind;
@@ -65,5 +66,7 @@ private:
     QByteArray m_screen;  // RGB565 big-endian, as the LCD is read
     QTimer m_pushTimer;
     int m_pushes = 0;
+    bool m_pushRle = false;  // refresh rle (Ultra): "rle8" pushes and a scrolling waterfall
     void region(bool fill, int x, int y, int w, int h, quint16 colour);  // draw + push if refreshing
+    void scroll(int x, int y, int w, int h);  // the rows move down by one, pushed as "scrl"
 };

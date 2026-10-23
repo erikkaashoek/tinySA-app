@@ -55,6 +55,16 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   `reset dfu`): hw_smoke, hw_screen (RLE8 ~30 KB in ~250 ms vs raw 307 KB in ~345 ms; pixel-exact
   vs raw), hw_dfu_enter/read/write/leave PASS. The remote-mode push-inside-echo race was found and
   fixed there. test/out/dfu/flash.bin = backup of that unit (v1.4-244 + config).
+- Branch `refresh-rle` (2026-10-23, firmware branch of the same name): remote control sends
+  `refresh rle` and falls back to `refresh on` when the reply contains "usage" (older firmware,
+  every tinySA basic). Parser: `rle8` + `scrl` pushes; sim:ultra pushes them (plus a scrolling
+  band), sim:basic answers usage. tst_core remoteMirrorsScreen: mirrored screen pixel-exact for
+  both. Hardware (Ultra+ ZS407, fw tinySA4_v1.4-252 + refresh-rle): hw_screen PASS on old
+  firmware (fallback) and new; rebuilt screen = raw capture (0 pixels differ) for on and rle.
+  First format (u16 length + PackBits per row): normal 177 → 31 KB/s (5.7×). Now one PackBits
+  stream per region (93 % of pushed pixels are black, runs continue over rows): normal
+  289 → 34 KB/s (8.4×), big waterfall 368 → 23 KB/s (16×) at 2.12 vs 1.75 sweeps/s; every
+  stream byte-identical to DiSlord packbits() per 480 indices.
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -78,6 +88,9 @@ NOTE: after structural .ui changes (widgets moved between containers) do a clean
 `build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/ as RelWithDebInfo with PDB, copies runtime DLLs, runs ctest).
 Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -y build -c "kn 20;q" build\tinySA-App.exe --sim`
 `build.bat dist` also stages dist/ + tinySA-App.zip. Qt auto-detected at `C:/Qt/6.*/msvc*_64`.
+Version: CMake makes `2.0.0-<commits>-g<hash>[-dirty]` (git rev-list --count / describe, like the
+firmware's v1.4-255-g37e46e3) for the About box, `--version` and the exe version info (2.0.0.<commits>);
+build a release from a clean, committed tree.
 
 ## Files
 | File | Role |
@@ -122,6 +135,11 @@ Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g
 - 0 Hz shows the LO feedthrough (strongest point) — start peak tests above 0.
 - `capture`: W×H×2 bytes RGB565 then prompt. `refresh on` pushes regions:
   `"bulk\r\n"|"fill\r\n"` + x,y,w,h int16 LE + payload + `ch> `.
+- `refresh rle` (firmware `__REFRESH_RLE__`, tinySA4 only; others: "usage: refresh off|on"):
+  a bulk of ≥256 px becomes `"rle8\r\n"` + x,y,w,h + u16 palette bytes + its own palette (sorted,
+  BE RGB565) + the w×h indices as one PackBits stream without lengths (decode blocks until w×h;
+  the firmware packs 480 indices at a time); smaller ones, >256 colours or not smaller stay `bulk`. The waterfall scrolls on the unit and is pushed as
+  `"scrl\r\n"` + x,y,w,h + int16 dy (rows of the rect move down by dy; the new top row follows).
 - USB: VID 0483 PID 5740, 576000 baud. On open: `abort`, drain.
 - Screen capture: the app always sends `capture rle` = DiSlord NanoVNA-D RLE8 (any argument):
   "BM" u16 w u16 h u8 8 u8 1, u16 palette bytes + palette (BE RGB565 as read from the LCD),
