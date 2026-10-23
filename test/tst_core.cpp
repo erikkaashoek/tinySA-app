@@ -151,8 +151,9 @@ static QString describe(const QVector<RxEvent> &ev)
         case RxEvent::ScanEnd: s << QString("}%1").arg(e.count); break;
         case RxEvent::Pixels: s << QString("PX:%1").arg(e.data.size()); break;
         case RxEvent::Region:
-            s << QString("R:%1,%2,%3,%4,%5,%6").arg(e.rect.x()).arg(e.rect.y())
-                     .arg(e.rect.width()).arg(e.rect.height()).arg(e.fill).arg(e.data.size());
+            s << QString("R:%1,%2,%3,%4,%5,%6%7").arg(e.rect.x()).arg(e.rect.y())
+                     .arg(e.rect.width()).arg(e.rect.height()).arg(e.fill).arg(e.data.size())
+                     .arg(e.rle8 ? ",rle8" : e.scroll ? ",scrl" : "");
             break;
         }
     }
@@ -260,6 +261,42 @@ private slots:
                                    "ref" + push + "resh off\r\nch> "}}, chunk);
             QCOMPARE(describe(ev), QString("R:0,0,1,1,0,2 E:refresh off P"));
         }
+    }
+    void refreshRlePushes()
+    {
+        // "rle8": 2x2 at 3,4, palette {black, red}, indices 0 1 1 1 as one PackBits stream
+        // (literal 1: 0, then 3 x 1); "scrl": rows 0..9 of x 0..1 down by 1
+        auto le16 = [](int v) { return QByteArray(1, char(v & 0xff)) + char((v >> 8) & 0xff); };
+        const QByteArray rle8 = "rle8\r\n" + le16(3) + le16(4) + le16(2) + le16(2) + le16(4)
+                                + QByteArray("\x00\x00\xf8\x00", 4) + QByteArray("\x00\x00\xfe\x01", 4) + "ch> ";
+        const QByteArray scrl = "scrl\r\n" + le16(0) + le16(0) + le16(2) + le16(10) + le16(1) + "ch> ";
+        QCOMPARE(SimTransport::packBits(QByteArray("\x00\x01\x01\x01", 4)), QByteArray("\x00\x00\xfe\x01", 4));
+        for (int chunk : {0, 1, 3, 7}) {
+            const auto ev = play({{"refresh rle", RxParser::Body::Text, 0,
+                                   "refr" + rle8 + "esh rle\r\n" + scrl + "ch> "}}, chunk);
+            QCOMPARE(describe(ev), QString("R:3,4,2,2,0,10,rle8 E:refresh rle R:0,0,2,10,0,2,scrl P"));
+            QImage img(6, 12, QImage::Format_RGB16);
+            img.fill(Qt::white);
+            QVERIFY(blitRle8(img, ev[0].rect, ev[0].data));
+            QCOMPARE(img.pixelColor(3, 4), QColor(Qt::black));
+            QCOMPARE(img.pixelColor(4, 4).red(), 255);
+            QCOMPARE(img.pixelColor(3, 5).red(), 255);
+            QCOMPARE(img.pixelColor(2, 4), QColor(Qt::white));  // outside the region
+        }
+    }
+    void scrollMovesRowsDown()
+    {
+        QImage img(3, 4, QImage::Format_RGB16);
+        auto px = [&](int x, int y) -> quint16 & { return reinterpret_cast<quint16 *>(img.scanLine(y))[x]; };
+        for (int y = 0; y < 4; ++y)
+            for (int x = 0; x < 3; ++x)
+                px(x, y) = quint16(10 * y + x);
+        scrollRgb16(img, QRect(0, 1, 2, 3), 1);  // rows 1..3 of x 0..1 down by 1: row 3 drops off
+        QCOMPARE(px(0, 0), quint16(0));
+        QCOMPARE(px(0, 1), quint16(10));  // left as it was: the caller draws the new top row
+        QCOMPARE(px(0, 2), quint16(10));
+        QCOMPARE(px(1, 3), quint16(21));
+        QCOMPARE(px(2, 3), quint16(32));  // outside the rectangle
     }
     void rgb565IsBigEndian()
     {
@@ -434,6 +471,36 @@ private slots:
             sawRle |= t.at(1).toString().contains("RLE8");
         QCOMPARE(sawRle, rle);
         QVERIFY(sim->received().contains("capture rle"));
+    }
+
+    void remoteMirrorsScreen_data()
+    {
+        QTest::addColumn<QString>("port");
+        QTest::addColumn<bool>("rle");
+        QTest::newRow("ultra, refresh rle") << "sim:ultra" << true;
+        QTest::newRow("basic, falls back to refresh on") << "sim:basic" << false;
+    }
+    void remoteMirrorsScreen()
+    {
+        QFETCH(QString, port);
+        QFETCH(bool, rle);
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), screen(&link, &DeviceLink::screen);
+        link.open(port);
+        QVERIFY(opened.wait(3000));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        link.setRemote(true);
+        QTRY_VERIFY_WITH_TIMEOUT(screen.size() >= 6, 5000);  // the capture, then pushes (rle: scrolls too)
+        sim->stopPushes();
+        QImage want(sim->screenBytes().size() == 480 * 320 * 2 ? QSize(480, 320) : QSize(320, 240),
+                    QImage::Format_RGB16);
+        blitRgb565BE(want, want.rect(), sim->screenBytes());
+        QTRY_COMPARE_WITH_TIMEOUT(screen.last().first().value<QImage>(), want, 2000);  // pixel exact
+        const QByteArrayList rx = sim->received();
+        QVERIFY(rx.contains("refresh rle"));
+        QCOMPARE(rx.contains("refresh on"), !rle);
+        link.setRemote(false);
+        QTRY_VERIFY_WITH_TIMEOUT(sim->received().contains("refresh off"), 3000);
     }
 
     void stopAbortsALongScan()

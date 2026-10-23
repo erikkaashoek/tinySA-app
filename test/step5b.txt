@@ -12,10 +12,11 @@ click captureButton
 wait 500
 check console.log contains RLE8
 # remote control: our scanning pauses, the unit streams its screen changes
+# (the simulated Ultra has refresh rle: RLE8 pushes and a scrolling waterfall band)
 set remoteCheck 1
 waitfor scan == 0 3000
 waitfor screen.updates >= 4 5000
-check sent contains refresh on
+check sent contains refresh rle
 do screentouch 200 100
 waitfor screen.pixel@200,100 == #ffffff 3000
 check sent contains touch 200 100

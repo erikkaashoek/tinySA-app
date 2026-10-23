@@ -1,5 +1,6 @@
 #include "simdevice.h"
 #include <QHash>
+#include <QMap>
 #include <cmath>
 #include <cstring>
 
@@ -118,8 +119,41 @@ void SimTransport::region(bool fill, int x, int y, int w, int h, quint16 colour)
     if (!m_pushTimer.isActive())
         return;
     auto le16 = [](int v) { return QByteArray(1, char(v & 0xff)) + char((v >> 8) & 0xff); };
-    out((fill ? "fill\r\n" : "bulk\r\n") + le16(x) + le16(y) + le16(w) + le16(h)
-        + (fill ? px.left(2) : px) + "ch> ");
+    const QByteArray head = le16(x) + le16(y) + le16(w) + le16(h);
+    if (fill)
+        return out("fill\r\n" + head + px.left(2) + "ch> ");
+    // refresh rle, as send_region_rle8(): own palette sorted by the pixel as the MCU reads it
+    // (little-endian word), raw when small, more than 256 colours or possibly larger than raw;
+    // the indices as one PackBits stream, packed 480 (LCD_WIDTH) at a time
+    const int n = w * h;
+    QMap<quint16, int> colours;
+    for (int i = 0; i < n; ++i)
+        colours.insert(quint16(quint8(px[2 * i]) | quint8(px[2 * i + 1]) << 8), 0);
+    if (!m_pushRle || n < 256 || colours.size() > 256 || 2 * colours.size() + n / 64 + 2 > n)
+        return out("bulk\r\n" + head + px + "ch> ");
+    QByteArray palette, idx(n, 0), stream;
+    int k = 0;
+    for (auto it = colours.begin(); it != colours.end(); ++it, ++k) {
+        it.value() = k;
+        palette += char(it.key() & 0xff);
+        palette += char(it.key() >> 8);
+    }
+    for (int i = 0; i < n; ++i)
+        idx[i] = char(colours.value(quint16(quint8(px[2 * i]) | quint8(px[2 * i + 1]) << 8)));
+    for (int i = 0; i < n; i += 480)
+        stream += packBits(idx.mid(i, 480));
+    out("rle8\r\n" + head + le16(int(palette.size())) + palette + stream + "ch> ");
+}
+
+void SimTransport::scroll(int x, int y, int w, int h)
+{
+    const int bpl = 2 * m_lcd.width();
+    char *d = m_screen.data();
+    for (int r = std::min(y + h, m_lcd.height() - 1) - 1; r >= y; --r)
+        std::memcpy(d + (r + 1) * bpl + 2 * x, d + r * bpl + 2 * x, size_t(2 * w));
+    auto le16 = [](int v) { return QByteArray(1, char(v & 0xff)) + char((v >> 8) & 0xff); };
+    if (m_pushTimer.isActive())
+        out("scrl\r\n" + le16(x) + le16(y) + le16(w) + le16(h) + le16(1) + "ch> ");
 }
 
 void SimTransport::pushTick()
@@ -128,6 +162,10 @@ void SimTransport::pushTick()
         return;  // never inside scan data
     ++m_pushes;
     region(false, (m_pushes * 16) % (m_lcd.width() - 32), m_lcd.height() - 24, 32, 16, 0x001F);
+    if (m_pushRle) {  // a waterfall as refresh rle sends it: the rows move down, then a new top row
+        scroll(30, 200, 450, 80);
+        region(false, 30, 200, 450, 1, quint16(0xF800 + 0x20 * (m_pushes % 32)));
+    }
 }
 
 QVector<SimTransport::Carrier> SimTransport::carriers()
@@ -250,10 +288,15 @@ void SimTransport::execute(const QByteArray &line)
     } else if (cmd == "capture") {
         out(!a1.isEmpty() && rleCapture ? rle8() : m_screen);
     } else if (cmd == "refresh") {
-        if (a1 == "on")
-            m_pushTimer.start();
-        else
-            m_pushTimer.stop();
+        if (a1 == "rle" && !ultra) {  // firmware without __REFRESH_RLE__ (every tinySA basic)
+            out("usage: refresh off|on\r\n");
+        } else {
+            m_pushRle = a1 == "rle";
+            if (a1 == "on" || m_pushRle)
+                m_pushTimer.start();
+            else
+                m_pushTimer.stop();
+        }
     } else if (cmd == "touch") {
         region(true, a1.toInt() - 4, a2.toInt() - 4, 8, 8, 0xFFFF);  // a white dot where touched
     } else if (cmd == "scanraw") {

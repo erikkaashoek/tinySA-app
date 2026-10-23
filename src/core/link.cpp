@@ -271,7 +271,11 @@ void DeviceLink::setRemote(bool on)
         m_modeBeforeRemote = m_mode;
         setMode(Off);  // resumes the unit's own sweeping and display
         capture();     // full picture first, then only the changes
-        enqueue({"refresh on"});
+        // compressed pushes and a scrolling waterfall; firmware without them answers with usage
+        enqueue({"refresh rle", {}, 0, 3000, [this](bool, const QStringList &lines) {
+            if (m_remote && lines.join(' ').contains("usage"))
+                enqueue({"refresh on"});
+        }});
     } else {
         enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {  // after anything in flight
             flushTouch();
@@ -495,13 +499,17 @@ void DeviceLink::handle(const RxEvent &e)
         m_pixels = e.data;
         m_pixelsRle8 = e.rle8;
         break;
-    case RxEvent::Region:  // pushed screen change (refresh on)
+    case RxEvent::Region:  // pushed screen change (refresh on / rle)
         if (m_info.model && m_screen.size() != m_info.model->lcd) {
             m_screen = QImage(m_info.model->lcd, QImage::Format_RGB16);
             m_screen.fill(Qt::black);
         }
-        if (e.fill)
+        if (e.scroll)
+            scrollRgb16(m_screen, e.rect, qint16(quint8(e.data[0]) | quint8(e.data[1]) << 8));
+        else if (e.fill)
             fillRgb565BE(m_screen, e.rect, e.data);
+        else if (e.rle8)
+            blitRle8(m_screen, e.rect, e.data);
         else
             blitRgb565BE(m_screen, e.rect, e.data);
         if (!m_screenTimer.isActive())
