@@ -91,7 +91,8 @@ NOTE: after structural .ui changes (widgets moved between containers) do a clean
 (delete build/): a stale incremental build once crashed at start-up (objects vs. generated ui header).
 `build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/ as RelWithDebInfo with PDB, copies runtime DLLs, runs ctest).
 Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -y build -c "kn 20;q" build\tinySA-App.exe --sim`
-`build.bat dist` also stages dist/ + tinySA-App.zip. Qt auto-detected at `C:/Qt/6.*/msvc*_64`.
+`build.bat dist` also stages dist/ + tinySA-App-<version>.zip (version 2.0.0-24[-dirty] from build/version.txt,
+written by CMake). Qt auto-detected at `C:/Qt/6.*/msvc*_64`.
 Version: CMake makes `2.0.0-<commits>-g<hash>[-dirty]` (git rev-list --count / describe, like the
 firmware's v1.4-255-g37e46e3) for the About box, `--version` and the exe version info (2.0.0.<commits>);
 build a release from a clean, committed tree.

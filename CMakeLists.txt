@@ -101,6 +101,8 @@ if(NOT APP_COMMITS)
 endif()
 set(APP_VERSION "${PROJECT_VERSION}-${APP_COMMITS}-g${APP_HASH}")
 message(STATUS "tinySA-App version ${APP_VERSION}")
+string(REGEX MATCH "-dirty$" APP_DIRTY "${APP_HASH}")  # build.bat dist: tinySA-App-2.0.0-24[-dirty].zip
+file(WRITE ${CMAKE_BINARY_DIR}/version.txt "${PROJECT_VERSION}-${APP_COMMITS}${APP_DIRTY}")
 target_compile_definitions(tinySA-App PRIVATE APP_VERSION="${APP_VERSION}"
     APP_VERSION_NUMBERS=${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},${APP_COMMITS})
 
