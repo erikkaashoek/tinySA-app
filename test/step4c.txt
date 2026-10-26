@@ -1,0 +1,35 @@
+# Step 4c: the hover readout stays clear of the marker labels. Bug report: with Start close to
+# 0 MHz and a large span the strongest point (on a unit the 0 Hz LO feedthrough) is at the far
+# left, near the top: its max label was clamped into the top left corner, under the readout.
+#   tinySA-App.exe --sim --ini test\out\step4c.ini --script test\step4c.txt --out test\out\step4c
+do connect sim:ultra
+waitfor connected == 1
+set startEdit 0
+set stopEdit 5000
+do mark
+click scanButton
+waitfor sweeps.new >= 1 15000
+# the 100 MHz carrier (strongest) at the top of the graph, as the LO feedthrough on a unit
+click autoScaleButton
+wait 300
+do mouse hover plot 2500000000 -80
+wait 300
+check hover contains Live
+check hover.covers == 0
+check hover.place == bottom
+shot step4c_wide.png
+# hovering at the peak itself
+do mouse hover plot 100000000 -80
+wait 300
+check hover.covers == 0
+# narrow span: the peak label is in the middle, the readout keeps its usual place
+set startEdit 80
+set stopEdit 120
+do mark
+waitfor sweeps.new >= 2 15000
+do mouse hover plot 90000000 -80
+wait 300
+check hover.covers == 0
+check hover.place == top
+shot step4c_narrow.png
+quit

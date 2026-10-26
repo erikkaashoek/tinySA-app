@@ -45,6 +45,11 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "peak.hz") return peak() < 0 ? "" : num(live.grid.freq(peak()));
     if (name == "peak.dbm") return peak() < 0 ? "" : num(live.dBm[peak()], 2);
     if (name == "hover") return ui->spectrum->hoverText();
+    if (name == "hover.covers") return ui->spectrum->hoverCoversMark() ? "1" : "0";
+    if (name == "hover.place") {  // top left / bottom left / top centre
+        const QPointF at = ui->spectrum->hoverPlace();
+        return at.y() > 0.5 ? "bottom" : at.x() > 0.25 ? "centre" : "top";
+    }
     if (name == "ymin") return QString::number(ui->spectrum->yAxis->range().lower, 'g', 6);
     if (name == "ymax") return QString::number(ui->spectrum->yAxis->range().upper, 'g', 6);
     if (name == "xmin") return num(ui->spectrum->xAxis->range().lower);

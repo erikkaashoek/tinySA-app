@@ -51,6 +51,7 @@ SpectrumView::SpectrumView(QWidget *parent) : QCustomPlot(parent)
     m_hoverText->setPositionAlignment(Qt::AlignLeft | Qt::AlignTop);
     m_hoverText->setPadding(QMargins(6, 3, 6, 3));
     m_hoverText->setVisible(false);
+    connect(this, &QCustomPlot::afterLayout, this, &SpectrumView::placeHover);  // clear of this replot's marks
     legend->setVisible(false);
     m_overlay = createMarkerOverlay(this);
     setAntialiasedElements(QCP::aePlottables | QCP::aeItems);

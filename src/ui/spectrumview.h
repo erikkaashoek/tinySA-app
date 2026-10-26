@@ -3,10 +3,12 @@
 // interaction. It shows traces and emits intents (range requests, image requests);
 // it never talks to the device. Promoted from a plain QWidget in mainwindow.ui.
 //
-// Mouse: hover shows a readout. Frequency strip below the plot: drag the left /
-// middle / right third to move start / pan / move stop; wheel zooms. Level strip
-// left of the plot: top / middle / bottom third moves top / pans / moves bottom;
-// wheel zooms. Wheel in the plot zooms the span about the cursor. Right click: menu.
+// Mouse: hover shows a readout (top left, else bottom left or top centre: the first
+// place clear of the marker labels and the readout block). Frequency strip below the
+// plot: drag the left / middle / right third to move start / pan / move stop; wheel
+// zooms. Level strip left of the plot: top / middle / bottom third moves top / pans /
+// moves bottom; wheel zooms. Wheel in the plot zooms the span about the cursor.
+// Right click: menu.
 // Markers: click selects, drag moves (drop outside the plot deletes), double click
 // adds or deletes, Left/Right step the selected marker, Del deletes it.
 #include "appsettings.h"
@@ -46,6 +48,8 @@ public:
     QPointF pointFor(const QString &zone, double hz, double level) const;  // zone: plot/xaxis/yaxis
     QList<QAction *> menuActions(QPointF pos, QObject *owner);             // the context menu
     QString hoverText() const;
+    QPointF hoverPlace() const { return m_hoverText->position->coords(); }  // axis rect ratio
+    bool hoverCoversMark() const;  // the hover readout overlaps a marker label or the readout block
     QPointF peak(bool max) const;  // peak marker (Hz, dBm) of the shown live trace
 
 signals:
@@ -84,6 +88,12 @@ private:
     void updateHover(QPointF p);
     void hideHover();
     int markerAt(QPointF p) const;  // user marker under the mouse, -1 if none
+    // what drawMarkers() paints: a triangle at tip (none for UserLine), a label in box
+    struct Mark { QString text; QRectF box; QColor colour; QPointF tip; enum { User, UserLine, Max, Min } kind; };
+    QVector<Mark> markLayout() const;
+    QRect readoutRect() const;                    // marker readout block, empty when not shown
+    bool marksIntersect(const QRectF &box) const;  // box overlaps a mark's label or the readout block
+    void placeHover();                            // after the layout of every replot
     void drawMarkers(QCPPainter *p);
 
     Theme m_theme;

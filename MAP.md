@@ -27,6 +27,10 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   Del, context menu), marker list under the graph (vertical splitter, View > Marker list) so the left
   panel keeps its full height. Sim step4a/b + full regression PASS; hw_cal10 PASS: CAL harmonics at
   10.0010 / 110.0013 MHz (unit shows ~+1 kHz response offset; levels quantised to 0.5 dB).
+  Bug fix 2026-10-26: the hover readout covered the max label with Start near 0 Hz and a large span
+  (the peak at the far left is clamped top left). markLayout() is the one geometry of all marker
+  labels; placeHover() (after every layout) puts the readout top left, else bottom left or top
+  centre, clear of them. step4c.txt checks it (queries hover.covers, hover.place).
 - **Step 5 DONE** (5a console + battery, 5b screen capture + live remote control + DiSlord RLE8
   capture, 5c settings dialog; peak interpolation now least-squares over the top 6 dB).
 - **Step 6 DONE**: firmware upload. src/dfu: DfuSe engine over a
