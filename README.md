@@ -9,7 +9,8 @@ the connected model.
 - Live spectrum over USB with the firmware's `scanraw`, on the exact frequency grid of the unit
 - Start/stop/center/span, points (51–30000), RBW, attenuation, LNA (Ultra), LOW/HIGH input (basic),
   or take over the range set on the tinySA itself
-- Max/min hold, averaging over 2–64 sweeps, normalisation, three trace memories (kept between runs),
+- Max/min hold, averaging over 2–64 sweeps (with a sweep counter and a restart button),
+  normalisation, three trace memories (kept between runs),
   log (dBm) or linear (W) scale, spline and point display
 - Graph interaction: hover readout, drag the frequency or level scale (ends or middle), mouse wheel
   zoom, PgUp/PgDn, Esc stops, right-click menu
@@ -17,7 +18,7 @@ the connected model.
   sub-point (least-squares parabolic) frequency interpolation
 - Save CSV, record every sweep, save or copy the graph as an image
 - Screen capture of the tinySA and live remote control (click on the picture to touch the screen);
-  uses DiSlord's compressed RLE8 capture when the firmware supports it
+  uses DiSlord's compressed RLE8 capture when the firmware supports it; inverted colours for printing
 - Console with command history and four programmable macro buttons, battery voltage plot
 - Firmware update over USB (DFU) with whichever Windows driver the bootloader uses
   (WinUSB, libusb-win32, libusbK or ST's DfuSe/STTub30); only the pages the firmware needs are

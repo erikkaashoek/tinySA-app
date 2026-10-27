@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QMenu>
 #include <QRegularExpression>
+#include <QTimer>
 #include <cmath>
 
 std::optional<QString> MainWindow::testQuery(const QString &name)
@@ -73,9 +74,9 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "scheme") return num(m_settings.colorScheme);
     if (name == "screen.width") return num(m_screen->view()->image().width());
     if (name == "screen.updates") return num(m_screen->updates());
-    if (name.startsWith("screen.pixel@")) {  // screen.pixel@x,y -> #rrggbb
+    if (name.startsWith("screen.pixel@")) {  // screen.pixel@x,y -> #rrggbb as shown (inverted or not)
         const QStringList xy = name.mid(13).split(',');
-        const QImage &img = m_screen->view()->image();
+        const QImage &img = m_screen->view()->shownImage();
         const QPoint p(xy.value(0).toInt(), xy.value(1).toInt());
         return img.valid(p) ? img.pixelColor(p).name() : QString("none");
     }
@@ -141,14 +142,19 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
         names[i] = a1;
         cmds[i] = args.mid(2).join(' ').split('|').join('\n');
         m_console->setMacros(names, cmds);
-    } else if (name == "screentouch") {  // screentouch x y: click on the screen view at LCD x,y
+    } else if (name == "screentouch") {  // screentouch x y [hold ms]: click on the screen view at LCD x,y
         ScreenView *v = m_screen->view();
         const QPointF p = v->widgetPoint({a0.toInt(), a1.toInt()});
-        for (auto t : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease}) {
+        auto send = [v, p](QEvent::Type t) {
             QMouseEvent e(t, p, v->mapToGlobal(p), Qt::LeftButton,
                           t == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(v, &e);
-        }
+        };
+        send(QEvent::MouseButtonPress);
+        if (args.size() > 2)  // held like a real click, released while the script goes on
+            QTimer::singleShot(args.value(2).toInt(), v, [send] { send(QEvent::MouseButtonRelease); });
+        else
+            send(QEvent::MouseButtonRelease);
     } else if (name == "dfuread") {  // dfuread <file>: Save flash without the file dialog
         return m_firmwareDialog->startRead(a0);
     } else if (name == "dfuwrite") {  // dfuwrite <file>: Upload + verify without confirmation

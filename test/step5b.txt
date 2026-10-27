@@ -28,4 +28,11 @@ check sent contains refresh off
 do mark
 waitfor sweeps.new >= 2 5000
 shotw screenWindow step5_screen.png
+# inverted colours (printer friendly): the white touch dot shows black, the dark background white
+set invertCheck 1
+check screen.pixel@200,100 == #000000
+check screen.pixel@2,2 == #ffffff
+shotw screenWindow step5_screen_inverted.png
+set invertCheck 0
+check screen.pixel@200,100 == #ffffff
 quit

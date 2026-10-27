@@ -3,6 +3,7 @@
 #include "mainwindow.h"
 #include "batterywindow.h"
 #include "consolewindow.h"
+#include "screenwindow.h"
 #include "ui_mainwindow.h"
 #include <QCloseEvent>
 #include <QLabel>
@@ -33,9 +34,12 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     m_stepLabel = new QLabel(this);
     statusBar()->addPermanentWidget(m_stepLabel);
     m_sweepsLabel = new QLabel(this);
+    m_avgLabel = new QLabel(this);
+    m_avgLabel->setObjectName("avgCountLabel");
+    m_avgLabel->setToolTip("Sweeps in the average so far (restart with the button next to Avg)");
     m_rateLabel = new QLabel(this);
     m_batteryLabel = new QLabel(this);
-    for (QLabel *l : {m_sweepsLabel, m_rateLabel, m_batteryLabel})
+    for (QLabel *l : {m_sweepsLabel, m_avgLabel, m_rateLabel, m_batteryLabel})
         statusBar()->addPermanentWidget(l);
 
     // --- sweep and device widgets -> session ---
@@ -81,6 +85,11 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     connect(ui->avgCombo, &QComboBox::activated, this, [this](int i) {
         m_session.traces().setAverage(1 << i);
         renderTraces(false);
+        showAverage();
+    });
+    connect(ui->avgRestartButton, &QToolButton::clicked, this, [this] {
+        m_session.traces().restartAverage();
+        showAverage();
     });
     connect(ui->scaleCombo, &QComboBox::activated, this, [this](int i) { ui->spectrum->setLinear(i == 1); });
     connect(ui->liveButton, &QToolButton::toggled, this, [this](bool on) { ui->spectrum->setShown(0, on); });
@@ -161,7 +170,9 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     m_session.traces().setAverage(m_settings.average);
     ui->calcCombo->setCurrentIndex(std::clamp(m_settings.hold, 0, 2));
     ui->avgCombo->setCurrentIndex(std::clamp(int(std::log2(std::max(1, m_settings.average))), 0, 6));
+    showAverage();
     ui->sweepNameEdit->setText(m_settings.sweepName);
+    m_screen->setInvert(m_settings.screenInvert);
     m_console->setMacros(m_settings.macroNames, m_settings.macroCommands);
     m_console->setHistory(m_settings.history);
     applyAppearance();
@@ -343,6 +354,7 @@ void MainWindow::onFrame(const SweepFrame &f)
     else
         m_cycle.start();
     m_sweepsLabel->setText(QString("Sweeps %1").arg(m_sweeps));
+    showAverage();
     if (f.seconds > 0)
         m_rateLabel->setText(QString("%1 points/s").arg(std::lround(f.grid.points / f.seconds)));
     QString err;

@@ -12,8 +12,19 @@ void ScreenView::setImage(const QImage &img)
 {
     const bool resized = img.size() != m_img.size();
     m_img = img;
+    setInvert(m_invert);
     if (resized)
         updateGeometry();
+}
+
+void ScreenView::setInvert(bool on)
+{
+    m_invert = on;
+    m_inverted = QImage();
+    if (on && !m_img.isNull()) {
+        m_inverted = m_img.copy();
+        m_inverted.invertPixels();  // RGB565: every channel inverted
+    }
     update();
 }
 
@@ -57,14 +68,14 @@ QPointF ScreenView::widgetPoint(QPoint lcd) const
 void ScreenView::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
-    p.fillRect(rect(), Qt::black);
+    p.fillRect(rect(), m_invert ? Qt::white : Qt::black);
     if (m_img.isNull()) {
         p.setPen(Qt::gray);
         p.drawText(rect(), Qt::AlignCenter, "No screen captured yet");
         return;
     }
     p.setRenderHint(QPainter::SmoothPixmapTransform);
-    p.drawImage(target(), m_img);
+    p.drawImage(target(), shownImage());
 }
 
 void ScreenView::mousePressEvent(QMouseEvent *e)

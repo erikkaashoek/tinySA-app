@@ -75,6 +75,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QCheckBox" name="invertCheck">
+       <property name="toolTip">
+        <string>Light background, printer friendly: the screen is shown, saved and copied with inverted colours</string>
+       </property>
+       <property name="text">
+        <string>Invert colours</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="screenSpacer">
        <property name="orientation">
         <enum>Qt::Orientation::Horizontal</enum>

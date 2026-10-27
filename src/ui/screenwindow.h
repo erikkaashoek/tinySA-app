@@ -15,6 +15,7 @@ public:
 
     void setScreen(const QImage &img);
     void remoteEnded();  // the link dropped remote mode (disconnect)
+    void setInvert(bool on);  // "Invert colours" (restored from the settings)
     ScreenView *view() const;
     int updates() const { return m_updates; }
 
@@ -22,6 +23,7 @@ signals:
     void captureRequested();
     void remoteRequested(bool on);
     void touchRequested(QPoint lcd, bool down);
+    void invertChanged(bool on);
 
 protected:
     void hideEvent(QHideEvent *e) override;  // closing the window ends remote control

@@ -21,6 +21,9 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   log/linear W, auto scale, spline/points, image with header, clipboard). Compact left panel (fits 700 px):
   File actions moved to menu bar + toolbar. Sim step3.txt + full regression and hw_step2 PASS.
   (Max/min peak markers moved to step 4: they are markers.)
+  User requests 2026-10-27: "Avg n/N" in the status bar next to Sweeps (TraceSet::averaged(), shown
+  while Avg > 1), ↺ button next to Avg = restartAverage() (average and min/max hold start again with
+  the next sweep). step3b.txt checks 0/16 → 1/16 → 16/16 → restart → 1/16.
 - **Step 4 DONE**: MarkerSet (normal/delta vs first normal marker, selection, persisted), peak markers
   (3-point parabolic interpolation, never bin-snapped), one MarkerOverlay layer draws all marks,
   graph interaction (double click add/delete, click select, drag, drop off-plot deletes, Left/Right,
@@ -33,6 +36,8 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   centre, clear of them. step4c.txt checks it (queries hover.covers, hover.place).
 - **Step 5 DONE** (5a console + battery, 5b screen capture + live remote control + DiSlord RLE8
   capture, 5c settings dialog; peak interpolation now least-squares over the top 6 dB).
+  2026-10-27: screen window "Invert colours" (printer friendly, ini `screen/invert`): shown, saved and
+  copied inverted; ScreenView::image() stays as the unit sent it, shownImage() is what is shown.
 - **Step 6 DONE**: firmware upload. src/dfu: DfuSe engine over a
   transport interface; transports for the driver Windows bound to 0483:DF11 — WinUSB, libusb-win32
   (\\.\libusb0-NNNN), libusbK (libusb0 IOCTLs, untested) and legacy STTub30. Only the pages the

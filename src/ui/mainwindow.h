@@ -53,6 +53,7 @@ private:
     void applyRangeOp(SpectrumView::RangeOp op, double a, double b);
 
     void renderTraces(bool memories);  // TraceSet -> SpectrumView
+    void showAverage();                // "Avg 3/16" in the status bar while averaging
     void setupMemoryButton(int m, QToolButton *b);
     bool saveCsv(const QString &path);
     bool saveImage(const QString &path);
@@ -84,7 +85,7 @@ private:
     QTimer m_portPoll;
     QStringList m_portNames;
     bool m_simulators;
-    QLabel *m_stepLabel, *m_sweepsLabel, *m_rateLabel, *m_batteryLabel;
+    QLabel *m_stepLabel, *m_sweepsLabel, *m_avgLabel, *m_rateLabel, *m_batteryLabel;
     int m_sweeps = 0, m_sweepsMark = 0;
     QElapsedTimer m_cycle;
     double m_cycleMs = 0, m_sweepMs = 0;  // last sweep-to-sweep time, last sweep duration
