@@ -20,6 +20,13 @@ void MainWindow::renderTraces(bool memories)
     renderMarkers();  // readings follow the data
 }
 
+void MainWindow::showAverage()
+{
+    const TraceSet &t = m_session.traces();
+    m_avgLabel->setVisible(t.average() > 1);
+    m_avgLabel->setText(QString("Avg %1/%2").arg(t.averaged()).arg(t.average()));
+}
+
 void MainWindow::setupMemoryButton(int m, QToolButton *b)
 {
     connect(b, &QToolButton::toggled, this, [this, m](bool on) { ui->spectrum->setShown(m + 1, on); });

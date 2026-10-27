@@ -1,0 +1,30 @@
+# Step 3b: averaging counter in the status bar and the restart button next to Avg (user request).
+#   tinySA-App.exe --sim --ini test\out\step3b.ini --script test\step3b.txt --out test\out\step3b
+do connect sim:ultra
+waitfor connected == 1
+set avgCombo 16
+check @avgCountLabel == Avg 0/16
+do mark
+click onceButton
+waitfor sweeps.new >= 1 5000
+# (waitfor takes a one-word value, check the rest of the line)
+waitfor @avgCountLabel contains 1/16 3000
+check @avgCountLabel == Avg 1/16
+# continuous: counts up to 16/16 and stays there
+click scanButton
+waitfor @avgCountLabel contains 16/16 15000
+wait 500
+check @avgCountLabel == Avg 16/16
+click scanButton
+waitfor scan == 0 3000
+# restart: the next sweep is 1/16 again
+click avgRestartButton
+check @avgCountLabel == Avg 0/16
+do mark
+click onceButton
+waitfor sweeps.new >= 1 5000
+waitfor @avgCountLabel contains 1/16 3000
+check @avgCountLabel == Avg 1/16
+shot step3b_average.png
+set avgCombo Off
+quit

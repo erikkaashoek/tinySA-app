@@ -16,6 +16,10 @@ ScreenWindow::ScreenWindow(QWidget *parent) : QWidget(parent, Qt::Window), ui(ne
         emit remoteRequested(on);
     });
     connect(ui->fitCheck, &QCheckBox::toggled, ui->screenView, &ScreenView::setFit);
+    connect(ui->invertCheck, &QCheckBox::toggled, this, [this](bool on) {
+        ui->screenView->setInvert(on);
+        emit invertChanged(on);
+    });
     connect(ui->screenView, &ScreenView::touched, this, [this](QPoint lcd, bool down) {
         emit touchRequested(lcd, down);
         if (!down && !ui->remoteCheck->isChecked())  // no live updates: show the result
@@ -26,11 +30,16 @@ ScreenWindow::ScreenWindow(QWidget *parent) : QWidget(parent, Qt::Window), ui(ne
             this, "Save screen", "tinySA screen " + QDateTime::currentDateTime().toString("yyyy-MM-dd hh-mm-ss") + ".png",
             "PNG (*.png);;Bitmap (*.bmp)");
         if (!path.isEmpty())
-            ui->screenView->image().save(path);
+            ui->screenView->shownImage().save(path);
     });
     connect(ui->copyScreenButton, &QPushButton::clicked, this, [this] {
-        QGuiApplication::clipboard()->setImage(ui->screenView->image());
+        QGuiApplication::clipboard()->setImage(ui->screenView->shownImage());
     });
+}
+
+void ScreenWindow::setInvert(bool on)
+{
+    ui->invertCheck->setChecked(on);
 }
 
 ScreenWindow::~ScreenWindow() = default;

@@ -73,9 +73,9 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "scheme") return num(m_settings.colorScheme);
     if (name == "screen.width") return num(m_screen->view()->image().width());
     if (name == "screen.updates") return num(m_screen->updates());
-    if (name.startsWith("screen.pixel@")) {  // screen.pixel@x,y -> #rrggbb
+    if (name.startsWith("screen.pixel@")) {  // screen.pixel@x,y -> #rrggbb as shown (inverted or not)
         const QStringList xy = name.mid(13).split(',');
-        const QImage &img = m_screen->view()->image();
+        const QImage &img = m_screen->view()->shownImage();
         const QPoint p(xy.value(0).toInt(), xy.value(1).toInt());
         return img.valid(p) ? img.pixelColor(p).name() : QString("none");
     }

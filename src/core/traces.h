@@ -22,6 +22,8 @@ public:
     Hold hold() const { return m_hold; }
     void setAverage(int sweeps);   // 1 = off, else a moving average over this many sweeps
     int average() const { return m_avgN; }
+    int averaged() const { return m_done < m_avgN ? m_done : m_avgN; }  // complete sweeps in it so far
+    void restartAverage();         // averaging and min/max hold start again with the next sweep
     void restart();                // forget history (new range, user request)
 
     void add(const SweepFrame &f);
@@ -39,6 +41,7 @@ private:
     Trace m_live;
     Hold m_hold = Hold::Off;
     int m_avgN = 1;
+    int m_done = 0;                 // complete sweeps since the average (re)started
     QVector<double> m_holdVals;
     QList<QVector<double>> m_ring;  // linear power of the last m_avgN-1 complete sweeps
     QVector<double> m_sum;          // sum over m_ring

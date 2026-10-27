@@ -28,14 +28,21 @@ void TraceSet::setAverage(int sweeps)
     m_avgN = std::max(1, sweeps);
     m_ring.clear();
     m_sum.clear();
+    m_done = 0;
+}
+
+void TraceSet::restartAverage()
+{
+    m_holdVals.clear();
+    m_ring.clear();
+    m_sum.clear();
+    m_done = 0;
 }
 
 void TraceSet::restart()
 {
     m_live = Trace{};
-    m_holdVals.clear();
-    m_ring.clear();
-    m_sum.clear();
+    restartAverage();
 }
 
 void TraceSet::add(const SweepFrame &f)
@@ -75,6 +82,7 @@ void TraceSet::add(const SweepFrame &f)
             m_ring.removeFirst();
         }
     }
+    m_done += f.complete;
 }
 
 void TraceSet::store(int m)

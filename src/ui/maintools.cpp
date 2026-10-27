@@ -36,6 +36,7 @@ void MainWindow::setupTools()
     connect(m_screen, &ScreenWindow::touchRequested, &m_session, &Session::touch);
     connect(&m_session, &Session::screen, m_screen, &ScreenWindow::setScreen);
     connect(&m_session, &Session::disconnected, m_screen, &ScreenWindow::remoteEnded);
+    connect(m_screen, &ScreenWindow::invertChanged, this, [this](bool on) { m_settings.screenInvert = on; });
 
     m_settingsDialog = new SettingsDialog(this);
     connect(ui->actionSettings, &QAction::triggered, this, [this] {

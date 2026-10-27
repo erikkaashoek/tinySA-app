@@ -577,6 +577,28 @@ private slots:
         t.add(frame(g, {-30, -30}));  // window of 2: the -40 sweep has left
         QVERIFY(std::abs(t.live().dBm[0] - -30) < 1e-9);
     }
+    void countsAndRestartsTheAverage()
+    {
+        const ScanGrid g{0, 100, 2};
+        TraceSet t;
+        t.setAverage(4);
+        QCOMPARE(t.averaged(), 0);
+        for (int i = 1; i <= 6; ++i) {
+            t.add(frame(g, {-40, -40}));
+            QCOMPARE(t.averaged(), std::min(i, 4));  // 1/4, 2/4, 3/4, 4/4, then stays 4/4
+        }
+        t.add(frame(g, {-10, qQNaN()}, false, 1));  // a partial sweep does not count
+        QCOMPARE(t.averaged(), 4);
+        t.setHold(Hold::Max);
+        t.add(frame(g, {-20, -20}));
+        t.restartAverage();                         // average and max hold forget the -40 / -20 sweeps
+        QCOMPARE(t.averaged(), 0);
+        t.add(frame(g, {-60, -60}));
+        QCOMPARE(t.averaged(), 1);
+        QVERIFY(std::abs(t.live().dBm[0] - -60) < 1e-9);
+        t.setAverage(8);                            // a new length starts over too
+        QCOMPARE(t.averaged(), 0);
+    }
     void holdsAndRestarts()
     {
         const ScanGrid g{0, 100, 3};

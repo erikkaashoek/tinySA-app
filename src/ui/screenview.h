@@ -9,7 +9,9 @@ class ScreenView : public QWidget {
 public:
     explicit ScreenView(QWidget *parent = nullptr);
     void setImage(const QImage &img);
-    const QImage &image() const { return m_img; }
+    const QImage &image() const { return m_img; }  // as the tinySA sent it
+    const QImage &shownImage() const { return m_invert ? m_inverted : m_img; }  // shown, saved, copied
+    void setInvert(bool on);  // inverted colours: light background, printer friendly
     void setFit(bool fit);
     QPointF widgetPoint(QPoint lcd) const;  // scripted tests
 
@@ -27,6 +29,6 @@ private:
     QRectF target() const;  // where the image is drawn
     QPoint toLcd(QPointF p) const;
 
-    QImage m_img;
-    bool m_fit = true, m_down = false;
+    QImage m_img, m_inverted;
+    bool m_fit = true, m_down = false, m_invert = false;
 };

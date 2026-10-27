@@ -58,6 +58,7 @@ struct AppSettings {
     CsvFormat csv;
     QStringList macroNames, macroCommands, history;  // console
     int colorScheme = 0;          // application: 0 system, 1 light, 2 dark
+    bool screenInvert = false;    // screen window: inverted colours (printer friendly)
 
     template <class V> void visit(V &&v)
     {
@@ -101,6 +102,7 @@ struct AppSettings {
         v("theme/line_width", theme.lineWidth);
         v("theme/font_pt", theme.fontPt);
         v("view/color_scheme", colorScheme);
+        v("screen/invert", screenInvert);
         v("file/sweep_name", sweepName);
         v("file/record_folder", recordFolder);
         v("file/csv_separator", m_csvSeparator);
