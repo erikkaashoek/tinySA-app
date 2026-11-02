@@ -150,7 +150,8 @@ build a release from a clean, committed tree.
   BE RGB565) + the w×h indices as one PackBits stream without lengths (decode blocks until w×h;
   the firmware packs 480 indices at a time); smaller ones, >256 colours or not smaller stay `bulk`. The waterfall scrolls on the unit and is pushed as
   `"scrl\r\n"` + x,y,w,h + int16 dy (rows of the rect move down by dy; the new top row follows).
-- USB: VID 0483 PID 5740, 576000 baud. On open: `abort`, drain.
+- USB: VID 0483 PID 5740 (tinySA, older Ultra firmware) or VID 1781 PID 0A44 (newer Ultra firmware),
+  `DeviceLink::isTinySAUsbId`; 576000 baud. On open: `abort`, drain.
 - Screen capture: the app always sends `capture rle` = DiSlord NanoVNA-D RLE8 (any argument):
   "BM" u16 w u16 h u8 8 u8 1, u16 palette bytes + palette (BE RGB565 as read from the LCD),
   per row u16 length + PackBits (DiSlord `packbits()`) palette indices; then prompt. Firmware

@@ -246,7 +246,7 @@ void MainWindow::refreshPorts()
     QSignalBlocker block(ui->portCombo);
     ui->portCombo->clear();
     for (const auto &p : ports) {
-        const bool isTinySA = p.vendorIdentifier() == 0x0483 && p.productIdentifier() == 0x5740;
+        const bool isTinySA = DeviceLink::isTinySAUsbId(p.vendorIdentifier(), p.productIdentifier());
         ui->portCombo->addItem(isTinySA ? p.portName() + " - tinySA" : p.portName(), p.portName());
         if (isTinySA)
             tinySAs << p.portName();
