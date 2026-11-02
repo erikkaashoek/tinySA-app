@@ -1,7 +1,8 @@
 @echo off
 rem Configure + build + unit-test with the VS 2026 toolchain and its bundled CMake/Ninja.
 rem   build.bat        build, copy runtime DLLs next to the exes, run tst_core
-rem   build.bat dist   additionally stage dist\ and zip it as tinySA-App-<version>.zip (build\version.txt)
+rem   build.bat dist   additionally stage dist\ and zip it as tinySA-App-<version>.zip (build\version.txt),
+rem                    replacing any older tinySA-App-*.zip
 cd /d %~dp0
 set VSROOT=C:\Program Files\Microsoft Visual Studio\18\Community
 call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" >nul
@@ -35,5 +36,6 @@ copy /y build\platforms\qwindows.dll dist\platforms\ >nul
 copy /y build\styles\qmodernwindowsstyle.dll dist\styles\ >nul
 copy /y build\imageformats\qjpeg.dll dist\imageformats\ >nul
 set /p APPVER=<build\version.txt
+del /q tinySA-App-*.zip 2>nul
 powershell -NoProfile -Command "Compress-Archive -Path dist\* -DestinationPath tinySA-App-%APPVER%.zip -Force" >nul
 echo tinySA-App-%APPVER%.zip

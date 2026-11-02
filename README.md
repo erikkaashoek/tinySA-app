@@ -37,7 +37,7 @@ Qt 6.10 for `msvc2022_64` including *Qt Serial Port*, installed under `C:\Qt`.
 
 ```
 build.bat          configure + build (build\), copy the Qt runtime, run the unit tests
-build.bat dist     the same, plus a ready-to-run dist\ folder and tinySA-App-<version>.zip
+build.bat dist     the same, plus a ready-to-run dist\ folder and tinySA-App-<version>.zip (replaces an older one)
 ```
 
 In Visual Studio use *File > Open > Folder* on this directory (CMake project).
