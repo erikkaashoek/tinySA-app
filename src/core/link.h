@@ -38,7 +38,8 @@ public:
     explicit DeviceLink(QObject *parent = nullptr);
     ~DeviceLink() override;
 
-    static QString findPort();  // first USB port with the tinySA VID/PID, "" if none
+    static QString findPort();  // first USB port with a tinySA VID/PID, "" if none
+    static bool isTinySAUsbId(quint16 vid, quint16 pid);  // 0483:5740 or the Ultra's 1781:0A44
     QIODevice *transport() const { return m_io; }  // tests: reach the SimTransport
 
 public slots:

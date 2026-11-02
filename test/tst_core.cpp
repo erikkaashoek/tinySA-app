@@ -372,6 +372,16 @@ class TstLink : public QObject {
 private slots:
     void initTestCase() { qRegisterMetaType<SweepFrame>(); qRegisterMetaType<DeviceInfo>(); }
 
+    void usbIdsOfBothFirmwares()
+    {
+        QVERIFY(DeviceLink::isTinySAUsbId(0x0483, 0x5740));
+        QVERIFY(DeviceLink::isTinySAUsbId(0x1781, 0x0A44));
+        QVERIFY(!DeviceLink::isTinySAUsbId(0x0483, 0x5741));  // tinyGTC
+        QVERIFY(!DeviceLink::isTinySAUsbId(0x0483, 0xDF11));  // DFU bootloader
+        QVERIFY(!DeviceLink::isTinySAUsbId(0x1781, 0x5740));
+        QVERIFY(!DeviceLink::isTinySAUsbId(0, 0));            // port without USB IDs
+    }
+
     void handshakeDetectsSimUltra()
     {
         DeviceLink link;

@@ -38,10 +38,16 @@ DeviceLink::~DeviceLink()
     shutdown({});
 }
 
+bool DeviceLink::isTinySAUsbId(quint16 vid, quint16 pid)
+{
+    return (vid == 0x0483 && pid == 0x5740)     // ST virtual COM port: tinySA, older Ultra firmware
+        || (vid == 0x1781 && pid == 0x0A44);    // newer tinySA Ultra firmware
+}
+
 QString DeviceLink::findPort()
 {
     for (const auto &pi : QSerialPortInfo::availablePorts())
-        if (pi.vendorIdentifier() == 0x0483 && pi.productIdentifier() == 0x5740)
+        if (isTinySAUsbId(pi.vendorIdentifier(), pi.productIdentifier()))
             return pi.portName();
     return {};
 }
