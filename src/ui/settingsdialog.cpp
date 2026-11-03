@@ -42,6 +42,10 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent), ui(new Ui::Se
         if (!dir.isEmpty())
             ui->recordFolderEdit->setText(dir);
     });
+    connect(ui->mhzCsvCheck, &QCheckBox::toggled, this, [this](bool mhz) {  // fixed comma and decimal point
+        ui->csvSeparatorCombo->setEnabled(!mhz);
+        ui->decimalCommaCheck->setEnabled(!mhz);
+    });
 
     connect(ui->vbatOffsetButton, &QPushButton::clicked, this, [this] {
         emit commandRequested(QString("vbat_offset %1").arg(ui->vbatOffsetSpin->value()));
@@ -80,6 +84,7 @@ void SettingsDialog::load(const AppSettings &s, const DeviceInfo &info, bool con
     ui->recordFolderEdit->setText(s.recordFolder);
     ui->csvSeparatorCombo->setCurrentIndex(s.csv.separator == ',' ? 1 : s.csv.separator == '\t' ? 2 : 0);
     ui->decimalCommaCheck->setChecked(s.csv.decimalComma);
+    ui->mhzCsvCheck->setChecked(s.csv.mhz);
 }
 
 void SettingsDialog::store(AppSettings &s) const
@@ -91,6 +96,7 @@ void SettingsDialog::store(AppSettings &s) const
     s.recordFolder = ui->recordFolderEdit->text();
     s.csv.separator = QList<QChar>{';', ',', '\t'}.value(ui->csvSeparatorCombo->currentIndex(), ';');
     s.csv.decimalComma = ui->decimalCommaCheck->isChecked();
+    s.csv.mhz = ui->mhzCsvCheck->isChecked();
 }
 
 void SettingsDialog::showTheme()

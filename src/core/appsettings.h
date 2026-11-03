@@ -107,6 +107,7 @@ struct AppSettings {
         v("file/record_folder", recordFolder);
         v("file/csv_separator", m_csvSeparator);
         v("file/csv_decimal_comma", csv.decimalComma);
+        v("file/csv_mhz", csv.mhz);
         v("console/macro_names", macroNames);
         v("console/macro_commands", macroCommands);
         v("console/history", history);

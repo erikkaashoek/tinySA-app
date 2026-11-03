@@ -1,0 +1,16 @@
+# Issue #88: MHz CSV for wireless managers (simulated Ultra).
+#   tinySA-App.exe --sim --ini test\out\csvmhz.ini --script test\csvmhz.txt --out test\out\csvmhz
+do connect sim:ultra
+waitfor connected == 1
+click actionSettings
+set mhzCsvCheck 1
+shotw filesTab csvmhz_files.png
+click settingsOk
+check csv.mhz == 1
+do mark
+click onceButton
+waitfor sweeps.new >= 1
+do savecsv test/out/csvmhz/trace.csv
+do loadmem 2 test/out/csvmhz/trace.csv
+check mem2 > 100
+quit
