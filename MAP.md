@@ -74,7 +74,10 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   stream per region (93 % of pushed pixels are black, runs continue over rows): normal
   289 → 34 KB/s (8.4×), big waterfall 368 → 23 KB/s (16×) at 2.12 vs 1.75 sweeps/s; every
   stream byte-identical to DiSlord packbits() per 480 indices.
-- Branch `generator` (2026-11-10): signal generator mode.
+- Branch `csv-mhz` (merged 2026-11-10, tinySA issue #88): Settings > Files "MHz CSV for wireless
+  managers" writes rows as "433.920000,-85.25" without header lines, as the tinySA's own MHz CSV
+  (CsvFormat::mhz); reading takes a frequency with a decimal mark as MHz. Test test/csvmhz.txt.
+- Branch `generator` (merged 2026-11-10): signal generator mode.
   - **UI:** Device controls moved to a top bar with an Analyzer | Generator switch. The
     generator page replaces the left panel and the graph, as the unit's own screen does: big
     DigitEdit frequency and level (wheel/↑↓ per digit, typed entry), RF button (off on entry,

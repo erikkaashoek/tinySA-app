@@ -26,7 +26,8 @@ the connected model.
   - External gain.
   The app follows a tinySA that is already generating when it connects, and leaves it
   generating when it closes.
-- Save CSV, record every sweep, save or copy the graph as an image
+- Save CSV (also the tinySA's MHz format for wireless managers such as Wireless Workbench),
+  record every sweep, save or copy the graph as an image
 - Screen capture of the tinySA and live remote control (click on the picture to touch the screen);
   uses DiSlord's compressed RLE8 capture when the firmware supports it; inverted colours for printing
 - Console with command history and four programmable macro buttons, battery voltage plot
