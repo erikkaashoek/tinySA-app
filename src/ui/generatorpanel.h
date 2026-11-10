@@ -10,6 +10,7 @@
 
 namespace Ui { class GeneratorPanel; }
 class QButtonGroup;
+class QKeyEvent;
 class QLineEdit;
 
 class GeneratorPanel : public QWidget {
@@ -25,6 +26,9 @@ public:
 
 signals:
     void edited(const GenConfig &c);
+
+protected:
+    void keyPressEvent(QKeyEvent *e) override;  // Esc: RF off, also where the window shortcut does not fire
 
 private:
     void edit(const std::function<void(GenConfig &)> &change);

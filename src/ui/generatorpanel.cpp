@@ -1,6 +1,7 @@
 #include "generatorpanel.h"
 #include "ui_generatorpanel.h"
 #include <QButtonGroup>
+#include <QKeyEvent>
 #include <QSignalBlocker>
 #include <QStyle>
 #include <cmath>
@@ -86,6 +87,15 @@ void GeneratorPanel::edit(const std::function<void(GenConfig &)> &change)
     GenConfig c = m_config;
     change(c);
     emit edited(c);
+}
+
+void GeneratorPanel::keyPressEvent(QKeyEvent *e)
+{
+    // the main window's Esc shortcut takes the key while the window is active; otherwise an Esc
+    // the fields did not use ends up here
+    if (e->key() == Qt::Key_Escape && m_connected && m_config.on != false)
+        return edit([](GenConfig &c) { c.on = false; });
+    QWidget::keyPressEvent(e);
 }
 
 void GeneratorPanel::editSweep(QLineEdit *e)
