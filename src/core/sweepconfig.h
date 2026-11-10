@@ -27,7 +27,7 @@ struct AppliedConfig {
 };
 
 // Commands that bring the device from `have` to `want`, in firmware-safe order
-// (input mode first: it resets rbw/atten). Updates `have`.
+// (input mode first, on every model while unknown: it resets rbw/atten). Updates `have`.
 QByteArrayList configCommands(const SweepConfig &want, AppliedConfig &have, const ModelDesc &m);
 
 // Clamp a config to what the model supports (range per input mode, RBW list, atten).

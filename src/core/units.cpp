@@ -106,6 +106,16 @@ QString formatHz(double hz, double resolutionHz)
     return QString("%1 %2").arg(hz / mult, 0, 'f', decimals).arg(unit);
 }
 
+QString formatMHz(double hz)
+{
+    QString s = QString::number(hz / 1e6, 'f', 6);
+    while (s.endsWith('0'))
+        s.chop(1);
+    if (s.endsWith('.'))
+        s.chop(1);
+    return s;
+}
+
 std::optional<double> parseHz(QString text, double defaultUnitHz)
 {
     static const QRegularExpression re(

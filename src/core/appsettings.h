@@ -2,6 +2,7 @@
 // Persistent application settings. visit() lists every setting once and drives
 // both load() and save(), so adding a setting is one line.
 #include "csvio.h"
+#include "genconfig.h"
 #include "sweepconfig.h"
 #include <QColor>
 #include <QString>
@@ -47,6 +48,7 @@ struct Theme {
 
 struct AppSettings {
     SweepConfig config;
+    GenConfig gen;                // RF on/off is never stored: the generator starts with RF off
     QString port;                 // last connected port
     int hold = 0;                 // Hold enum
     int average = 1;              // sweeps
@@ -70,6 +72,18 @@ struct AppSettings {
         v("device/lna", config.lna);
         v("device/high_input", m_highInput);
         v("device/port", port);
+        v("generator/high_output", m_genHigh);
+        v("generator/mixer", gen.mixer);
+        v("generator/freq_hz", gen.freqHz);
+        v("generator/level_dbm", gen.levelDbm);
+        v("generator/ext_gain_db", gen.extGainDb);
+        v("generator/type", m_genType);
+        v("generator/span_hz", gen.spanHz);
+        v("generator/sweep_s", gen.sweepS);
+        v("generator/level_change_db", gen.levelChangeDb);
+        v("generator/mod_hz", gen.modHz);
+        v("generator/am_depth", gen.amDepth);
+        v("generator/fm_dev_hz", gen.fmDevHz);
         v("trace/hold", hold);
         v("trace/average", average);
         v("view/linear", view.linear);
@@ -120,6 +134,9 @@ struct AppSettings {
     static QString defaultPath();
 
 private:
+    void storeGenerator();     // gen -> the stored forms below
     bool m_highInput = false;  // stored forms of enum / char fields
     QString m_csvSeparator = ";";
+    bool m_genHigh = false;
+    QString m_genType = "CW";
 };

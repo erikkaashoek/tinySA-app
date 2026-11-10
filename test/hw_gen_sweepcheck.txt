@@ -1,0 +1,21 @@
+# Generator on hardware, step 4 of 5 (see hw_gen_start.txt): the measuring unit holds the
+# maximum while the generator sweeps 140-160 MHz in 10 s: a band of about -30 dBm there,
+# nothing outside.
+waitfor connected == 1 10000
+set stopEdit 170
+set startEdit 130
+set pointsCombo 290
+set rbwCombo 600 kHz
+set calcCombo Max hold
+click scanButton
+wait 14000
+click scanButton
+waitfor idle == 1 20000
+check level@144000000 > -45
+check level@150000000 > -45
+check level@156000000 > -45
+check level@134000000 < -60
+check level@166000000 < -60
+set calcCombo Normal
+shot hwgen_sweep.png
+quit

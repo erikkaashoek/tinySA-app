@@ -1,0 +1,25 @@
+# Generator on hardware, step 1 of 5 (the unit's RF port cabled to a second tinySA's input).
+# Run one after the other, each a separate process (generator unit G, measuring unit M):
+#   tinySA-App.exe --port <G> --ini test\out\hwg.ini --script test\hw_gen_start.txt --out test\out\hwgen1
+#   tinySA-App.exe --port <M> --ini test\out\hwm.ini --script test\hw_gen_check.txt --out test\out\hwgen2
+#   tinySA-App.exe --port <G> --ini test\out\hwg.ini --script test\hw_gen_follow.txt --out test\out\hwgen3
+#   tinySA-App.exe --port <M> --ini test\out\hwm.ini --script test\hw_gen_sweepcheck.txt --out test\out\hwgen4
+#   tinySA-App.exe --port <G> --ini test\out\hwg.ini --script test\hw_gen_stop.txt --out test\out\hwgen5
+# G starts in analyzer mode. Here: generator at 100 MHz -40 dBm, RF on; the app quits and
+# leaves the unit generating.
+waitfor connected == 1 10000
+waitfor activity == analyzer
+click generatorButton
+waitfor activity == generator
+check gen.on == 0
+set freqDisplay 100M
+set levelDisplay -40
+click cwButton
+click rfButton
+waitfor sent contains "output on" 5000
+waitfor idle == 1 5000
+check sent contains mode low output
+check messages !contains refused
+check messages !contains No reply
+shot hwgen_on.png
+quit

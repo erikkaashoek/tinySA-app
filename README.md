@@ -16,6 +16,16 @@ the connected model.
   zoom, PgUp/PgDn, Esc stops, right-click menu
 - Markers: double click to add, drag, delta markers, marker list; max/min peak markers with
   sub-point (least-squares parabolic) frequency interpolation
+- Signal generator: an Analyzer | Generator switch turns the tinySA into a generator, with a
+  front panel in place of the graph:
+  - Large frequency and level displays: wheel or arrow keys over a digit tune it, or type a value
+    such as `433.92M`.
+  - An RF on/off button (off whenever the generator is switched on; Esc switches it off).
+  - CW, sweep (frequency and/or level), AM and FM (tinySA basic: AM, NFM, WFM, external).
+  - The output path: LOW/HIGH port on the basic, accurate or cleanest on the Ultra.
+  - External gain.
+  The app follows a tinySA that is already generating when it connects, and leaves it
+  generating when it closes.
 - Save CSV, record every sweep, save or copy the graph as an image
 - Screen capture of the tinySA and live remote control (click on the picture to touch the screen);
   uses DiSlord's compressed RLE8 capture when the firmware supports it; inverted colours for printing
@@ -31,6 +41,10 @@ nothing needs installing.
 Settings are kept in `tinySA-App.settings.ini` next to the exe (or in `%APPDATA%\tinySA-App`
 when that folder is read-only). `tinySA-App.exe --sim` adds simulated tinySA units to the port list.
 
+Use tinySA firmware v1.4-266 or newer. Older firmware can lose a command sent over USB and stop
+answering until it is restarted; the app then shows "Old firmware" next to the device, with a link
+to the firmware update.
+
 ## Building
 Requirements: Visual Studio 2026 (Community is fine) with *Desktop development with C++*, and
 Qt 6.10 for `msvc2022_64` including *Qt Serial Port*, installed under `C:\Qt`.
@@ -43,8 +57,8 @@ build.bat dist     the same, plus a ready-to-run dist\ folder and tinySA-App-<ve
 In Visual Studio use *File > Open > Folder* on this directory (CMake project).
 
 ### Editing the screens
-Every window is a Qt Designer form in `src/ui/*.ui` (main window, console, battery, screen,
-settings, firmware). Open them with Qt Designer (`C:\Qt\6.10.3\msvc2022_64\bin\designer.exe`),
+Every window is a Qt Designer form in `src/ui/*.ui` (main window, generator page, console,
+battery, screen, settings, firmware). Open them with Qt Designer (`C:\Qt\6.10.3\msvc2022_64\bin\designer.exe`),
 or from Visual Studio with the Qt VS Tools extension. The graph (`SpectrumView`) and the screen
 view are *promoted* widgets: you place and size them in Designer, their drawing lives in code.
 Give new widgets an objectName; after moving widgets between containers, delete `build\` once.
@@ -53,8 +67,9 @@ Give new widgets an objectName; after moving widgets between containers, delete 
 - `build\tst_core.exe`: unit tests for the protocol parser, device model, sweep settings, traces,
   CSV, markers, RLE8 capture and DFU (against a simulated bootloader); run by `build.bat`.
 - GUI scripts: `build\tinySA-App.exe --sim --ini test\out\t.ini --script test\smoke.txt --out test\out`
-  (exit code = number of failures). `test\step*.txt` cover each feature, `test\hw_*.txt` need a real
-  tinySA (`--port COMx`).
+  (exit code = number of failures). `test\step*.txt` and `test\gen_*.txt` cover each feature,
+  `test\hw_*.txt` need a real tinySA (`--port COMx`); `test\hw_gen_*.txt` need two, the RF port of
+  one cabled to the input of the other.
 
 `MAP.md` describes the code layout, the tinySA protocol details and the test conventions.
 

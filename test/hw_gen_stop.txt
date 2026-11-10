@@ -1,0 +1,35 @@
+# Generator on hardware, step 5 of 5 (see hw_gen_start.txt): follows the sweeping unit,
+# AM and CW are accepted, RF off, the unit's own screen captured, then back to the analyzer:
+# input mode and a normal sweep.
+waitfor connected == 1 10000
+waitfor activity == generator 5000
+check gen.type == Sweep
+check gen.span == 20000000
+# the console logs all traffic, with times (dumped at the end)
+set pollCheck 1
+do clearsent
+click amButton
+waitfor idle == 1 5000
+check sent contains modulation freq 1000
+check sent contains modulation am
+click actionScreen
+waitfor screen.width > 0 8000
+wait 1000
+shotw screenWindow hwgen_unit_am.png
+click cwButton
+click rfButton
+waitfor sent contains "output off" 5000
+waitfor idle == 1 5000
+check messages !contains refused
+check messages !contains No reply
+do clearsent
+click analyzerButton
+waitfor activity == analyzer
+waitfor sent contains "mode low input" 5000
+set startEdit 1
+set stopEdit 300
+click onceButton
+waitfor sweeps >= 1 20000
+shot hwgen_back.png
+dump console.log hwgen_console.log
+quit

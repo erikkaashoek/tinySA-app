@@ -14,16 +14,6 @@
 #include <QSignalBlocker>
 #include <cmath>
 
-static QString mhz(double hz)  // 433.92, 100, 0.0001 - no trailing zeros
-{
-    QString s = QString::number(hz / 1e6, 'f', 6);
-    while (s.endsWith('0'))
-        s.chop(1);
-    if (s.endsWith('.'))
-        s.chop(1);
-    return s;
-}
-
 MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), m_settingsPath(settingsPath),
       m_simulators(simulators)
@@ -118,6 +108,7 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
 
     setupMarkers();
     setupTools();
+    setupGenerator();
 
     // --- graph intents ---
     connect(ui->spectrum, &SpectrumView::rangeRequested, this, &MainWindow::applyRangeOp);
@@ -125,15 +116,17 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     connect(ui->spectrum, &SpectrumView::copyImageRequested, this, [this] { saveImage("clipboard:"); });
     connect(ui->spectrum, &SpectrumView::stopRequested, this, [this] { m_session.setScan(DeviceLink::Off); });
     auto shortcut = [this](QKeySequence k, auto fn) {
-        connect(new QShortcut(k, this), &QShortcut::activated, this, fn);
+        auto *s = new QShortcut(k, this);
+        connect(s, &QShortcut::activated, this, fn);
+        return s;
     };
     const auto zoom = [this](double f) {
         const SweepConfig c = m_session.config();
         applyRangeOp(SpectrumView::RangeOp::Zoom, f, (c.grid.startHz + c.grid.stopHz) / 2);
     };
-    shortcut(Qt::Key_PageUp, [zoom] { zoom(1 / 1.5); });
-    shortcut(Qt::Key_PageDown, [zoom] { zoom(1.5); });
-    shortcut(Qt::Key_Escape, [this] { m_session.setScan(DeviceLink::Off); });
+    m_analyzerShortcuts = {shortcut(Qt::Key_PageUp, [zoom] { zoom(1 / 1.5); }),
+                           shortcut(Qt::Key_PageDown, [zoom] { zoom(1.5); })};
+    shortcut(Qt::Key_Escape, [this] { escape(); });
 
     // --- session -> render ---
     connect(&m_session, &Session::connected, this, &MainWindow::onConnected);
@@ -187,6 +180,9 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     m_session.setConfig(m_settings.config);
     showConfig(m_session.config());
     onScanChanged(DeviceLink::Off);
+    m_session.setGenerator(m_settings.gen);
+    ui->generatorPanel->showConfig(m_session.generator());
+    showActivity(DeviceLink::Analyzer);
 
     refreshPorts();
     connect(&m_portPoll, &QTimer::timeout, this, &MainWindow::refreshPorts);
@@ -200,6 +196,7 @@ void MainWindow::closeEvent(QCloseEvent *e)
     setRecording(false);
     QSettings qs(m_settingsPath, QSettings::IniFormat);
     m_settings.config = m_session.config();
+    m_settings.gen = m_session.generator();
     m_settings.view = ui->spectrum->view();
     m_settings.hold = int(m_session.traces().hold());
     m_settings.average = m_session.traces().average();
@@ -299,6 +296,10 @@ void MainWindow::onConnected(const DeviceInfo &info)
     ui->deviceRangeButton->setEnabled(info.deviceGrid.points > 1);
     applyModel(info.model);
     onScanChanged(m_session.scanMode());
+    ui->generatorPanel->setDevice(&info);
+    ui->analyzerButton->setEnabled(true);
+    ui->generatorButton->setEnabled(true);
+    ui->firmwareWarningLabel->setVisible(info.directCommandRace());
 }
 
 void MainWindow::onDisconnected(const QString &reason)
@@ -312,6 +313,10 @@ void MainWindow::onDisconnected(const QString &reason)
     ui->deviceRangeButton->setEnabled(false);
     m_batteryLabel->clear();
     onScanChanged(DeviceLink::Off);
+    ui->generatorPanel->setDevice(nullptr);  // the page stays (disabled) until the unit is back
+    ui->analyzerButton->setEnabled(false);
+    ui->generatorButton->setEnabled(false);
+    ui->firmwareWarningLabel->hide();
     statusBar()->showMessage(reason, 5000);
     m_messages << reason;
 }
@@ -364,10 +369,10 @@ void MainWindow::onFrame(const SweepFrame &f)
 
 void MainWindow::showConfig(const SweepConfig &c)
 {
-    ui->startEdit->setText(mhz(c.grid.startHz));
-    ui->stopEdit->setText(mhz(c.grid.stopHz));
-    ui->centerEdit->setText(mhz((c.grid.startHz + c.grid.stopHz) / 2));
-    ui->spanEdit->setText(mhz(c.grid.stopHz - c.grid.startHz));
+    ui->startEdit->setText(formatMHz(c.grid.startHz));
+    ui->stopEdit->setText(formatMHz(c.grid.stopHz));
+    ui->centerEdit->setText(formatMHz((c.grid.startHz + c.grid.stopHz) / 2));
+    ui->spanEdit->setText(formatMHz(c.grid.stopHz - c.grid.startHz));
     const QString points = QString::number(c.grid.points);
     if (ui->pointsCombo->findText(points) < 0)  // e.g. the unit's own 450 points
         ui->pointsCombo->addItem(points);

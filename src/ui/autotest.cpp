@@ -1,4 +1,5 @@
 #include "autotest.h"
+#include "digitedit.h"
 #include <QAbstractButton>
 #include <QAbstractSlider>
 #include <QAction>
@@ -70,7 +71,14 @@ void AutoTest::step()
 {
     if (m_pc >= m_lines.size())
         m_lines << "quit";
-    const QStringList tok = m_lines[m_pc].split(' ', Qt::SkipEmptyParts);
+    // words; "a quoted value" is one word (waitfor sent contains "output off" 5000)
+    QStringList tok;
+    const QStringList quoted = m_lines[m_pc].split('"');
+    for (int i = 0; i < quoted.size(); ++i)
+        if (i % 2)
+            tok << quoted[i];
+        else
+            tok += quoted[i].split(' ', Qt::SkipEmptyParts);
     const bool bail = tok[0] == "bail" && m_failures;
     if (tok[0] == "quit" || bail) {
         if (bail)
@@ -109,6 +117,7 @@ bool AutoTest::compare(const QString &query, const QString &op, const QString &w
         else if (auto *s = qobject_cast<QAbstractSpinBox *>(w)) answer = s->text();
         else if (auto *b = qobject_cast<QAbstractButton *>(w)) answer = b->isChecked() ? "1" : "0";
         else if (auto *l = qobject_cast<QLabel *>(w)) answer = l->text();
+        else if (auto *d = qobject_cast<DigitEdit *>(w)) answer = d->text();
     } else {
         answer = m_host->testQuery(query);
     }
@@ -158,6 +167,9 @@ bool AutoTest::exec(const QStringList &tok)
             s->setValue(val.toInt());
         } else if (auto *s = qobject_cast<QAbstractSlider *>(w)) {
             s->setValue(val.toInt());
+        } else if (auto *d = qobject_cast<DigitEdit *>(w)) {  // as typed: "433.92M", "-30.5"
+            if (!d->enter(val))
+                fail(QString("set %1: cannot parse '%2'").arg(arg, val));
         } else if (w) {
             fail("set: unsupported widget " + arg);
         }

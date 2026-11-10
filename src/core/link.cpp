@@ -8,8 +8,11 @@
 #include <utility>
 
 DeviceLink::DeviceLink(QObject *parent)
-    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_screenTimer(this), m_touchTimer(this)
+    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_settle(this), m_screenTimer(this),
+      m_touchTimer(this)
 {
+    m_settle.setSingleShot(true);
+    connect(&m_settle, &QTimer::timeout, this, &DeviceLink::pump);
     m_touchTimer.setInterval(30);
     connect(&m_touchTimer, &QTimer::timeout, this, [this] {
         if (m_pendingTouch.isEmpty())
@@ -58,9 +61,14 @@ void DeviceLink::open(const QString &port)
     m_info = DeviceInfo{};
     m_info.port = port;
     m_have = AppliedConfig{};
-    if (port.startsWith("sim:")) {
-        auto *sim = new SimTransport(port.endsWith("basic") ? SimTransport::Kind::Basic
+    m_genHave = AppliedGen{};
+    m_activity = Analyzer;
+    if (port.startsWith("sim:")) {  // sim:basic, sim:ultra; ":old" = v1.4-220 ZS405, ":gen" = left generating
+        auto *sim = new SimTransport(port.contains("basic") ? SimTransport::Kind::Basic
                                                             : SimTransport::Kind::Ultra, this);
+        sim->oldFirmware = port.contains(":old");
+        if (port.contains(":gen"))
+            sim->startGenerating();
         sim->open(QIODevice::ReadWrite | QIODevice::Unbuffered);
         m_io = sim;
     } else {
@@ -125,6 +133,11 @@ void DeviceLink::handshake()
         if (ok && v.size() >= 3)
             m_info.deviceGrid = {v[0].toDouble(), v[1].toDouble(), v[2].toInt()};
     }});
+    // mode probe: `level` without a value prints its usage only in output mode
+    enqueue({"level", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+        if (ok)
+            probeGenerator(lines);
+    }});
     enqueue({"vbat_offset", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
         bool num = false;
         const int v = lines.value(0).trimmed().toInt(&num);
@@ -133,9 +146,11 @@ void DeviceLink::handshake()
     }});
     enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {
         m_want = clampConfig(m_want, *m_info.model);
+        m_gen = clampGen(m_gen, m_info);
         m_ready = true;
         m_batteryDue = true;
         emit opened(m_info);
+        adoptGenerator();
     }});
 }
 
@@ -154,6 +169,7 @@ void DeviceLink::shutdown(const QString &reason)
     m_timeout.stop();
     m_battery.stop();
     m_drain.stop();
+    m_settle.stop();
     const bool wasOpen = m_io != nullptr;
     if (QIODevice *io = std::exchange(m_io, nullptr)) {
         io->disconnect(this);  // nothing from the port gets back in here while it closes
@@ -204,7 +220,7 @@ void DeviceLink::setScan(int mode)
 
 void DeviceLink::setMode(int mode)
 {
-    if (mode == m_mode)
+    if (mode == m_mode || (mode != Off && m_activity == Generator))  // a generating unit cannot scan
         return;
     m_mode = mode;
     emit scanChanged(mode);
@@ -353,7 +369,7 @@ void DeviceLink::pump()
 
 void DeviceLink::updateBusy()
 {
-    const bool busy = m_cur || !m_queue.isEmpty() || m_draining;
+    const bool busy = m_cur || !m_queue.isEmpty() || m_draining || m_settle.isActive();
     if (busy != m_busy) {
         m_busy = busy;
         emit busyChanged(busy);
@@ -362,13 +378,16 @@ void DeviceLink::updateBusy()
 
 void DeviceLink::pumpStep()
 {
-    if (!m_io || m_cur || m_draining)
+    if (!m_io || m_cur || m_draining || m_settle.isActive())
         return;
     if (!m_queue.isEmpty())
         return transmit(m_queue.takeFirst());
     if (!m_ready)
         return;
-    if (m_batteryDue && !m_remote) {  // no polls while the screen streams
+    // no polls while the screen streams, nor while generating anything but a carrier:
+    // `vbat` restarts the unit's sweep and interrupts its modulation
+    const bool quietGenerator = m_activity == Generator && m_gen.type != GenType::CW;
+    if (m_batteryDue && !m_remote && !quietGenerator) {
         m_batteryDue = false;
         return enqueue({"vbat", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
             static const QRegularExpression re(R"((\d+)\s*mV)");
@@ -377,21 +396,32 @@ void DeviceLink::pumpStep()
                 emit battery(m.captured(1).toInt());
         }});
     }
+    if (m_activity == Generator)
+        return pumpGenerator();
     if (m_mode == Off)
         return;
     if (!m_paused)  // the unit's own sweeping would compete with scanraw
         return enqueue({"pause"});
     const QByteArrayList cmds = configCommands(m_want, m_have, *m_info.model);
-    if (!cmds.isEmpty()) {
-        for (const QByteArray &c : cmds)
-            m_queue.append({c, {}, 0, 3000, [this, c](bool, const QStringList &lines) {
-                const QString l = lines.value(0);
-                if (l.endsWith('?') || l.startsWith("usage"))  // unknown command / bad value
-                    emit message(QString("tinySA refused '%1': %2").arg(QString::fromLatin1(c), l));
-            }});
-        return pump();
-    }
+    if (!cmds.isEmpty())
+        return queueChecked(cmds);
     startSweep();
+}
+
+void DeviceLink::queueChecked(const QByteArrayList &lines, bool generator)
+{
+    for (const QByteArray &c : lines) {
+        Cmd cmd{c, {}, 0, 3000, [this, c, generator](bool ok, const QStringList &reply) {
+            const QString l = reply.value(0);
+            if (l.endsWith('?') || l.startsWith("usage"))  // unknown command / bad value
+                emit message(QString("tinySA refused '%1': %2").arg(QString::fromLatin1(c), l));
+            else if (!ok && generator && m_activity == Generator)
+                forgetGenCommand(c, m_genHave);
+        }};
+        cmd.generator = generator;
+        m_queue.append(cmd);
+    }
+    pump();
 }
 
 void DeviceLink::startSweep()
@@ -531,6 +561,12 @@ void DeviceLink::finish(bool ok)
     m_cur.reset();
     if (c.done)
         c.done(ok, m_lines);
+    // Old firmware: after these commands the unit's sweep thread handles a fake lever event and
+    // wipes the request of a command that arrives meanwhile, which then hangs (fixed in
+    // v1.4-266, firmware commit 994a567). Give the sweep thread time to handle it first.
+    static const QByteArrayList racy{"output", "modulation", "levelchange", "ext_gain"};
+    if (m_info.model && m_info.directCommandRace() && racy.contains(c.line.split(' ').value(0)))
+        m_settle.start(300);
     pump();
 }
 

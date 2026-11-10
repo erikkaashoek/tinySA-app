@@ -3,12 +3,14 @@
 // One command per line, '#' comments. Widgets are addressed by objectName;
 // app state through the host's named queries/actions.
 //
-//   set <widget> <value>          line edit (typed + Enter), combo (text), check box, spin box
+//   set <widget> <value>          line edit (typed + Enter), combo (text), check box, spin box,
+//                                 DigitEdit (as typed: 433.92M)
 //   click <widget|action>         button, or menu/toolbar action (e.g. actionRecord)
 //   key <widget> <key>            QKeySequence name: Return, Escape, PgUp, Left, Del ...
 //   wait <ms>
 //   waitfor <query> <op> <value> [timeoutMs=5000]
-//                                 <query> is a host query, or @widgetName for what a widget shows
+//                                 <query> is a host query, or @widgetName for what a widget shows;
+//                                 <value> is one word: quote it if it has spaces ("output off")
 //   check <query> <op> <value> [tolerance]   ops: == != contains !contains < <= > >= ~
 //                                 (~ uses tolerance); for == != (!)contains the value is the rest of the line
 //   do <action> [args...]         host action, e.g. "do connect sim:ultra"

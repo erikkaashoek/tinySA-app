@@ -227,8 +227,8 @@ void SimTransport::out(const QByteArray &bytes)
 
 void SimTransport::processInput()
 {
-    // the shell thread reads (and echoes) nothing while a scan runs
-    while (!m_scan && !m_in.isEmpty()) {
+    // the shell thread reads (and echoes) nothing while a scan runs, nor once it hangs
+    while (!m_scan && !m_hung && !m_in.isEmpty()) {
         const char c = m_in.at(0);
         m_in.remove(0, 1);
         if (c == '\r') {
@@ -252,22 +252,43 @@ void SimTransport::execute(const QByteArray &line)
     const QByteArray cmd = tok.value(0), a1 = tok.value(1), a2 = tok.value(2);
     const bool ultra = m_kind == Kind::Ultra;
 
+    // old firmware (v1.4-220): a wait-mutex command right after a direct one that set `dirty`
+    // in output mode loses its request, and the shell waits for it forever (firmware 994a567)
+    static const QByteArrayList mutexCommands{"level", "sweeptime", "sweep", "mode", "vbat", "zero",
+                                              "pause", "resume", "attenuate", "rbw", "lna"};
+    if (oldFirmware && m_outMode && mutexCommands.contains(cmd) && m_directClock.isValid()
+        && m_directClock.elapsed() < 100) {
+        m_hung = true;
+        return;  // no reply, no prompt, no more input read
+    }
+    if (oldFirmware && m_outMode && QByteArrayList{"output", "modulation", "levelchange", "ext_gain"}.contains(cmd))
+        m_directClock.start();
+    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-302-sim";
     if (cmd == "version") {
-        out(ultra ? "tinySA4_v1.4-sim\r\nHW Version:V0.5.4 max2871\r\n" : "tinySA_v1.4-sim\r\n");
+        out(version + "\r\n" + (!ultra ? "" : oldFirmware ? "HW Version:V0.4.5.1.1\r\n" : "HW Version:V0.5.4 max2871\r\n"));
     } else if (cmd == "info") {
-        out(ultra ? "tinySA ULTRA+ ZS407\r\n" : "tinySA v0.3ZS304\r\n");
+        out(!ultra ? "tinySA v0.3ZS304\r\n" : oldFirmware ? "tinySA ULTRA ZS405\r\n" : "tinySA ULTRA+ ZS407\r\n");
         out("2019-2024 Copyright @Erik Kaashoek\r\n2016-2020 Copyright @edy555\r\n"
             "SW licensed under GPL. See: https://github.com/erikkaashoek/tinySA\r\n");
-        out(ultra ? "Version: tinySA4_v1.4-sim\r\n" : "Version: tinySA_v1.4-sim\r\n");
+        out("Version: " + version + "\r\n");
     } else if (cmd == "help") {
         out(ultra ? kHelpUltra : kHelpBasic);
     } else if (cmd == "zero") {
         out(ultra ? "usage: zero {level}\r\n174dBm\r\n" : "usage: zero {level}\r\n128dBm\r\n");
     } else if (cmd == "sweep") {
+        const qint64 f = a2.toLongLong(), half = (m_sweepStop - m_sweepStart) / 2;
         if (a1 == "start")
-            m_sweepStart = a2.toLongLong();
+            m_sweepStart = f;
         else if (a1 == "stop")
-            m_sweepStop = a2.toLongLong();
+            m_sweepStop = f;
+        else if (a1 == "cw")
+            m_sweepStart = m_sweepStop = f;
+        else if (a1 == "center")
+            m_sweepStart = f - half, m_sweepStop = f + half;
+        else if (a1 == "span")
+            m_sweepStart = m_sweepStart + half - f / 2, m_sweepStop = m_sweepStart + f;
+        else if (a1 == "go" || a1 == "abort")
+            m_genSweep = a1 == "go";
         else if (a1.isEmpty())
             out(QByteArray::number(m_sweepStart) + " " + QByteArray::number(m_sweepStop) + " "
                 + QByteArray::number(m_sweepPoints) + "\r\n");
@@ -280,7 +301,18 @@ void SimTransport::execute(const QByteArray &line)
     } else if (cmd == "rbw") {
         m_rbwKHz = a1 == "auto" ? 0 : a1.toDouble();
     } else if (cmd == "attenuate") {
-        m_atten = a1 == "auto" ? -1 : a1.toInt();
+        if (a1.isEmpty())  // output mode: the level from the attenuator setting
+            out("usage: attenuate 0..31|auto\r\n"
+                + QByteArray::number(m_outMode && !m_high ? m_level : std::max(m_atten, 0), 'f', 2) + "\r\n");
+        else
+            m_atten = a1 == "auto" ? -1 : a1.toInt();
+    } else if (cmd == "mode") {
+        const bool one = ultra && tok.size() == 2;  // the Ultra's "mode input|output"
+        const QByteArray lh = one ? QByteArray("low") : a1, io = one ? a1 : a2;
+        if ((lh != "low" && (ultra || lh != "high")) || (io != "input" && io != "output"))
+            out(ultra ? "usage: mode [low] input|output\r\n" : "usage: mode low|high input|output\r\n");
+        else
+            setMode(io == "output", lh == "high");
     } else if (cmd == "lna") {
         m_lna = a1 == "on";
     } else if (cmd == "pause" || cmd == "resume") {
@@ -302,6 +334,8 @@ void SimTransport::execute(const QByteArray &line)
     } else if (cmd == "scanraw") {
         const qint64 s = a1.toLongLong(), e = a2.toLongLong();
         const int n = tok.size() > 3 ? tok[3].toInt() : m_sweepPoints;
+        if (m_outMode)
+            ++scansWhileGenerating;
         if (tok.size() < 3 || e < s || n <= 0) {
             out("frequency range is invalid\r\n");
         } else {
@@ -310,12 +344,97 @@ void SimTransport::execute(const QByteArray &line)
             m_timer.start();
             return;  // '}' + prompt when the scan completes
         }
-    } else if (!(cmd.isEmpty() || cmd == "mode" || cmd == "abort" || cmd == "release" || cmd == "reset"
-                 || cmd == "saveconfig"
-                 || cmd == "marker" || cmd == "threshold")) {
+    } else if (!(cmd.isEmpty() || cmd == "abort" || cmd == "release" || cmd == "reset"
+                 || cmd == "saveconfig" || cmd == "marker" || cmd == "threshold"
+                 || generatorCommand(tok))) {
         out(cmd + "?\r\n");
     }
     out("ch> ");
+}
+
+void SimTransport::setMode(bool output, bool high)
+{
+    if (output == m_outMode && high == m_high)
+        return;  // set_mode(): nothing happens in the same mode
+    const bool ultra = m_kind == Kind::Ultra;
+    m_outMode = output;
+    m_high = high;
+    m_rfOn = m_genSweep = false;
+    m_mixer = true;
+    m_modulation = "off";
+    m_modHz = 1000, m_amDepth = 80, m_fmDev = 3000;
+    m_levelChange = m_extGain = 0;
+    m_sweepTime = 2;
+    m_rbwKHz = 0;
+    m_atten = -1;
+    if (output) {  // carrier at 10 MHz (HIGH: 300 MHz), level at its maximum
+        m_sweepStart = m_sweepStop = high ? 300000000 : 10000000;
+        m_level = high ? 9 : ultra ? -18.5 : -7;
+    } else {
+        m_sweepStart = high ? 240000000 : 0;
+        m_sweepStop = high ? 960000000 : ultra ? 800000000 : 350000000;
+    }
+}
+
+void SimTransport::startGenerating()
+{
+    setMode(true, false);
+    m_sweepStart = m_sweepStop = 100000000;
+    m_level = -30;
+    m_rfOn = true;
+    m_modulation = m_kind == Kind::Ultra ? "fm" : "nfm";
+}
+
+// The firmware's generator commands (sa_cmd.c); true when `tok` is one of them.
+bool SimTransport::generatorCommand(const QByteArrayList &tok)
+{
+    const QByteArray cmd = tok.value(0), a1 = tok.value(1), a2 = tok.value(2);
+    const bool ultra = m_kind == Kind::Ultra;
+    if (cmd == "output") {
+        if (a1 == "on" || a1 == "off")
+            m_rfOn = a1 == "on";
+        else if (ultra && (a1 == "normal" || a1 == "mixer"))
+            m_mixer = a1 == "mixer";
+        else
+            out(ultra ? "usage: output on|off|normal|mixer\r\n" : "usage: output on|off\r\n");
+    } else if (cmd == "level") {
+        if (a1.isEmpty() && m_outMode)  // only in output mode, and the basic's ranges
+            out(m_high ? "usage: level -38..13\r\n" : "usage: level -76..-6\r\n");
+        else if (!a1.isEmpty())
+            m_level = std::clamp(a1.toDouble(), m_high ? -38.0 : ultra ? -115.0 : -76.0,
+                                 m_high ? 9.0 : ultra ? -18.5 : -7.0);
+    } else if (cmd == "levelchange") {
+        if (a1.isEmpty())
+            out(ultra ? "usage: levelchange -90..+90\r\n" : "usage: levelchange -70..+70\r\n");
+        else
+            m_levelChange = a1.toDouble();
+    } else if (cmd == "sweeptime") {
+        if (a1.isEmpty())
+            out("usage: sweeptime 0.003..60\r\n" + QByteArray::number(m_sweepTime, 'f', 3) + "s\r\n");
+        else
+            m_sweepTime = a1.toDouble();
+    } else if (cmd == "ext_gain") {
+        if (a1.isEmpty())
+            out("usage: ext_gain -100.0..+100.0\r\n" + QByteArray::number(m_extGain, 'f', 1) + "\r\n");
+        else
+            m_extGain = a1.toDouble();
+    } else if (cmd == "modulation") {
+        const QByteArrayList types = ultra ? QByteArrayList{"off", "am", "fm"}
+                                           : QByteArrayList{"off", "am", "nfm", "wfm", "extern"};
+        if (types.contains(a1))
+            m_modulation = a1;
+        else if (a1 == "freq" && !a2.isEmpty())
+            m_modHz = std::clamp(a2.toInt(), 1, 10000);
+        else if (ultra && a1 == "depth" && !a2.isEmpty())
+            m_amDepth = a2.toInt();
+        else if (ultra && a1 == "deviation" && !a2.isEmpty())
+            m_fmDev = a2.toInt();
+        else
+            out("usage: modulation " + types.join('|') + "|freq 100..6000\r\n");
+    } else {
+        return false;
+    }
+    return true;
 }
 
 void SimTransport::scanTick()

@@ -1,0 +1,102 @@
+# Generator page, simulated Ultra+ ZS407: entering with RF off, edits reach the unit in a
+# safe order, sweep and FM never together, Esc = RF off, back to the analyzer.
+#   del test\out\gen.ini & tinySA-App.exe --sim --ini test\out\gen.ini --script test\gen_ultra.txt --out test\out\gen_ultra
+do connect sim:ultra
+waitfor connected == 1
+check activity == analyzer
+click onceButton
+waitfor sweeps >= 1
+check sent contains mode low input
+do clearsent
+click generatorButton
+waitfor activity == generator
+check gen.on == 0
+check gen.type == CW
+waitfor sent contains "mode low output"
+check sent !contains output on
+check sent !contains scanraw
+# frequency and level: typed into the big displays
+do clearsent
+set freqDisplay 100M
+set levelDisplay -50
+waitfor sent contains "level -50"
+check sent contains sweep cw 100000000
+check @freqDisplay == 100.000000
+check @levelDisplay == -50.0
+check gen.status contains RF OFF
+do clearsent
+click rfButton
+waitfor sent contains "output on"
+check gen.on == 1
+check @rfButton == 1
+check gen.status contains RF ON
+shot gen_ultra_cw.png
+# digit tuning: Up/Down step the selected digit (1 MHz), Left selects the next one (10 MHz)
+key freqDisplay Up
+check gen.freq == 101000000
+key freqDisplay Left
+key freqDisplay Down
+check gen.freq == 91000000
+# typed entry: Enter opens it, Enter applies and closes it (it must not open again)
+key freqDisplay Return
+check gen.editing == 1
+set freqDisplayEntry 200
+check gen.freq == 200000000
+check gen.editing == 0
+# the ZS407's mixer path ends at 7.37 GHz, the direct path at 6.3 GHz
+set freqDisplay 9G
+check gen.freq == 7370000000
+set pathCombo Cleanest, max 6.30 GHz
+check gen.freq == 6300000000
+set pathCombo Accurate, max 7.37 GHz
+check @pathInfoLabel == Square wave, Mixer
+set freqDisplay 433.92
+check @pathInfoLabel == Sine
+# level: steps and the external gain (shown at the DUT, the port level stays)
+click levelUp10Button
+check gen.level == -40.0
+do clearsent
+set extGainSpin 10
+check gen.level == -30.0
+waitfor sent contains "ext_gain 10"
+check sent !contains level -
+# sweep around the frequency; the Ultra needs `sweep go`
+do clearsent
+click sweepButton
+check gen.type == Sweep
+set sweepSpanEdit 20
+waitfor sent contains "sweep go"
+check sent contains sweep span 20000000
+check @sweepStartEdit == 423.92
+check @sweepStopEdit == 443.92
+set levelChangeSpin -10
+waitfor sent contains "levelchange -10"
+shot gen_ultra_sweep.png
+# FM: the sweep stops first, no span
+do clearsent
+click fmButton
+waitfor sent contains "modulation fm"
+check sent contains sweep abort
+check sent contains sweep cw 433920000
+check sent contains levelchange 0
+set fmDevSpin 5
+waitfor sent contains "modulation deviation 5000"
+shot gen_ultra_fm.png
+# Esc switches RF off, wherever the focus is
+do clearsent
+key freqDisplay Escape
+waitfor sent contains "output off"
+check gen.on == 0
+# no scans while generating, and back to the analyzer
+do mark
+click onceButton
+wait 300
+check sweeps.new == 0
+do clearsent
+click analyzerButton
+waitfor activity == analyzer
+waitfor sent contains "mode low input"
+click onceButton
+waitfor sweeps.new >= 1
+shot gen_ultra_back.png
+quit
