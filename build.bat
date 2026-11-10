@@ -31,6 +31,7 @@ if /i not "%1"=="dist" exit /b 0
 if exist dist rmdir /s /q dist
 mkdir dist\platforms dist\styles dist\imageformats
 copy /y build\tinySA-App.exe dist\ >nul
+copy /y changelog.txt dist\ >nul
 for %%d in (Qt6Core Qt6Gui Qt6Widgets Qt6SerialPort Qt6Test Qt6PrintSupport msvcp140 vcruntime140 vcruntime140_1) do copy /y build\%%d.dll dist\ >nul
 copy /y build\platforms\qwindows.dll dist\platforms\ >nul
 copy /y build\styles\qmodernwindowsstyle.dll dist\styles\ >nul

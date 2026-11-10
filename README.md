@@ -37,8 +37,8 @@ the connected model.
 - Light or dark application colours, adjustable graph colours
 
 ## Running
-Unzip `tinySA-App-<version>.zip` (e.g. `tinySA-App-2.0.0-24.zip`) anywhere and start `tinySA-App.exe`;
-nothing needs installing.
+Unzip `tinySA-App-<version>.zip` (e.g. `tinySA-App-2.0.0-39.zip`) anywhere and start `tinySA-App.exe`;
+nothing needs installing. `changelog.txt` lists what changed in each version.
 Settings are kept in `tinySA-App.settings.ini` next to the exe (or in `%APPDATA%\tinySA-App`
 when that folder is read-only). `tinySA-App.exe --sim` adds simulated tinySA units to the port list.
 

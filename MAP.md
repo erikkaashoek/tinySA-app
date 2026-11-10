@@ -159,6 +159,9 @@ NOTE: after any mainwindow.ui change that adds, removes or moves widgets, do a c
 Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -y build -c "kn 20;q" build\tinySA-App.exe --sim`
 `build.bat dist` also stages dist/ + tinySA-App-<version>.zip (version 2.0.0-28[-dirty] from build/version.txt,
 written by CMake; an older tinySA-App-*.zip is deleted first, so one zip remains). Qt auto-detected at `C:/Qt/6.*/msvc*_64`.
+changelog.txt (in the zip too): user-facing, one entry per release, newest first, in the firmware changelog's
+format. The entry's version is the commit count after the commit that adds it (2.0.0-<count>), so commit it
+directly on main as the last commit before `build.bat dist` (a branch + merge adds two commits).
 Version: CMake makes `2.0.0-<commits>-g<hash>[-dirty]` (git rev-list --count / describe, like the
 firmware's v1.4-255-g37e46e3) for the About box, `--version` and the exe version info (2.0.0.<commits>);
 build a release from a clean, committed tree.
@@ -194,6 +197,7 @@ build a release from a clean, committed tree.
 | src/dfu/dfuusb.h | find 0483:DF11 devices + open through the bound driver (WinUSB/libusb0/libusbK/STTub30) |
 | src/ui/autotest.* | script runner + `TestHost` interface |
 | src/main.cpp | CLI: --sim, --port, --script, --out |
+| changelog.txt | what changed per release, for users (copied into the dist zip) |
 | test/tst_core.cpp | Qt Test unit tests for core, one class per module |
 | vendor/qcustomplot/ | QCustomPlot 2.1.1 — never read these files |
 | res/ | icon + version resource |

@@ -1,0 +1,33 @@
+2.0.0-39 2026-11-10
+- Signal generator: the Analyzer | Generator switch at the top of the window turns the tinySA into a signal generator. A generator page replaces the controls and the graph, as the tinySA's own screen does
+- Generator frequency and level in large digits: the mouse wheel or Up/Down over a digit tunes that digit, Left/Right select a digit, or type a value (e.g. 433.92M) and press Enter. The level also has -10, -1, +1 and +10 dB buttons and a slider between the minimum and maximum level of the output
+- RF ON/OFF button: the output is off whenever the generator is switched on, and Esc switches it off
+- Signal: CW, sweep (start, stop or span, sweep time, level change over the sweep), AM and FM (tinySA basic: AM, NFM, WFM and external modulation). Sweep and modulation are never on at the same time
+- Output: LOW or HIGH output connector (tinySA basic), "Accurate" (mixer) or "Cleanest" (direct) with the maximum frequency of the model (tinySA Ultra), what the tinySA generates at that frequency (sine, square wave, mixer), and the gain of an external amplifier or attenuator: levels are then shown and entered at the device under test
+- A tinySA that is already generating when the app connects opens the generator page with its frequency, span, external gain and sweep time. RF, level and modulation cannot be read from the tinySA: they show "?" and are not changed until they are set. The app leaves the tinySA generating when it closes or disconnects
+- The generator settings are kept between runs, except RF, which always starts off
+- The port, the Connect button and the device name moved to a bar at the top of the window, next to the Analyzer | Generator switch, which leaves more room in the left panel
+- CSV files in the tinySA's MHz format for wireless managers such as Wireless Workbench ("433.920000,-85.25" without header lines): Settings > Files > MHz CSV for wireless managers (issue #88)
+- Firmware older than v1.4-266 shows "Old firmware: may stop answering over USB" next to the device name, with a link to the firmware update. Such firmware can lose a command and then stop answering until the tinySA is restarted. In generator mode the app waits after the output, modulation, level change and external gain commands, so that it does not happen there
+- Fixed: a tinySA Ultra left in generator mode (e.g. with modulation on) could hang when the app started to scan. The app now switches it to analyzer mode first
+
+2.0.0-31 2026-11-02
+- The tinySA Ultra with newer firmware (USB ID 1781:0A44) is recognised and selected automatically, as well as the older ID 0483:5740
+- Averaging: "Avg n/N" in the status bar shows how many sweeps are in the average so far, the button next to Avg starts the averaging and the min/max hold again
+- Screen window: "Invert colours" for printer friendly screen images, which are also saved and copied inverted
+
+2.0.0-24 2026-10-26
+- Live remote control uses the compressed "refresh rle" screen updates of new tinySA Ultra firmware (about 8 times less data, a scrolling waterfall is sent as a scroll). Older firmware falls back to "refresh on"
+- The version number (2.0.0-<n>) is shown in the About box and by "tinySA-App --version", and is part of the zip name
+- The hover readout on the graph no longer covers the max and min peak marker labels
+
+2.0.0-20 2026-10-01
+- First version of tinySA-App 2, a rewrite in C++ and Qt 6 of the C++Builder tinySA-App, for the tinySA, tinySA Ultra and tinySA Ultra+ (the model is recognised from its "info" reply)
+- Live spectrum with "scanraw" on the exact frequency grid of the tinySA: start, stop, center, span, points (51 to 30000), RBW, attenuation, LNA (Ultra), LOW or HIGH input (tinySA basic), or the range set on the tinySA itself
+- Traces: max and min hold, averaging, normalisation, three trace memories kept between runs, log (dBm) or linear (W) scale, spline and point display
+- Graph: hover readout, drag the frequency or level scale, mouse wheel zoom, PgUp/PgDn, Esc stops, right click menu
+- Markers: double click to add, drag, delta markers, marker list, max and min peak markers with an interpolated frequency
+- Save CSV, record every sweep, save or copy the graph as an image
+- Screen capture and live remote control (compressed RLE8 capture when the firmware has it), console with command history and four macro buttons, battery voltage plot
+- Firmware update over USB (DFU) with the WinUSB, libusb-win32, libusbK or STTub30 driver. Only the pages the firmware needs are erased, so the tinySA keeps its configuration
+- Settings: tinySA configuration, graph colours, light or dark application colours, files
