@@ -23,7 +23,7 @@ void MainWindow::renderTraces(bool memories)
 void MainWindow::showAverage()
 {
     const TraceSet &t = m_session.traces();
-    m_avgLabel->setVisible(t.average() > 1);
+    m_avgLabel->setVisible(t.average() > 1 && m_session.activity() == DeviceLink::Analyzer);
     m_avgLabel->setText(QString("Avg %1/%2").arg(t.averaged()).arg(t.average()));
 }
 

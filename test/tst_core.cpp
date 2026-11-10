@@ -6,6 +6,7 @@
 #include "markers.h"
 #include "model.h"
 #include "protocol.h"
+#include "session.h"
 #include "simdevice.h"
 #include "sweepconfig.h"
 #include "traces.h"
@@ -321,6 +322,20 @@ private slots:
         QCOMPARE(detectModel("", "tinySA_v1.4-100")->name, QString("tinySA"));
         QVERIFY(!detectModel("NanoVNA-H 4\n", "1.2.00"));
     }
+    void firmwareWithTheCommandRace()
+    {
+        auto race = [](const char *version) {
+            DeviceInfo d;
+            d.version = version;
+            return d.directCommandRace();
+        };
+        QVERIFY(race("tinySA4_v1.4-220-gbc09086"));  // ZS405 that hung in generator mode
+        QVERIFY(race("tinySA4_v1.4-265-g1234567"));
+        QVERIFY(!race("tinySA4_v1.4-266-g1234567"));  // fixed (changelog V1.4266)
+        QVERIFY(!race("tinySA_v1.4-302-gab5ecd5-dirty"));
+        QVERIFY(race("tinySA_v1.3-500-gaaaaaaa"));
+        QVERIFY(race("something else"));  // cannot tell: wait, to be safe
+    }
     void helpAndZero()
     {
         const QStringList cmds = parseHelp({"commands: version zero", "Other commands: scanraw vbat"});
@@ -347,8 +362,10 @@ private slots:
         const ModelDesc &ultra = *detectModel("tinySA ULTRA ZS405", "");
         AppliedConfig u;
         c.lna = true;
-        QVERIFY(configCommands(c, u, ultra).contains("lna on"));
-        QVERIFY(!configCommands(c, u, ultra).contains("mode high input"));
+        const QByteArrayList first = configCommands(clampConfig(c, ultra), u, ultra);
+        QCOMPARE(first.value(0), QByteArray("mode low input"));  // a unit left generating: never scanraw
+        QVERIFY(first.contains("lna on"));
+        QVERIFY(configCommands(clampConfig(c, ultra), u, ultra).isEmpty());
     }
     void clampToModel()
     {
@@ -393,7 +410,8 @@ private slots:
         QCOMPARE(info.hardware, QString("ZS407"));
         QCOMPARE(info.zeroDbm, 174);
         QVERIFY(info.has("scanraw"));
-        QCOMPARE(info.version, QString("tinySA4_v1.4-sim"));
+        QCOMPARE(info.version, QString("tinySA4_v1.4-302-sim"));
+        QVERIFY(!info.directCommandRace());
     }
 
     void singleSweepLandsOnTheGrid()
@@ -560,6 +578,315 @@ private slots:
     void notATinySA()
     {
         QCOMPARE(detectModel("NanoVNA-H", "1.0"), nullptr);
+    }
+};
+
+// ---------------------------------------------------------------------------
+
+static DeviceInfo unit(const QString &info)  // as the handshake fills it in
+{
+    DeviceInfo d;
+    d.model = detectModel(info, "");
+    d.hardware = QRegularExpression(R"(ZS\d{3})").match(info).captured(0);
+    return d;
+}
+
+static GenConfig carrier(double hz = 433.92e6, double dBm = -40)
+{
+    GenConfig c;
+    c.freqHz = hz;
+    c.levelDbm = dBm;
+    c.on = false;
+    c.type = GenType::CW;
+    return c;
+}
+
+class TstGenerator : public QObject {
+    Q_OBJECT
+private slots:
+    void initTestCase() { qRegisterMetaType<SweepFrame>(); qRegisterMetaType<DeviceInfo>(); qRegisterMetaType<GenConfig>(); }
+
+    void ultraCommandsInFirmwareOrder()
+    {
+        const ModelDesc &m = *unit("tinySA ULTRA+ ZS407").model;
+        AppliedGen h;
+        GenConfig c = carrier();
+        // the mode switch mutes the output and resets modulation: only what differs follows
+        QCOMPARE(genCommands(c, h, m),
+                 QByteArrayList({"mode low output", "ext_gain 0", "sweep cw 433920000", "level -40"}));
+        QVERIFY(genCommands(c, h, m).isEmpty());
+        c.on = true;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"output on"}));
+        c.freqHz = 100e6;  // the Ultra may lower the level at a new frequency: level again
+        c.freqHz = 101e6;  // edits between two diffs: one command per field
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"sweep cw 101000000", "level -40"}));
+        c.type = GenType::Sweep;
+        c.spanHz = 10e6;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"sweep center 101000000", "sweep span 10000000",
+                                                       "level -40", "sweeptime 2", "sweep go"}));
+        c.type = GenType::FM;  // never sweep and modulate: the sweep stops first
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"sweep abort", "sweep cw 101000000", "level -40",
+                                                       "modulation fm"}));
+        c.fmDevHz = 5000;
+        c.modHz = 400;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"modulation freq 400", "modulation deviation 5000"}));
+        c.mixer = false;
+        c.extGainDb = 10;  // the level is at the DUT; the unit gets the port level
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"output normal", "ext_gain 10", "level -50"}));
+        c.on = false;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"output off"}));
+    }
+
+    void levelBeforeOutputOn()
+    {
+        const ModelDesc &m = *unit("tinySA v0.3ZS304").model;
+        AppliedGen h;
+        GenConfig c = carrier(400e6, -10);
+        c.path = GenPath::High;  // the unit starts at +9 dBm here
+        c.on = true;
+        QCOMPARE(genCommands(c, h, m),
+                 QByteArrayList({"mode high output", "ext_gain 0", "sweep cw 400000000", "level -10", "output on"}));
+        c.type = GenType::Sweep;  // the basic sweeps without `sweep go`
+        c.spanHz = 20e6;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"sweep center 400000000", "sweep span 20000000",
+                                                       "level -10", "sweeptime 2"}));
+        c.path = GenPath::Low;  // other connector: mode switch, RF off again
+        c.type = GenType::NFM;
+        c.freqHz = 100e6;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"mode low output", "ext_gain 0", "sweep cw 100000000",
+                                                       "level -10", "modulation nfm", "output on"}));
+    }
+
+    void clampToTheUnit()
+    {
+        const DeviceInfo basic = unit("tinySA v0.3ZS304");
+        GenConfig c = carrier(100e6);
+        c.path = GenPath::High;
+        c.type = GenType::AM;  // no AM on the HIGH output
+        c.levelChangeDb = 10;
+        c = clampGen(c, basic);
+        QCOMPARE(c.freqHz, 240e6);
+        QCOMPARE(c.type, std::optional(GenType::CW));
+        QCOMPARE(c.levelChangeDb, 0.0);
+        c.type = GenType::FM;  // the Ultra's FM on a basic: the nearest FM
+        QCOMPARE(clampGen(c, basic).type, std::optional(GenType::NFM));
+
+        GenConfig u = carrier(6e9, -200);
+        QCOMPARE(clampGen(u, unit("tinySA ULTRA ZS405")).freqHz, 5.327e9);  // mixer path
+        u.mixer = false;
+        QCOMPARE(clampGen(u, unit("tinySA ULTRA ZS405")).freqHz, 4.35e9);   // direct PLL path
+        QCOMPARE(clampGen(u, unit("tinySA ULTRA+ ZS407")).freqHz, 6e9);     // MAX2871 reaches 6.3 GHz
+        QCOMPARE(clampGen(u, unit("tinySA ULTRA+ ZS407")).levelDbm, -115.0);
+        u.extGainDb = 10;
+        u.levelDbm = 0;
+        QCOMPARE(clampGen(u, unit("tinySA ULTRA+ ZS407")).levelDbm, -8.5);  // -18.5 + 10 dB amplifier
+        u.type = GenType::Sweep;  // the whole sweep stays inside the limits
+        u.freqHz = 1e6;
+        u.spanHz = 10e6;
+        QCOMPARE(clampGen(u, unit("tinySA ULTRA+ ZS407")).freqHz, 10e3 + 5e6);
+        QCOMPARE(outputPathText(carrier(433.92e6), unit("tinySA ULTRA ZS405")), QString("Sine"));
+        QCOMPARE(outputPathText(carrier(2e9), unit("tinySA ULTRA ZS405")), QString("Square wave, Mixer"));
+    }
+
+    void adoptKeepsTheUnitAsItIs()
+    {
+        DeviceInfo d = unit("tinySA ULTRA ZS405");
+        d.gen.active = true;
+        d.gen.extGainDb = 0;
+        d.deviceGrid = {100e6, 100e6, 450};
+        AppliedGen h;
+        GenConfig c = adoptUnitGenerator(carrier(), d, &h);
+        QCOMPARE(c.freqHz, 100e6);
+        QVERIFY(!c.on && !c.type && !c.levelKnown);  // cannot be read
+        QVERIFY(genCommands(c, h, *d.model).isEmpty());  // nothing changes on the unit
+        c.on = true;
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"output on"}));
+        c.type = GenType::CW;  // now the app knows: no sweep, no modulation, no level change
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"sweep abort", "modulation off", "levelchange 0"}));
+        c.freqHz = 101e6;  // the level stays the unit's until it is set
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"sweep cw 101000000"}));
+        c.levelKnown = true;
+        c.levelDbm = -50;
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"level -50"}));
+        c.freqHz = 2e9;  // the unit's path (mixer or not) was not known: set where it matters
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"output mixer", "sweep cw 2000000000", "level -50"}));
+
+        d.deviceGrid = {90e6, 110e6, 450};  // a span: the unit sweeps (its menus never add modulation)
+        d.gen.sweepS = 5;
+        c = adoptUnitGenerator(carrier(), d, &h);
+        QCOMPARE(c.type, std::optional(GenType::Sweep));
+        QCOMPARE(c.spanHz, 20e6);
+        QCOMPARE(c.sweepS, 5.0);
+        QVERIFY(genCommands(c, h, *d.model).isEmpty());
+
+        d.deviceGrid = {6e9, 6e9, 450};  // an LO harmonic, outside the app's range: moved inside
+        d.gen.extGainDb.reset();         // not read (no reply): the app's own goes out
+        GenConfig stored = carrier();
+        stored.extGainDb = 10;
+        c = adoptUnitGenerator(stored, d, &h);
+        QCOMPARE(c.freqHz, 5.327e9);
+        QCOMPARE(genCommands(c, h, *d.model),
+                 QByteArrayList({"output mixer", "ext_gain 10", "sweep cw 5327000000"}));
+    }
+
+    void lostCommandIsSentAgain()
+    {
+        const ModelDesc &m = *unit("tinySA ULTRA ZS405").model;
+        AppliedGen h;
+        GenConfig c = carrier();
+        c.on = true;
+        genCommands(c, h, m);
+        c.on = false;  // RF off ...
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"output off"}));
+        forgetGenCommand("output off", h);  // ... got no reply: it goes out again
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"output off"}));
+        forgetGenCommand("level -40", h);
+        forgetGenCommand("modulation off", h);
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"modulation off", "level -40"}));
+    }
+
+    void modulationStopsBeforeASweepStarts()
+    {
+        const ModelDesc &basic = *unit("tinySA v0.3ZS304").model;
+        AppliedGen h;
+        GenConfig c = carrier(100e6);
+        c.type = GenType::NFM;
+        genCommands(c, h, basic);
+        c.type = GenType::Sweep;  // the basic sweeps as soon as it has a span
+        const QByteArrayList cmds = genCommands(c, h, basic);
+        QCOMPARE(cmds.value(0), QByteArray("modulation off"));
+        QVERIFY(cmds.indexOf("sweep span 10000000") > 0);
+    }
+
+    void oldFirmwareDoesNotHang()
+    {
+        // v1.4-220: a command right after output/modulation/levelchange/ext_gain hangs the shell
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened);
+        link.open("sim:ultra:old");
+        QVERIFY(opened.wait(3000));
+        QVERIFY(opened.first().first().value<DeviceInfo>().directCommandRace());
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        GenConfig g = carrier(100e6, -50);
+        link.setGenerator(g);
+        link.setActivity(DeviceLink::Generator);
+        g.on = true;
+        link.setGenerator(g);  // output on, then (racing) the level and sweep commands below
+        g.type = GenType::AM;
+        g.levelDbm = -45;
+        g.freqHz = 101e6;
+        link.setGenerator(g);
+        g.type = GenType::Sweep;
+        g.levelChangeDb = -10;
+        link.setGenerator(g);
+        QTRY_VERIFY_WITH_TIMEOUT(sim->received().contains("sweep go"), 8000);
+        QVERIFY(!sim->hung());
+        QVERIFY(sim->rfOn());
+        QCOMPARE(sim->outputLevel(), -45.0);
+        link.send("vbat");  // a console command after `modulation off`, `levelchange -10` ...
+        QSignalSpy reply(&link, &DeviceLink::reply);
+        QVERIFY(reply.wait(3000));
+        QVERIFY(!sim->hung());
+        // the emulation itself: without the wait it hangs, as the real unit did
+        sim->write("output off\rlevel -30\r");
+        QVERIFY(sim->hung());
+    }
+
+    void portSwitchSendsTheLevel()
+    {
+        // a taken-over unit (level unknown) switched to the other port: the mode switch sets the
+        // unit's level to its maximum, so the app's level must go out before RF can go on
+        Session session;
+        QSignalSpy activity(&session, &Session::activityChanged), traffic(&session, &Session::traffic);
+        session.connectDevice("sim:basic:gen");
+        QTRY_VERIFY_WITH_TIMEOUT(!activity.isEmpty(), 5000);
+        GenConfig g = session.generator();
+        QVERIFY(!g.levelKnown);
+        g.path = GenPath::High;
+        session.setGenerator(g);
+        QVERIFY(session.generator().levelKnown);
+        auto sent = [&](const QString &prefix) {
+            for (const auto &t : traffic)
+                if (t.at(0).toBool() && t.at(1).toString().startsWith(prefix))
+                    return true;
+            return false;
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(sent("mode high output") && sent("level "), 3000);
+        session.disconnectDevice();
+    }
+
+    void generatorNeverScans()
+    {
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), frames(&link, &DeviceLink::frame),
+            activity(&link, &DeviceLink::activityChanged);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        QTRY_VERIFY_WITH_TIMEOUT(!activity.isEmpty(), 1000);
+        QCOMPARE(activity.last().first().toInt(), int(DeviceLink::Analyzer));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        link.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), 3000);
+        GenConfig g = carrier(100e6, -50);
+        link.setGenerator(g);
+        link.setActivity(DeviceLink::Generator);  // stops the scan, resumes the unit
+        QTRY_VERIFY_WITH_TIMEOUT(sim->generating(), 3000);
+        QCOMPARE(activity.last().first().toInt(), int(DeviceLink::Generator));
+        g.on = true;
+        link.setGenerator(g);
+        QTRY_VERIFY_WITH_TIMEOUT(sim->rfOn(), 2000);
+        QCOMPARE(sim->outputLevel(), -50.0);
+        link.setScan(DeviceLink::Once);  // ignored
+        QTest::qWait(300);
+        QCOMPARE(sim->scansWhileGenerating, 0);
+        const QByteArrayList rx = sim->received();
+        for (const char *c : {"resume", "mode low output", "level -50", "output on"})
+            QVERIFY2(rx.contains(c), c);
+        QVERIFY(rx.indexOf("resume") < rx.indexOf("mode low output"));
+        QVERIFY(rx.indexOf("level -50") < rx.indexOf("output on"));
+        link.setActivity(DeviceLink::Analyzer);  // back to the scan from before
+        QTRY_VERIFY_WITH_TIMEOUT(!sim->generating(), 2000);
+        const int before = int(frames.size());
+        QTRY_VERIFY_WITH_TIMEOUT(frames.size() > before + 2, 5000);
+        QCOMPARE(sim->scansWhileGenerating, 0);
+    }
+
+    void followsAGeneratingUnit_data()
+    {
+        QTest::addColumn<QString>("port");
+        QTest::addColumn<QByteArray>("modulation");
+        QTest::newRow("ultra") << "sim:ultra:gen" << QByteArray("fm");
+        QTest::newRow("basic") << "sim:basic:gen" << QByteArray("nfm");
+    }
+    void followsAGeneratingUnit()
+    {
+        QFETCH(QString, port);
+        QFETCH(QByteArray, modulation);
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), adopted(&link, &DeviceLink::generatorAdopted),
+            activity(&link, &DeviceLink::activityChanged);
+        link.setGenerator(carrier(433.92e6, -60));  // the app's stored settings
+        link.open(port);
+        QVERIFY(opened.wait(3000));
+        QTRY_VERIFY_WITH_TIMEOUT(!activity.isEmpty(), 1000);
+        QCOMPARE(activity.last().first().toInt(), int(DeviceLink::Generator));
+        QCOMPARE(adopted.size(), 1);
+        const GenConfig g = adopted.first().first().value<GenConfig>();
+        QCOMPARE(g.freqHz, 100e6);
+        QVERIFY(!g.on && !g.type && !g.levelKnown);
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        QTest::qWait(300);  // nothing changed on the unit
+        QVERIFY(sim->generating() && sim->rfOn());
+        QCOMPARE(sim->modulation(), modulation);
+        QCOMPARE(sim->outputLevel(), -30.0);
+        link.setScan(DeviceLink::Continuous);  // a generating unit is never scanned
+        QTest::qWait(200);
+        QCOMPARE(sim->scansWhileGenerating, 0);
+        GenConfig off = g;  // RF off: only that is sent
+        off.on = false;
+        link.setGenerator(off);
+        QTRY_VERIFY_WITH_TIMEOUT(!sim->rfOn(), 2000);
+        QCOMPARE(sim->modulation(), modulation);
     }
 };
 
@@ -966,6 +1293,8 @@ int main(int argc, char **argv)
     run(&model);
     TstLink link;
     run(&link);
+    TstGenerator generator;
+    run(&generator);
     TstTraces traces;
     run(&traces);
     TstCsv csv;

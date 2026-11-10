@@ -1,0 +1,54 @@
+# Generator page, simulated tinySA basic: the LOW and HIGH output connectors with their own
+# ranges and levels, the basic's modulations, a sweep without `sweep go`.
+#   del test\out\gen.ini & tinySA-App.exe --sim --ini test\out\gen.ini --script test\gen_basic.txt --out test\out\gen_basic
+do connect sim:basic
+waitfor connected == 1
+do clearsent
+click generatorButton
+waitfor activity == generator
+waitfor sent contains "mode low output"
+# 433.92 MHz is above the LOW output: clamped to 350 MHz
+check gen.freq == 350000000
+check gen.path == low
+# HIGH connector: RF off, 240-960 MHz, -38..+9 dBm
+click rfButton
+waitfor sent contains "output on"
+do clearsent
+set pathCombo HIGH port, 240 MHz - 960 MHz
+check gen.path == high
+check gen.on == 0
+waitfor sent contains "mode high output"
+check sent !contains output on
+set freqDisplay 433.92M
+set levelDisplay 20
+check gen.level == 9.0
+set levelDisplay -50
+check gen.level == -38.0
+# no AM on the HIGH output (the button is disabled)
+click amButton
+check gen.type == CW
+do clearsent
+click nfmButton
+waitfor sent contains "modulation nfm"
+check gen.type == NFM
+# a sweep: the basic runs it without `sweep go`, and without a level change on HIGH
+do clearsent
+click sweepButton
+set sweepSpanEdit 100
+waitfor sent contains "sweep span 100000000"
+check sent contains modulation off
+check sent !contains sweep go
+shot gen_basic_high.png
+# back to the LOW connector: the sweep moves inside 10 kHz - 350 MHz
+do clearsent
+set pathCombo LOW port, max 350 MHz
+waitfor sent contains "mode low output"
+check gen.freq == 300000000
+click amButton
+waitfor sent contains "modulation am"
+check @modInfoLabel == Depth about 30 %
+shot gen_basic_low.png
+click analyzerButton
+waitfor activity == analyzer
+waitfor sent contains "mode low input"
+quit

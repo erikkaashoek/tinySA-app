@@ -1,0 +1,98 @@
+// DeviceLink, signal generator: switching between analyzer and generator, the GenConfig
+// diff, and following a unit that is already generating when it connects.
+#include "link.h"
+#include <QRegularExpression>
+#include <cmath>
+
+void DeviceLink::setGenerator(const GenConfig &g)
+{
+    m_gen = m_info.model ? clampGen(g, m_info) : g;
+    pump();
+}
+
+void DeviceLink::setActivity(int activity)
+{
+    if (!m_ready || activity == m_activity)
+        return;
+    if (activity == Generator) {
+        m_modeBeforeGen = m_mode;
+        setMode(Off);  // abort + resume: a paused unit does not apply output changes
+        m_activity = Generator;
+        m_genHave = AppliedGen{};  // unknown: the diff starts with the mode switch
+    } else {
+        m_activity = Analyzer;
+        // generator commands not sent yet are obsolete: no `output on` just before the switch
+        m_queue.removeIf([](const Cmd &c) { return c.generator; });
+        const InputMode input = m_info.model->hasInputMode ? m_want.input : InputMode::Low;
+        // at once, so the unit shows its own spectrum again; it resets the unit's settings
+        queueChecked({input == InputMode::High ? "mode high input" : "mode low input"});
+        m_have = AppliedConfig{input};
+        m_genHave = AppliedGen{};
+    }
+    emit activityChanged(m_activity);
+    if (activity == Analyzer)
+        setMode(m_modeBeforeGen);
+    pump();
+}
+
+void DeviceLink::pumpGenerator()
+{
+    if (m_paused)  // output on/off and frequency changes only take effect in the unit's sweep loop
+        return enqueue({"resume"});
+    const QByteArrayList cmds = genCommands(m_gen, m_genHave, *m_info.model);
+    if (!cmds.isEmpty())
+        queueChecked(cmds, true);
+}
+
+// "usage: sweeptime 0.003..60\r\n 2.003s" -> 2.003; the unit prints SI prefixes (500m).
+static std::optional<double> lastValue(const QStringList &lines)
+{
+    static const QRegularExpression re(R"(^\s*([-+]?\d+(?:\.\d+)?)\s*([pnumkMG]?)s?\s*$)");
+    for (auto it = lines.crbegin(); it != lines.crend(); ++it) {
+        const auto m = re.match(*it);
+        if (!m.hasMatch())
+            continue;
+        static const QString prefixes = "pnum kMG";
+        const int p = m.captured(2).isEmpty() ? 4 : int(prefixes.indexOf(m.captured(2)));
+        return m.captured(1).toDouble() * std::pow(10.0, 3 * (p - 4));
+    }
+    return std::nullopt;
+}
+
+void DeviceLink::probeGenerator(const QStringList &levelReply)
+{
+    const QString usage = levelReply.join(' ');
+    if (!usage.contains("usage: level"))
+        return;  // input mode: `level` printed nothing
+    m_info.gen.active = true;
+    m_info.gen.high = usage.contains("-38");  // basic HIGH output: "usage: level -38..13"
+    // read what else the unit can tell, before the rest of the handshake (not the level:
+    // `attenuate` reports the attenuator, on a ZS407 5 dB below the level)
+    QList<Cmd> probes;
+    probes.append({"ext_gain", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+        if (ok && !lines.join(' ').contains('?'))
+            m_info.gen.extGainDb = lastValue(lines);
+    }});
+    probes.append({"sweeptime", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+        if (ok)
+            m_info.gen.sweepS = lastValue(lines);
+    }});
+    for (int i = int(probes.size()) - 1; i >= 0; --i)
+        m_queue.prepend(probes[i]);
+}
+
+void DeviceLink::adoptGenerator()
+{
+    if (m_info.gen.active) {
+        setMode(Off);  // a scan asked for during the handshake does not happen
+        m_gen = adoptUnitGenerator(m_gen, m_info, &m_genHave);
+        m_activity = Generator;
+        m_modeBeforeGen = Off;
+        const double center = (m_info.deviceGrid.startHz + m_info.deviceGrid.stopHz) / 2;
+        if (m_info.deviceGrid.points > 0 && std::abs(m_gen.freqHz - center) >= 1)  // sent at once
+            emit message(QString("The tinySA generated at %1, outside the app's range: moved to %2")
+                             .arg(formatHz(center, 1e3), formatHz(m_gen.freqHz, 1e3)));
+        emit generatorAdopted(m_gen);
+    }
+    emit activityChanged(m_activity);
+}

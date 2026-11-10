@@ -5,9 +5,12 @@
 QByteArrayList configCommands(const SweepConfig &want, AppliedConfig &have, const ModelDesc &m)
 {
     QByteArrayList cmds;
-    if (m.hasInputMode && have.input != want.input) {
-        cmds << (want.input == InputMode::High ? "mode high input" : "mode low input");
-        have = AppliedConfig{want.input};  // mode switch reloads the device settings
+    // Unknown mode (after connecting or generating): always set it, the Ultra too. A unit
+    // left in output mode answers scanraw with junk, and hangs in it with modulation on.
+    const InputMode input = m.hasInputMode ? want.input : InputMode::Low;
+    if (have.input != input) {
+        cmds << (input == InputMode::High ? "mode high input" : "mode low input");
+        have = AppliedConfig{input};  // mode switch reloads the device settings
     }
     if (m.hasLna && have.lna != want.lna) {
         cmds << (want.lna ? "lna on" : "lna off");

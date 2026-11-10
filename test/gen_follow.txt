@@ -1,0 +1,41 @@
+# Connecting to a unit that is already generating (sim: LOW output, 100 MHz, -30 dBm, RF on,
+# FM): the generator page opens with what the unit reports (frequency, span, external gain,
+# sweep time). RF, level and modulation cannot be read: shown as "?", nothing is sent.
+#   del test\out\gen.ini & tinySA-App.exe --sim --ini test\out\gen.ini --script test\gen_follow.txt --out test\out\gen_follow
+do connect sim:ultra:gen
+waitfor connected == 1
+waitfor activity == generator
+check gen.freq == 100000000
+check gen.on == ?
+check gen.level == ?
+check gen.type == ?
+check @rfButton == 0
+check @levelDisplay == ?
+check gen.status contains RF ?
+wait 300
+check sent !contains output
+check sent !contains modulation
+check sent !contains mode
+shot gen_follow.png
+# the first click on "RF ?" switches RF off (the safe way), the next one on again
+do clearsent
+click rfButton
+waitfor sent contains "output off"
+check gen.on == 0
+click rfButton
+waitfor sent contains "output on"
+# choosing a type takes the signal over; the unknown level is still not sent
+do clearsent
+click cwButton
+waitfor sent contains "modulation off"
+check sent contains sweep abort
+check sent !contains level -
+set levelDisplay -45
+waitfor sent contains "level -45"
+check gen.status contains 45.0 dBm
+# a generating unit is not scanned; back to the analyzer switches it to input
+do clearsent
+click analyzerButton
+waitfor activity == analyzer
+waitfor sent contains "mode low input"
+quit

@@ -5,6 +5,10 @@
 // One command in flight; replies are recognised by their echo and end at the
 // prompt (protocol.h). A sweep is one `scanraw S E N`; queued work (user commands,
 // config changes, battery polls) runs between sweeps.
+//
+// The unit is an analyzer or a signal generator, never both: in generator mode the
+// link only sends GenConfig differences and never scans (linkgen.cpp).
+#include "genconfig.h"
 #include "model.h"
 #include "protocol.h"
 #include "sweepconfig.h"
@@ -34,6 +38,8 @@ class DeviceLink : public QObject {
 public:
     enum Scan { Off, Once, Continuous };
     Q_ENUM(Scan)
+    enum Activity { Analyzer, Generator };
+    Q_ENUM(Activity)
 
     explicit DeviceLink(QObject *parent = nullptr);
     ~DeviceLink() override;
@@ -54,9 +60,15 @@ public slots:
     void setRemote(bool on);
     void touch(QPoint lcd, bool down);  // down: press/drag at lcd pixel, else release
     void simTouch();                    // test hook: touch the simulated screen
+    // Generator: stops scanning and switches the unit to output mode (RF as in the
+    // GenConfig); Analyzer: back to input mode and the scan mode from before.
+    void setActivity(int activity);
+    void setGenerator(const GenConfig &g);
 
 signals:
     void opened(const DeviceInfo &info);
+    void activityChanged(int activity);           // also after connecting (the unit's own mode)
+    void generatorAdopted(const GenConfig &g);    // connected to a generating unit: its settings
     void closed(const QString &reason);
     void frame(const SweepFrame &f);
     void scanChanged(int mode);
@@ -74,11 +86,18 @@ private:
         int bytes = 0;    // capture size
         int timeoutMs = 3000;
         std::function<void(bool ok, const QStringList &lines)> done;
-        bool user = false;  // typed by the user (console, dialogs), not the app's own traffic
+        bool user = false;       // typed by the user (console, dialogs), not the app's own traffic
+        bool generator = false;  // from genCommands(): obsolete once back in analyzer mode
     };
     void enqueue(Cmd c);
+    // Reports refusals ("cmd?", "usage: ..."). Generator commands without a reply are
+    // forgotten in m_genHave, so the next diff sends them again.
+    void queueChecked(const QByteArrayList &lines, bool generator = false);
     void pump();      // send the next command, or start the next sweep
     void pumpStep();
+    void pumpGenerator();
+    void probeGenerator(const QStringList &levelReply);  // handshake: is the unit generating?
+    void adoptGenerator();                               // handshake end: follow a generating unit
     void updateBusy();
     void transmit(Cmd c);
     void onReadyRead();
@@ -104,11 +123,16 @@ private:
     bool m_pixelsRle8 = false;
     QTimer m_timeout, m_battery, m_drain;
     bool m_draining = false;
+    QTimer m_settle;  // old firmware: nothing goes out for a while after output/modulation/...
 
     DeviceInfo m_info;
     bool m_ready = false;
     SweepConfig m_want;
     AppliedConfig m_have;
+    int m_activity = Analyzer;
+    GenConfig m_gen;
+    AppliedGen m_genHave;
+    int m_modeBeforeGen = Off;
     int m_mode = Off;
     bool m_paused = false;    // unit paused by us: set when pause/resume is transmitted
     bool m_aborting = false;  // we sent abort for the scan in flight

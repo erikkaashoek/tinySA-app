@@ -14,6 +14,7 @@
 namespace Ui { class MainWindow; }
 class QLabel;
 class QLineEdit;
+class QShortcut;
 class QToolButton;
 class QSettings;
 class MarkerModel;
@@ -68,6 +69,10 @@ private:
     void setupTools();             // console, battery (maintools.cpp)
     void showTool(QWidget *w);
     void saveTools(QSettings &qs);
+    void setupGenerator();              // generator page and mode switch (maingenerator.cpp)
+    void showActivity(int activity);    // analyzer or generator page, toolbar, status bar
+    void showGeneratorStatus();
+    void escape();                      // Esc: stop scanning, or RF off when generating
     void applyAppearance();  // theme to the graphs, colour scheme to the application
     void error(const QString &what);
 
@@ -86,6 +91,8 @@ private:
     QStringList m_portNames;
     bool m_simulators;
     QLabel *m_stepLabel, *m_sweepsLabel, *m_avgLabel, *m_rateLabel, *m_batteryLabel;
+    QLabel *m_genLabel = nullptr;
+    QList<QShortcut *> m_analyzerShortcuts;  // off on the generator page (its fields take the keys)
     int m_sweeps = 0, m_sweepsMark = 0;
     QElapsedTimer m_cycle;
     double m_cycleMs = 0, m_sweepMs = 0;  // last sweep-to-sweep time, last sweep duration

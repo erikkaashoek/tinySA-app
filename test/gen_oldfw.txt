@@ -1,0 +1,46 @@
+# Firmware before v1.4-266 (sim: ZS405 with v1.4-220): a warning with an update link next to
+# the device, and the generator still works, because the link waits after output, modulation,
+# levelchange and ext_gain (without that the simulated shell hangs, as the real one did).
+#   del test\out\gen.ini & tinySA-App.exe --sim --ini test\out\gen.ini --script test\gen_oldfw.txt --out test\out\gen_oldfw
+do connect sim:ultra:old
+waitfor connected == 1
+check firmware.warning == 1
+check @firmwareWarningLabel contains Update the firmware
+click generatorButton
+waitfor activity == generator
+# each step a direct command right before a waiting one (level, sweep, sweeptime)
+click rfButton
+waitfor sent contains "output on"
+set levelDisplay -50
+waitfor sent contains "level -50"
+set extGainSpin 3
+waitfor sent contains "ext_gain 3"
+set levelDisplay -45
+waitfor sent contains "level -48"
+click amButton
+waitfor sent contains "modulation am"
+click sweepButton
+waitfor sent contains "sweep span"
+set levelChangeSpin -10
+waitfor sent contains "levelchange -10"
+set sweepTimeSpin 5
+waitfor sent contains "sweeptime 5"
+click fmButton
+waitfor sent contains "modulation fm" 8000
+waitfor idle == 1 8000
+check messages !contains No reply
+check gen.on == 1
+shot gen_oldfw.png
+click analyzerButton
+waitfor sent contains "mode low input" 5000
+click onceButton
+waitfor sweeps >= 1
+check messages !contains No reply
+# current firmware: no warning
+click connectButton
+waitfor connected == 0
+check firmware.warning == 0
+do connect sim:ultra
+waitfor connected == 1
+check firmware.warning == 0
+quit

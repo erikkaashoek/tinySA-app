@@ -5,6 +5,7 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink)
     qRegisterMetaType<SweepFrame>();
     qRegisterMetaType<SweepConfig>();
     qRegisterMetaType<DeviceInfo>();
+    qRegisterMetaType<GenConfig>();
     m_link->moveToThread(&m_thread);
     connect(&m_thread, &QThread::finished, m_link, &QObject::deleteLater);
 
@@ -12,7 +13,24 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink)
         m_info = info;
         m_connected = true;
         setConfig(m_config);  // clamp to the model's limits
+        // the link clamps its own copy (and may take over a generating unit's settings
+        // next): sending ours would race with that
+        const GenConfig g = clampGen(m_gen, m_info);
+        if (!(g == m_gen)) {
+            m_gen = g;
+            emit generatorChanged(m_gen);
+        }
         emit connected(info);
+    });
+    connect(m_link, &DeviceLink::generatorAdopted, this, [this](const GenConfig &g) {
+        m_gen = g;
+        emit generatorChanged(m_gen);
+    });
+    connect(m_link, &DeviceLink::activityChanged, this, [this](int a) {
+        if (a != m_activity) {
+            m_activity = a;
+            emit activityChanged(a);
+        }
     });
     connect(m_link, &DeviceLink::closed, this, [this](const QString &reason) {
         m_connected = false;
@@ -66,6 +84,34 @@ void Session::setConfig(const SweepConfig &c)
     QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setConfig(clamped); });
     if (changed || !(clamped == c))
         emit configChanged(m_config);
+}
+
+void Session::setGenerator(const GenConfig &want)
+{
+    GenConfig g = want;
+    if (g.path != m_gen.path)  // a mode switch sets the unit's level to its maximum: send ours
+        g.levelKnown = true;
+    const GenConfig clamped = m_info.model ? clampGen(g, m_info) : g;
+    const bool changed = !(clamped == m_gen);
+    m_gen = clamped;
+    QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setGenerator(clamped); });
+    if (changed || !(clamped == want))
+        emit generatorChanged(m_gen);
+}
+
+void Session::setActivity(int activity)
+{
+    if (!m_connected || activity == m_activity)
+        return;
+    if (activity == DeviceLink::Generator) {  // the unit starts with RF off; so do we
+        GenConfig g = m_gen;
+        g.on = false;
+        g.levelKnown = true;
+        if (!g.type)
+            g.type = GenType::CW;
+        setGenerator(g);
+    }
+    QMetaObject::invokeMethod(m_link, [l = m_link, activity] { l->setActivity(activity); });
 }
 
 void Session::setScan(int mode)

@@ -14,7 +14,10 @@
    <string>tinySA-App</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="centralLayout">
+   <layout class="QVBoxLayout" name="centralLayout">
+    <property name="spacing">
+     <number>4</number>
+    </property>
     <property name="leftMargin">
      <number>4</number>
     </property>
@@ -28,6 +31,139 @@
      <number>2</number>
     </property>
     <item>
+     <widget class="QWidget" name="deviceBar">
+      <layout class="QHBoxLayout" name="deviceBarLayout">
+       <property name="spacing">
+        <number>6</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QComboBox" name="portCombo">
+         <property name="minimumSize">
+          <size>
+           <width>170</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="toolTip">
+          <string>Serial port of the tinySA. A connected tinySA is selected automatically.</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="connectButton">
+         <property name="text">
+          <string>Connect</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="deviceLabel">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+           <horstretch>1</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>Not connected</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="firmwareWarningLabel">
+         <property name="toolTip">
+          <string>Firmware older than v1.4-266 can lose a command sent over USB and then stop answering until it is restarted (fixed in v1.4-252 and v1.4-266). The app avoids the case it can in generator mode; new firmware avoids all of them.</string>
+         </property>
+         <property name="text">
+          <string>&lt;span style=&quot;color:#d35400&quot;&gt;Old firmware: may stop answering over USB&lt;/span&gt; &amp;middot; &lt;a href=&quot;update&quot;&gt;Update the firmware&lt;/a&gt;</string>
+         </property>
+         <property name="textFormat">
+          <enum>Qt::TextFormat::RichText</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="analyzerButton">
+         <property name="minimumSize">
+          <size>
+           <width>100</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="toolTip">
+          <string>Spectrum analyzer: the tinySA measures (input mode)</string>
+         </property>
+         <property name="text">
+          <string>Analyzer</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+         <property name="autoExclusive">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="generatorButton">
+         <property name="minimumSize">
+          <size>
+           <width>100</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="toolTip">
+          <string>Signal generator: the tinySA generates (output mode, RF off at first)</string>
+         </property>
+         <property name="text">
+          <string>Generator</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="autoExclusive">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QStackedWidget" name="modeStack">
+      <widget class="QWidget" name="analyzerPage">
+       <layout class="QHBoxLayout" name="analyzerLayout">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
      <widget class="QSplitter" name="splitter">
       <property name="orientation">
        <enum>Qt::Orientation::Horizontal</enum>
@@ -68,63 +204,6 @@
          <property name="bottomMargin">
           <number>0</number>
          </property>
-         <item>
-          <widget class="QGroupBox" name="deviceGroup">
-           <property name="title">
-            <string>Device</string>
-           </property>
-           <layout class="QGridLayout" name="deviceLayout">
-            <property name="leftMargin">
-             <number>6</number>
-            </property>
-            <property name="topMargin">
-             <number>4</number>
-            </property>
-            <property name="rightMargin">
-             <number>6</number>
-            </property>
-            <property name="bottomMargin">
-             <number>6</number>
-            </property>
-            <property name="spacing">
-             <number>4</number>
-            </property>
-            <item row="0" column="0">
-             <widget class="QComboBox" name="portCombo">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                <horstretch>1</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="toolTip">
-               <string>Serial port of the tinySA. A connected tinySA is selected automatically.</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QPushButton" name="connectButton">
-              <property name="text">
-               <string>Connect</string>
-              </property>
-              <property name="checkable">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0" colspan="2">
-             <widget class="QLabel" name="deviceLabel">
-              <property name="text">
-               <string>Not connected</string>
-              </property>
-              <property name="wordWrap">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
          <item>
           <widget class="QGroupBox" name="sweepGroup">
            <property name="title">
@@ -794,6 +873,11 @@
       </widget>
       </widget>
      </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="GeneratorPanel" name="generatorPanel"/>
+     </widget>
     </item>
    </layout>
   </widget>
@@ -973,6 +1057,12 @@
    <class>SpectrumView</class>
    <extends>QWidget</extends>
    <header>spectrumview.h</header>
+   <container>0</container>
+  </customwidget>
+  <customwidget>
+   <class>GeneratorPanel</class>
+   <extends>QWidget</extends>
+   <header>generatorpanel.h</header>
    <container>0</container>
   </customwidget>
  </customwidgets>

@@ -1,0 +1,34 @@
+# Generator on hardware, step 3 of 5 (see hw_gen_start.txt): connecting to the generating
+# unit opens the generator page with its frequency; RF, level and type are unknown and nothing
+# is sent until set. Then: CW at 150 MHz -30 dBm, RF off and on, and a sweep 140-160 MHz in
+# 10 s that the app leaves running.
+waitfor connected == 1 10000
+waitfor activity == generator 5000
+check gen.freq == 100000000
+check gen.on == ?
+check gen.level == ?
+check gen.type == ?
+check sent !contains output
+check sent !contains modulation
+do clearsent
+click cwButton
+set levelDisplay -30
+set freqDisplay 150M
+waitfor idle == 1 5000
+check sent contains sweep cw 150000000
+check sent contains level -30
+click rfButton
+waitfor sent contains "output off" 5000
+click rfButton
+waitfor sent contains "output on" 5000
+shot hwgen_follow.png
+do clearsent
+click sweepButton
+set sweepSpanEdit 20
+set sweepTimeSpin 10
+waitfor idle == 1 5000
+check sent contains sweep span 20000000
+check sent contains sweeptime 10
+check messages !contains refused
+check messages !contains No reply
+quit

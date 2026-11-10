@@ -1,0 +1,17 @@
+# Generator on hardware, step 2 of 5 (see hw_gen_start.txt): the measuring unit M sees the
+# generator's 100 MHz -40 dBm carrier. Two units' calibrations: within 5 dB (measured with the
+# basic ZS304: Ultra+ ZS407 -38.1 dBm, ZS405 with v1.4-220 -43.1 / -43.6 dBm).
+waitfor connected == 1 10000
+check activity == analyzer
+set startEdit 99
+set stopEdit 101
+set pointsCombo 290
+set rbwCombo 10 kHz
+set attenCombo Auto
+click onceButton
+waitfor sweeps >= 1 20000
+check peak.hz ~ 100000000 20000
+check peak.dbm ~ -40 5
+dump peak.dbm hwgen_100mhz_level.txt
+shot hwgen_100mhz.png
+quit

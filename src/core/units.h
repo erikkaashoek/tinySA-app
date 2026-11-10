@@ -54,6 +54,8 @@ double niceStep(double minStep);  // smallest {1, 2, 2.5, 5} x 10^n >= minStep
 
 // "433.920 MHz"; decimals < 0 picks enough digits to resolve resolutionHz
 QString formatHz(double hz, double resolutionHz = 1);
+// MHz for the edits, to the Hz and without trailing zeros: "433.92", "100", "0.0001"
+QString formatMHz(double hz);
 // Parses "433.92", "433,92", "433.92M", "1.2 GHz", "100k". Numbers without a
 // suffix are in units of defaultUnitHz (the edits take MHz).
 std::optional<double> parseHz(QString text, double defaultUnitHz = 1e6);

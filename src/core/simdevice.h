@@ -33,6 +33,15 @@ public:
     QByteArray screenBytes() const { return m_screen; }  // raw RGB565 big-endian
     void stopPushes() { m_pushTimer.stop(); }  // the screen stands still (refresh stays on)
     static QByteArray packBits(const QByteArray &data);
+    // generator ("output mode"): what the app may read back, plus what tests check
+    void startGenerating();  // as a unit left generating: LOW output, 100 MHz, -30 dBm, RF on, FM
+    bool generating() const { return m_outMode; }
+    bool rfOn() const { return m_rfOn; }
+    double outputLevel() const { return m_level; }
+    QByteArray modulation() const { return m_modulation; }
+    int scansWhileGenerating = 0;  // scanraw in output mode: junk, and a hang with modulation
+    bool oldFirmware = false;      // v1.4-220 ZS405 (Ultra): the shell hangs on a command sent right
+    bool hung() const { return m_hung; }  // after output/modulation/levelchange/ext_gain
 
 protected:
     qint64 readData(char *data, qint64 maxlen) override;
@@ -56,6 +65,14 @@ private:
     double m_rbwKHz = 0;
     int m_atten = -1;
     bool m_lna = false, m_paused = false;
+    void setMode(bool output, bool high);  // a mode switch resets the settings, as reset_settings()
+    bool generatorCommand(const QByteArrayList &tok);  // output, level, modulation, ...
+    bool m_outMode = false, m_high = false, m_rfOn = false, m_mixer = true, m_genSweep = false;
+    double m_level = -18.5, m_extGain = 0, m_levelChange = 0, m_sweepTime = 2;
+    QByteArray m_modulation = "off";
+    int m_modHz = 1000, m_amDepth = 80, m_fmDev = 3000;
+    QElapsedTimer m_directClock;  // old firmware: since the last direct command in output mode
+    bool m_hung = false;
 
     struct Scan { qint64 start, stop; int points, next; };
     std::optional<Scan> m_scan;

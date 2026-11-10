@@ -74,12 +74,61 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   stream per region (93 % of pushed pixels are black, runs continue over rows): normal
   289 → 34 KB/s (8.4×), big waterfall 368 → 23 KB/s (16×) at 2.12 vs 1.75 sweeps/s; every
   stream byte-identical to DiSlord packbits() per 480 indices.
+- Branch `generator` (2026-11-10): signal generator mode.
+  - **UI:** Device controls moved to a top bar with an Analyzer | Generator switch. The
+    generator page replaces the left panel and the graph, as the unit's own screen does: big
+    DigitEdit frequency and level (wheel/↑↓ per digit, typed entry), RF button (off on entry,
+    "RF ?" when unknown, Esc = off), Output (path, signal type the unit makes, external gain)
+    and Signal (CW / Sweep / AM / FM, basic NFM / WFM / Ext; never sweep and modulation at once).
+  - **Behaviour:** on connect the app follows the unit's mode (probe: `level`). A generating
+    unit opens the page with its frequency/span/ext gain/sweep time; RF, level and type are
+    "?" and nothing is sent until set. Exit/disconnect leaves the unit as it is. Battery
+    polled only in CW (`vbat` restarts the sweep, interrupts modulation).
+  - **Fix:** the Ultra now gets `mode low input` before its first sweep (a unit left
+    generating with modulation hangs in `scanraw`).
+  - **Tests:** tst_core TstGenerator; sim gen_ultra / gen_basic / gen_follow + full regression
+    PASS. Hardware hw_gen_start → check → follow → sweepcheck → stop PASS both ways (Ultra+
+    ZS407 COM21 and basic ZS304 COM22, fw v1.4-302, RF ports cabled together): Ultra -40 dBm
+    measured -38.1 dBm by the basic, basic -40 dBm measured -40.0 by the Ultra; the units'
+    screens show what the app set.
+  - **Code review (/code-review, 14 findings), 13 fixed:**
+    - A port switch makes the level known (the mode switch puts the unit at full level).
+    - DigitEdit: Enter no longer reopens the entry.
+    - A generator command without a reply is forgotten in AppliedGen and sent again
+      (`forgetGenCommand`).
+    - Take-over: a frequency outside the app's range is moved inside, with a message; the
+      Ultra's mixer/direct setting is sent once the frequency is above 1.13 GHz; ext gain or
+      sweep time that could not be read gets the app's value.
+    - `modulation off` goes before a span (the basic sweeps at once); a scan asked for during
+      the handshake is cancelled on a generating unit; queued generator commands are dropped
+      on the switch to Analyzer; the Avg label stays hidden on the generator page; test
+      asserts, the sim's `levelchange`, and `formatMHz` in units.h.
+    - Not done: caching DigitEdit's layout (microseconds per mouse move).
+  - **Old firmware (ZS405 v1.4-220):** a command right after `output`, `modulation`,
+    `levelchange` or `ext_gain` lost its request and the shell hung for good. The link waits
+    300 ms after those on firmware before v1.4-266 (`DeviceInfo::directCommandRace`,
+    `DeviceLink::finish`). Raw check: 20 of 20 without a hang; the five hw_gen steps PASS with
+    the ZS405 generating. The older bug fixed in v1.4-252 (lost wakeup in the shell, commit
+    a65addb) can still hang any command, `scanraw` included: it hung the ZS405 as an analyzer.
+    No app workaround; such units need new firmware. `sim:ultra:old` emulates the generator
+    race.
+  - **Measured across units on the basic's LOW port:** ZS405 at -40 dBm reads -43.6 dBm; the
+    basic at -40 dBm reads -40.6 on the ZS405 (unit calibration, so hw_gen_check allows 5 dB).
+  - **Decided (user, 2026-11-10):**
+    - No LO-harmonic range above each Ultra path's maximum.
+    - Firmware before v1.4-266 shows "Old firmware: may stop answering over USB · Update the
+      firmware" next to the device. The link opens Firmware update; test gen_oldfw.txt.
+  - **Level limits are nominal:** the unit's `leveloffset` counts on the Ultra only when its
+    output is calibrated, which the shell cannot tell.
+  - **Stale build again:** adding a widget to mainwindow.ui crashed an incremental build at
+    start-up in setupMarkers (Ui struct layout). Delete build\ after any mainwindow.ui change.
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
 ## Steps (approved plan)
 0 setup · 1 live spectrum · 2 device controls + settings · 3 traces & graph interaction ·
 4 markers · 5 settings/battery/console/screen-capture windows · 6 firmware upload · 7 parity + packaging.
+Later: signal generator (branch `generator`).
 
 ## Tests
 - `build.bat` runs `tst_core` (per-class logs: build/tst_<Class>.log; QTest stdout is not visible from Git Bash).
@@ -88,12 +137,21 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
 - Hardware: `--port COM20 --ini test\out\hw.ini --script test\hw_step2.txt` (tinySA Ultra ZS405 on
   COM20, CAL output cabled to RF; scripts use `do send caloutput 10` and switch it off at the end).
   Always pass `--ini test\out\x.ini` so tests never touch the user's settings.
+  Ports change: on 2026-11-10 an Ultra+ ZS407 (1781:0A44) was on COM21 and a basic ZS304
+  (0483:5740) on COM22, RF ports cabled together. The generator scripts hw_gen_*.txt need two
+  units like that: five separate runs in turn, generator unit and measuring unit (commands in
+  hw_gen_start.txt). The generator unit must start in analyzer mode.
 - Script helpers: `do mark` + `sweeps.new`, `idle` (stopped and link queue empty), `sent` (commands,
   vbat filtered), `messages`, `do send <cmd>`, `do clearsent`.
+- `waitfor` takes ONE word as its value, then the timeout: quote values with spaces
+  (`waitfor sent contains "output off" 5000`). Unquoted, the second word was read as the timeout
+  (0): the wait failed at once, or passed on an unrelated match.
+- `pollCheck` exists in both the Console and the Screen window; scripts reach the Console's
+  ("all traffic", useful with `dump console.log`).
 
 ## Build / test
-NOTE: after structural .ui changes (widgets moved between containers) do a clean rebuild
-(delete build/): a stale incremental build once crashed at start-up (objects vs. generated ui header).
+NOTE: after any mainwindow.ui change that adds, removes or moves widgets, do a clean rebuild
+(delete build/): stale incremental builds crashed at start-up twice (objects vs. generated ui header).
 `build.bat` (VS 2026 vcvars64 + bundled cmake/ninja → build/ as RelWithDebInfo with PDB, copies runtime DLLs, runs ctest).
 Crash stacks: `"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" -g -G -y build -c "kn 20;q" build\tinySA-App.exe --sim`
 `build.bat dist` also stages dist/ + tinySA-App-<version>.zip (version 2.0.0-28[-dirty] from build/version.txt,
@@ -109,14 +167,17 @@ build a release from a clean, committed tree.
 | src/core/model.h | `ModelDesc` table (basic / Ultra / Ultra+), `detectModel(info, version)`, `DeviceInfo`, help/zero parsing |
 | src/core/protocol.h | `RxParser`: bytes → events (echo, lines, prompt, scanraw data, capture pixels, refresh regions); RGB565 BE decoders |
 | src/core/sweepconfig.h | `SweepConfig` value + `configCommands()` diff vs `AppliedConfig`, `clampConfig()` |
-| src/core/link.h | `DeviceLink` (own thread): handshake, 1 command in flight, per-sweep scanraw loop, battery poll, timeouts/resync, `SweepFrame` |
+| src/core/genconfig.h | `GenConfig` (generator) + `genCommands()` diff vs `AppliedGen` in firmware order, `clampGen()`/`genLimits()` (Ultra limits per ZS405/406/407), `adoptUnitGenerator()`, `outputPathText()` |
+| src/core/link.h | `DeviceLink` (own thread): handshake, 1 command in flight, per-sweep scanraw loop, battery poll, timeouts/resync, `SweepFrame`; linkgen.cpp = analyzer/generator activity, GenConfig diff, mode probe + follow |
 | src/core/simdevice.h | `SimTransport` QIODevice: firmware-exact simulated tinySA (carriers 100/250/433.92/868 MHz, 2.4/5.8 GHz) |
 | src/core/session.h | GUI-thread facade owning the link thread; the only API controllers use |
 | src/core/appsettings.h | `AppSettings` (+ `ViewSettings`, `Theme`): every persistent setting listed once in `visit()` |
 | src/core/traces.h | `Trace` (grid + dBm, interpolating `at()`), `TraceSet`: average/hold/memories/normalisation |
 | src/core/csvio.h | trace CSV write/read (separator + decimal detection), `SweepRecorder` |
 | src/core/markers.h | `MarkerSet` (normal/delta, readings at nearest point), `tracePeak`/`interpolatePeak` (parabolic) |
-| src/ui/mainwindow.* | main window: Designer form + controller (wiring, device, config); mainfiles.cpp = traces/memories/files; maintest.cpp = TestHost |
+| src/ui/mainwindow.* | main window: Designer form + controller (wiring, device, config); mainfiles.cpp = traces/memories/files; maintest.cpp = TestHost; maingenerator.cpp = mode switch + generator page wiring |
+| src/ui/generatorpanel.* | generator page (own .ui, promoted into the main window's `modeStack`): shows a GenConfig, emits edits |
+| src/ui/digitedit.* | big-digit number editor (wheel/keys per digit, inline typed entry) for frequency and level |
 | src/ui/spectrumview.* | `SpectrumView` (QCustomPlot subclass, promoted in the .ui): traces, levels, hover, menu, image; spectrummouse.cpp = mouse/wheel/keys; `SiTicker` |
 | src/ui/spectrummarkers.cpp | `MarkerOverlay` layerable: user markers, peak markers, readout block |
 | src/ui/markermodel.* / mainmarkers.cpp | marker list table model; marker controller (intents → MarkerSet → render) |
@@ -162,6 +223,25 @@ build a release from a clean, committed tree.
   per row: LCD read at DIV4 + lookup/packbits), not on USB (raw is USB-bound at ~890 KB/s).
   (The older `rle` branch has a different 9-bit colour `capt`/`refresh rle` scheme,
   not used). NanoVNA-D region pushes end with "ch> \r\n" (tinySA: "ch> ") — both parse.
+- Generator (output mode), verified on fw v1.4-302 (ZS304, ZS407):
+  - **Mode:** `mode low|high output` (high: basic only) resets all settings: output OFF, level
+    at maximum, no modulation, 10 MHz (HIGH 300 MHz). Same mode again: nothing happens.
+  - **Commands:** `output on|off` (Ultra also `normal|mixer`), `sweep cw|center|span`
+    (`center` then `span` is exact), `level` (absolute port level, clamped silently),
+    `levelchange`, `sweeptime`, `ext_gain`, `modulation off|am|fm|freq|depth|deviation`
+    (basic: `off|am|nfm|wfm|extern|freq`). The Ultra sweeps only after `sweep go`.
+  - **Never:** `freq` (a stub that pauses the unit). Never `scanraw` in output mode (junk;
+    with modulation the sweep thread hangs until a reset).
+  - **Read back:** `level` without a value prints "usage: level -76..-6" (basic HIGH
+    "-38..13") only in output mode. `sweep`, `ext_gain` and `sweeptime` (e.g. "    2s") read
+    back. Output on/off, level and modulation cannot: `attenuate` reports the attenuator,
+    5 dB below the level on the ZS407.
+  - **Side effects:** `vbat`, `level`, `sweep`, `sweeptime` restart the generator's sweep;
+    `output`, `modulation`, `levelchange` do not. A paused unit applies no output changes.
+  - **Old firmware:** before v1.4-266, a wait-mutex command right after one of the direct
+    commands `output`, `modulation`, `levelchange` or `ext_gain` can lose its request in
+    output mode. That hangs until "Command timeout" on v1.4-252..265, and for good before
+    v1.4-252. v1.4-220 boots back into output mode if it was off in it.
 - `reset dfu`: "Performing reset to DFU mode", then the ROM bootloader (0483:DF11). tinySA basic
   always; tinySA4 only from the user's 2026-09 firmware — older Ultra firmware just restarts, the
   firmware dialog says so after 10 s. Otherwise: power on with the jog switch pressed.

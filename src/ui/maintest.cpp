@@ -3,6 +3,8 @@
 #include "ui_mainwindow.h"
 #include "batterywindow.h"
 #include "consolewindow.h"
+#include "digitedit.h"
+#include "generatorpanel.h"
 #include "firmwaredialog.h"
 #include "screenview.h"
 #include "screenwindow.h"
@@ -26,6 +28,25 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     };
     auto num = [](double x, int dec = 0) { return QString::number(x, 'f', dec); };
     if (name == "connected") return m_session.isConnected() ? "1" : "0";
+    if (name == "activity") return m_session.activity() == DeviceLink::Generator ? "generator" : "analyzer";
+    if (name == "firmware.warning") return ui->firmwareWarningLabel->isHidden() ? "0" : "1";
+    if (name.startsWith("gen.")) {  // the generator as the session has it; "?" = unknown
+        const GenConfig g = m_session.generator();
+        const QString f = name.mid(4);
+        if (f == "on") return !g.on ? "?" : *g.on ? "1" : "0";
+        if (f == "freq") return num(g.freqHz);
+        if (f == "level") return g.levelKnown ? num(g.levelDbm, 1) : "?";
+        if (f == "type") return g.type ? genTypeName(*g.type) : "?";
+        if (f == "span") return num(g.spanHz);
+        if (f == "path") return g.path == GenPath::High ? "high" : "low";
+        if (f == "mixer") return g.mixer ? "1" : "0";
+        if (f == "extgain") return num(g.extGainDb, 1);
+        if (f == "status") return m_genLabel->text();
+        if (f == "editing") {  // an inline entry of the big displays is open
+            const auto edits = ui->generatorPanel->findChildren<DigitEdit *>();
+            return std::any_of(edits.begin(), edits.end(), [](DigitEdit *d) { return d->isEditing(); }) ? "1" : "0";
+        }
+    }
     if (name == "model") return m_session.device().model ? m_session.device().model->name : "";
     if (name == "version") return m_session.device().version;
     if (name == "sweeps") return num(m_sweeps);

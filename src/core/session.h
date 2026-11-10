@@ -19,6 +19,12 @@ public:
 
     SweepConfig config() const { return m_config; }
     void setConfig(const SweepConfig &c);  // clamped to the connected model
+    // Analyzer or signal generator (DeviceLink::Activity). Entering the generator switches
+    // RF off first, as the unit does; the unit's own mode is followed on connect.
+    int activity() const { return m_activity; }
+    void setActivity(int activity);
+    GenConfig generator() const { return m_gen; }
+    void setGenerator(const GenConfig &g);  // clamped to the connected unit
     int scanMode() const { return m_scan; }
     bool isBusy() const { return m_busy; }  // commands in flight or queued
     void setScan(int mode);                // DeviceLink::Off / Once / Continuous
@@ -36,6 +42,8 @@ signals:
     void connected(const DeviceInfo &info);
     void disconnected(const QString &reason);
     void configChanged(const SweepConfig &c);
+    void activityChanged(int activity);
+    void generatorChanged(const GenConfig &g);
     void frame(const SweepFrame &f);
     void scanChanged(int mode);
     void busyChanged(bool busy);
@@ -51,6 +59,8 @@ private:
     DeviceInfo m_info;
     bool m_connected = false;
     SweepConfig m_config;
+    int m_activity = DeviceLink::Analyzer;
+    GenConfig m_gen;
     int m_scan = DeviceLink::Off;
     bool m_busy = false;
     TraceSet m_traces;
