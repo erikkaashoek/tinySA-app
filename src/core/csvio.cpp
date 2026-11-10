@@ -15,6 +15,11 @@ bool writeTraceCsv(const QString &path, const Trace &t, const CsvFormat &fmt, QS
         return false;
     }
     QTextStream ts(&f);
+    if (fmt.mhz) {  // as the firmware's MHz CSV, which Wireless Workbench and others import
+        for (int i = 0; i < t.dBm.size(); ++i)
+            ts << QString::number(t.grid.freq(i) / 1e6, 'f', 6) << ',' << QString::number(t.dBm[i], 'f', 2) << "\n";
+        return true;
+    }
     if (!title.isEmpty())
         ts << "# " << title << "\n";
     ts << "Frequency (Hz)" << fmt.separator << "Level (dBm)\n";
@@ -46,7 +51,9 @@ std::optional<Trace> readTraceCsv(const QString &path, QString *error)
         if (!m.hasMatch())
             continue;  // header, comment
         auto num = [](QString s) { return s.replace(',', '.').toDouble(); };
-        hz << num(m.captured(1));
+        const QString freq = m.captured(1);  // Hz are written without decimals, MHz with
+        const bool mhz = (freq.contains('.') || freq.contains(',')) && !freq.contains('e', Qt::CaseInsensitive);
+        hz << (mhz ? std::round(num(freq) * 1e6) : num(freq));
         db << (m.captured(2).compare("nan", Qt::CaseInsensitive) ? num(m.captured(2)) : qQNaN());
     }
     if (hz.size() < 2) {

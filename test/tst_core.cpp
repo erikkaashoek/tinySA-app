@@ -674,6 +674,23 @@ private slots:
             QFile::remove(path);
         }
     }
+    void mhzForWirelessManagers()
+    {
+        const Trace t{{470e6, 470.5e6, 3}, {-85.25, qQNaN(), -30}};
+        const QString path = QDir::tempPath() + "/tst_mhz.csv";
+        QString err;
+        QVERIFY(writeTraceCsv(path, t, CsvFormat{';', true, true}, &err, "title"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(f.readLine(), QByteArray("470.000000,-85.25\n"));  // no title or header, comma and point
+        f.close();
+        const auto back = readTraceCsv(path, &err);
+        QVERIFY2(back.has_value(), qPrintable(err));
+        QCOMPARE(back->grid, t.grid);
+        QCOMPARE(back->dBm[0], -85.25);
+        QVERIFY(std::isnan(back->dBm[1]));
+        QFile::remove(path);
+    }
     void rejectsUnevenFrequencies()
     {
         const QString path = QDir::tempPath() + "/tst_uneven.csv";

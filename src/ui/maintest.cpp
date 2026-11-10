@@ -71,6 +71,7 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "theme.background") return m_settings.theme.background.name();
     if (name == "csv.separator") return QString(m_settings.csv.separator);
     if (name == "csv.decimalcomma") return m_settings.csv.decimalComma ? "1" : "0";
+    if (name == "csv.mhz") return m_settings.csv.mhz ? "1" : "0";
     if (name == "scheme") return num(m_settings.colorScheme);
     if (name == "screen.width") return num(m_screen->view()->image().width());
     if (name == "screen.updates") return num(m_screen->updates());
