@@ -1,0 +1,30 @@
+# Burst on hardware, step 1 of 3. Generator unit G: a tinySA Ultra with firmware v1.4-305 or
+# newer, its RF port cabled to the input of a second tinySA M. Separate runs, one after the other:
+#   tinySA-App.exe --port <G> --ini test\out\hwb.ini --script test\hw_gen_burst.txt --out test\out\hwburst1
+#   tinySA-App.exe --port <M> --ini test\out\hwbm.ini --script test\hw_gen_burstcheck.txt --out test\out\hwburst2
+#   tinySA-App.exe --port <G> --ini test\out\hwb.ini --script test\hw_gen_burstend.txt --out test\out\hwburst3
+# G starts in analyzer mode. Here: 100 MHz -40 dBm, on 1 s of every 2 s, RF on; the app quits and
+# leaves the unit bursting.
+waitfor connected == 1 10000
+waitfor activity == analyzer
+click generatorButton
+waitfor activity == generator
+check gen.burstbutton == 1
+set freqDisplay 100M
+set levelDisplay -40
+click burstButton
+set burstPeriodEdit 2
+set burstOnEdit 1
+click rfButton
+waitfor sent contains "output on" 5000
+waitfor idle == 1 5000
+check sent contains modulation burst
+check sent contains modulation period 2
+check sent contains modulation ontime 1
+check messages !contains refused
+check messages !contains No reply
+click actionScreen
+waitfor screen.width > 0 8000
+wait 1000
+shotw screenWindow hwburst_unit.png
+quit

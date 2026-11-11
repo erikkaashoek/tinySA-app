@@ -56,6 +56,10 @@ double niceStep(double minStep);  // smallest {1, 2, 2.5, 5} x 10^n >= minStep
 QString formatHz(double hz, double resolutionHz = 1);
 // MHz for the edits, to the Hz and without trailing zeros: "433.92", "100", "0.0001"
 QString formatMHz(double hz);
+// Times for the edits: "100 µs", "1.5 ms", "2 s"
+QString formatSeconds(double s);
+// "100u", "100us", "100 µs", "1.5m", "1.5 ms", "2", "2 s" -> seconds (no prefix: seconds)
+std::optional<double> parseSeconds(const QString &text);
 // Parses "433.92", "433,92", "433.92M", "1.2 GHz", "100k". Numbers without a
 // suffix are in units of defaultUnitHz (the edits take MHz).
 std::optional<double> parseHz(QString text, double defaultUnitHz = 1e6);

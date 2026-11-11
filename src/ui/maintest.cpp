@@ -41,6 +41,11 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
         if (f == "path") return g.path == GenPath::High ? "high" : "low";
         if (f == "mixer") return g.mixer ? "1" : "0";
         if (f == "extgain") return num(g.extGainDb, 1);
+        if (f == "period") return QString::number(g.burstPeriodS, 'g', 9);  // seconds
+        if (f == "ontime") return QString::number(g.burstOnS, 'g', 9);
+        if (f == "count") return num(g.burstCount);
+        if (f == "burstbutton")  // offered: firmware with burst
+            return ui->generatorPanel->findChild<QWidget *>("burstButton")->isHidden() ? "0" : "1";
         if (f == "status") return m_genLabel->text();
         if (f == "editing") {  // an inline entry of the big displays is open
             const auto edits = ui->generatorPanel->findChildren<DigitEdit *>();

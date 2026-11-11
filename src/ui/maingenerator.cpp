@@ -10,6 +10,7 @@
 void MainWindow::setupGenerator()
 {
     connect(ui->generatorPanel, &GeneratorPanel::edited, &m_session, &Session::setGenerator);
+    connect(ui->generatorPanel, &GeneratorPanel::burstTriggered, &m_session, &Session::triggerBurst);
     connect(&m_session, &Session::generatorChanged, this, [this](const GenConfig &g) {
         ui->generatorPanel->showConfig(g);
         showGeneratorStatus();

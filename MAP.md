@@ -125,6 +125,24 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     output is calibrated, which the shell cannot tell.
   - **Stale build again:** adding a widget to mainwindow.ui crashed an incremental build at
     start-up in setupMarkers (Ui struct layout). Delete build\ after any mainwindow.ui change.
+- Branch `burst` (2026-11-11): burst modulation of the generator (tinySA Ultra firmware v1.4-305).
+  - **Detection:** the handshake sends `modulation` alone; firmware with burst lists it in the
+    usage (`DeviceInfo::hasBurst`, `genTypes()`).
+  - **UI:** a Burst signal type with Period / On time (seconds with units: 100u, 1.5m, 2;
+    `parseSeconds`/`formatSeconds`), Count (0 = continuous) and Start burst
+    (`Session::triggerBurst` -> `modulation trigger`, queued after any settings not sent yet). An
+    info line gives the duty cycle or "N bursts after each Start burst", and warns that above
+    1.13 GHz burst needs Path Accurate (`burstPossible`).
+  - **Tests:** tst_core burstCommands, secondsInAndOut, burstDetectedAndTriggered; sim
+    gen_burst.txt; full regression PASS (the default sim Ultra is now v1.4-305 with burst,
+    sim:ultra:old without). Hardware Ultra+ ZS407 v1.4-305: hw_gen_burst and hw_gen_burstend
+    PASS, the unit shows "MOD: BURST 1s/2s" and "MOD: BURST 2ms/10ms x3".
+  - **Measured:** hw_gen_burstcheck PASS with the Ultra+ cabled to the basic's LOW input (100 MHz
+    -40 dBm, on 1 s of every 2 s). Max hold -37.6 dBm, min hold -86.8 dBm: about 49 dB on/off,
+    as the firmware commit reports.
+  - **Firmware display race (v1.4-305):** `output on` right after `modulation burst` sometimes
+    leaves "LOW OUTPUT OFF" on the unit's screen (3 of 4 fast sequences, never with AM). The
+    mute flag is on: the next menu redraw shows ON.
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -245,6 +263,14 @@ build a release from a clean, committed tree.
     5 dB below the level on the ZS407.
   - **Side effects:** `vbat`, `level`, `sweep`, `sweeptime` restart the generator's sweep;
     `output`, `modulation`, `levelchange` do not. A paused unit applies no output changes.
+  - **Burst (Ultra, v1.4-305, firmware commit 80292fa):**
+    - Commands: `modulation burst`, then `modulation period <s>` (2u..89), `ontime <s>` (1u..
+      period-1u), `count <n>` (0 = continuous .. 65535) and `trigger`; seconds take m/u
+      suffixes, not exponents. The settings do not set `dirty`.
+    - Defaults after a mode switch: 1 ms, 100 us, continuous.
+    - With count > 0 the output waits for `trigger`, and every settings change re-arms it. A
+      wait-mutex command stops the bursts while it runs.
+    - No burst on the direct path above 1.13 GHz ("MOD: BURST N/A").
   - **Old firmware:** before v1.4-266, a wait-mutex command right after one of the direct
     commands `output`, `modulation`, `levelchange` or `ext_gain` can lose its request in
     output mode. That hangs until "Command timeout" on v1.4-252..265, and for good before

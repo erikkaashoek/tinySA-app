@@ -9,7 +9,7 @@ check gen.on == ?
 check gen.level == ?
 check gen.type == ?
 check sent !contains output
-check sent !contains modulation
+check sent !contains "modulation "
 do clearsent
 click cwButton
 set levelDisplay -30

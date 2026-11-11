@@ -84,6 +84,9 @@ struct AppSettings {
         v("generator/mod_hz", gen.modHz);
         v("generator/am_depth", gen.amDepth);
         v("generator/fm_dev_hz", gen.fmDevHz);
+        v("generator/burst_period_s", gen.burstPeriodS);
+        v("generator/burst_on_s", gen.burstOnS);
+        v("generator/burst_count", gen.burstCount);
         v("trace/hold", hold);
         v("trace/average", average);
         v("view/linear", view.linear);

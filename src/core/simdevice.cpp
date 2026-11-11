@@ -1,4 +1,5 @@
 #include "simdevice.h"
+#include "units.h"
 #include <QHash>
 #include <QMap>
 #include <cmath>
@@ -263,7 +264,7 @@ void SimTransport::execute(const QByteArray &line)
     }
     if (oldFirmware && m_outMode && QByteArrayList{"output", "modulation", "levelchange", "ext_gain"}.contains(cmd))
         m_directClock.start();
-    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-302-sim";
+    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-305-sim";
     if (cmd == "version") {
         out(version + "\r\n" + (!ultra ? "" : oldFirmware ? "HW Version:V0.4.5.1.1\r\n" : "HW Version:V0.5.4 max2871\r\n"));
     } else if (cmd == "info") {
@@ -363,6 +364,7 @@ void SimTransport::setMode(bool output, bool high)
     m_mixer = true;
     m_modulation = "off";
     m_modHz = 1000, m_amDepth = 80, m_fmDev = 3000;
+    m_burstPeriod = 1e-3, m_burstOn = 100e-6, m_burstCount = 0;
     m_levelChange = m_extGain = 0;
     m_sweepTime = 2;
     m_rbwKHz = 0;
@@ -419,8 +421,11 @@ bool SimTransport::generatorCommand(const QByteArrayList &tok)
         else
             m_extGain = a1.toDouble();
     } else if (cmd == "modulation") {
-        const QByteArrayList types = ultra ? QByteArrayList{"off", "am", "fm"}
-                                           : QByteArrayList{"off", "am", "nfm", "wfm", "extern"};
+        const bool burst = ultra && !oldFirmware;  // v1.4-305
+        const QByteArrayList types = burst ? QByteArrayList{"off", "am", "fm", "burst"}
+                                     : ultra ? QByteArrayList{"off", "am", "fm"}
+                                             : QByteArrayList{"off", "am", "nfm", "wfm", "extern"};
+        const std::optional<double> s = parseSeconds(QString::fromLatin1(a2));  // m/u suffixes
         if (types.contains(a1))
             m_modulation = a1;
         else if (a1 == "freq" && !a2.isEmpty())
@@ -429,6 +434,16 @@ bool SimTransport::generatorCommand(const QByteArrayList &tok)
             m_amDepth = a2.toInt();
         else if (ultra && a1 == "deviation" && !a2.isEmpty())
             m_fmDev = a2.toInt();
+        else if (burst && a1 == "period" && s)  // as set_burst_period / _on_time / _count
+            m_burstPeriod = std::clamp(*s, 2e-6, 89.0), m_burstOn = std::clamp(m_burstOn, 1e-6, m_burstPeriod - 1e-6);
+        else if (burst && a1 == "ontime" && s)
+            m_burstOn = std::clamp(*s, 1e-6, m_burstPeriod - 1e-6);
+        else if (burst && a1 == "count" && !a2.isEmpty())
+            m_burstCount = std::clamp(a2.toInt(), 0, 65535);
+        else if (burst && a1 == "trigger")
+            ++m_burstTriggers;
+        else if (burst)
+            out("usage: modulation off|am|fm|freq|depth|deviation|burst|period|ontime|count|trigger [value]\r\n");
         else
             out("usage: modulation " + types.join('|') + "|freq 100..6000\r\n");
     } else {

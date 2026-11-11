@@ -43,13 +43,17 @@ GenConfig clampGen(GenConfig c, const DeviceInfo &d)
     c.amDepth = std::clamp(c.amDepth, 0, 100);
     c.fmDevHz = std::clamp(c.fmDevHz, 1000, 300000);
     c.levelChangeDb = std::clamp(c.levelChangeDb, -90.0, 90.0);
+    c.burstPeriodS = std::clamp(c.burstPeriodS, 2e-6, 89.0);  // as set_burst_period / _on_time
+    c.burstOnS = std::clamp(c.burstOnS, 1e-6, c.burstPeriodS - 1e-6);
+    c.burstCount = std::clamp(c.burstCount, 0, 65535);
     if (const ModelDesc *m = d.model) {
         const GenDesc &g = m->gen;
         if (g.highMaxHz <= 0)
             c.path = GenPath::Low;
-        if (c.type && !g.types.contains(*c.type)) {  // a type of the other model: nearest one
-            const auto fm = std::find_if(g.types.begin(), g.types.end(), isFm);
-            c.type = isFm(*c.type) && fm != g.types.end() ? *fm : GenType::CW;
+        const QVector<GenType> types = genTypes(d);
+        if (c.type && !types.contains(*c.type)) {  // a type of the other model or firmware: nearest one
+            const auto fm = std::find_if(types.begin(), types.end(), isFm);
+            c.type = isFm(*c.type) && fm != types.end() ? *fm : GenType::CW;
         }
         if (c.path == GenPath::High) {  // the HIGH output has no AM, external modulation or level sweep
             if (c.type == GenType::AM || c.type == GenType::External)
@@ -69,6 +73,12 @@ GenConfig clampGen(GenConfig c, const DeviceInfo &d)
 
 static QByteArray num(double v) { return QByteArray::number(v, 'g', 10); }
 static QByteArray hz(qint64 v) { return QByteArray::number(v); }
+static QByteArray seconds(double s)  // the firmware's my_atof takes m and u, not exponents
+{
+    return s < 1e-3 ? QByteArray::number(s * 1e6, 'g', 7) + "u"
+           : s < 1  ? QByteArray::number(s * 1e3, 'g', 7) + "m"
+                    : QByteArray::number(s, 'g', 7);
+}
 
 static QByteArray modulationName(std::optional<GenType> t)
 {
@@ -78,8 +88,22 @@ static QByteArray modulationName(std::optional<GenType> t)
     case GenType::NFM: return "nfm";
     case GenType::WFM: return "wfm";
     case GenType::External: return "extern";
+    case GenType::Burst: return "burst";
     default: return "off";
     }
+}
+
+QVector<GenType> genTypes(const DeviceInfo &d)
+{
+    QVector<GenType> t = d.model ? d.model->gen.types : QVector<GenType>{};
+    if (d.hasBurst)
+        t << GenType::Burst;
+    return t;
+}
+
+bool burstPossible(const GenConfig &c)
+{
+    return c.mixer || c.freqHz <= 1130e6;
 }
 
 QByteArrayList genCommands(const GenConfig &w, AppliedGen &h, const ModelDesc &m)
@@ -90,7 +114,8 @@ QByteArrayList genCommands(const GenConfig &w, AppliedGen &h, const ModelDesc &m
     if (h.mode != path) {
         cmds << (path == GenPath::High ? "mode high output" : "mode low output");
         // a mode switch resets the unit (sa_core.c reset_settings): output off, no modulation
-        // (1 kHz, 80 %, 3 kHz), no level change, not sweeping, mixer output; level at maximum
+        // (1 kHz, 80 %, 3 kHz; burst 1 ms, 100 us, continuous), no level change, not sweeping,
+        // mixer output; level at maximum
         h = AppliedGen{};
         h.mode = path;
         h.on = false;
@@ -98,6 +123,9 @@ QByteArrayList genCommands(const GenConfig &w, AppliedGen &h, const ModelDesc &m
         h.modHz = 1000;
         h.amDepth = 80;
         h.fmDevHz = 3000;
+        h.burstPeriodS = 1e-3;
+        h.burstOnS = 100e-6;
+        h.burstCount = 0;
         h.levelChangeDb = 0;
         h.sweeping = false;
         if (g.hasMixer)
@@ -151,7 +179,20 @@ QByteArrayList genCommands(const GenConfig &w, AppliedGen &h, const ModelDesc &m
             cmds << "sweeptime " + num(w.sweepS);
             h.sweepS = w.sweepS;
         }
-        if (mod != "off" && mod != "extern") {  // parameters first: the modulation starts right
+        if (mod == "burst") {  // parameters first: the bursts start right (period before ON time)
+            if (h.burstPeriodS != w.burstPeriodS) {
+                cmds << "modulation period " + seconds(w.burstPeriodS);
+                h.burstPeriodS = w.burstPeriodS;
+            }
+            if (h.burstOnS != w.burstOnS) {
+                cmds << "modulation ontime " + seconds(w.burstOnS);
+                h.burstOnS = w.burstOnS;
+            }
+            if (h.burstCount != w.burstCount) {  // counted bursts wait for `modulation trigger`
+                cmds << "modulation count " + QByteArray::number(w.burstCount);
+                h.burstCount = w.burstCount;
+            }
+        } else if (mod != "off" && mod != "extern") {  // parameters first: the modulation starts right
             if (h.modHz != w.modHz) {
                 cmds << "modulation freq " + QByteArray::number(w.modHz);
                 h.modHz = w.modHz;
@@ -196,7 +237,10 @@ void forgetGenCommand(const QByteArray &cmd, AppliedGen &h)
     else if (a == "modulation" && b == "freq") h.modHz.reset();
     else if (a == "modulation" && b == "depth") h.amDepth.reset();
     else if (a == "modulation" && b == "deviation") h.fmDevHz.reset();
-    else if (a == "modulation") h.modulation.reset();
+    else if (a == "modulation" && b == "period") h.burstPeriodS.reset();
+    else if (a == "modulation" && b == "ontime") h.burstOnS.reset();
+    else if (a == "modulation" && b == "count") h.burstCount.reset();
+    else if (a == "modulation" && b != "trigger") h.modulation.reset();  // a trigger is no setting
 }
 
 GenConfig adoptUnitGenerator(GenConfig c, const DeviceInfo &d, AppliedGen *have)
@@ -233,6 +277,9 @@ GenConfig adoptUnitGenerator(GenConfig c, const DeviceInfo &d, AppliedGen *have)
     h.modHz.reset();  // sent with the first modulation chosen
     h.amDepth.reset();
     h.fmDevHz.reset();
+    h.burstPeriodS.reset();
+    h.burstOnS.reset();
+    h.burstCount.reset();
     if (!u.extGainDb)  // not read: ours goes out
         h.extGainDb.reset();
     if (!u.sweepS)
@@ -266,7 +313,7 @@ QString outputPathText(const GenConfig &c, const DeviceInfo &d)
     return parts.join(", ");
 }
 
-static const char *const kTypeNames[] = {"CW", "Sweep", "AM", "FM", "NFM", "WFM", "Ext"};
+static const char *const kTypeNames[] = {"CW", "Sweep", "AM", "FM", "NFM", "WFM", "Ext", "Burst"};
 
 QString genTypeName(GenType t)
 {

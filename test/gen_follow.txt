@@ -14,7 +14,7 @@ check @levelDisplay == ?
 check gen.status contains RF ?
 wait 300
 check sent !contains output
-check sent !contains modulation
+check sent !contains "modulation "
 check sent !contains mode
 shot gen_follow.png
 # the first click on "RF ?" switches RF off (the safe way), the next one on again

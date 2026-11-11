@@ -1,0 +1,59 @@
+# Burst modulation (simulated Ultra+ with v1.4-305): period, ON time and count reach the unit,
+# Start burst triggers the counted bursts, the ON time is kept inside the period as on the unit,
+# and firmware without burst (v1.4-220) does not offer it.
+#   del test\out\gen.ini & tinySA-App.exe --sim --ini test\out\gen.ini --script test\gen_burst.txt --out test\out\gen_burst
+do connect sim:ultra
+waitfor connected == 1
+click generatorButton
+waitfor activity == generator
+check gen.burstbutton == 1
+set freqDisplay 100M
+do clearsent
+click burstButton
+check gen.type == Burst
+waitfor sent contains "modulation burst"
+check @burstPeriodEdit == 1 ms
+check @burstInfoLabel contains continuously
+do clearsent
+set burstPeriodEdit 2m
+set burstOnEdit 500u
+waitfor sent contains "modulation ontime 500u"
+check sent contains modulation period 2m
+check gen.ontime == 0.0005
+check @burstInfoLabel contains (25 %)
+# an ON time longer than the period is shortened, as on the unit
+set burstOnEdit 5m
+check gen.ontime == 0.001999
+check @burstOnEdit == 1.999 ms
+# counted bursts start with Start burst
+do clearsent
+set burstCountSpin 5
+waitfor sent contains "modulation count 5"
+check @burstInfoLabel contains 5 bursts
+click burstTriggerButton
+waitfor sent contains "modulation trigger"
+click rfButton
+waitfor sent contains "output on"
+shot gen_burst.png
+# above 1.13 GHz burst needs Path Accurate (the mixer path)
+set freqDisplay 2G
+set pathCombo Cleanest, max 6.30 GHz
+check @burstInfoLabel contains choose Accurate
+set pathCombo Accurate, max 7.37 GHz
+check @burstInfoLabel !contains choose Accurate
+# leaving burst
+do clearsent
+click cwButton
+waitfor sent contains "modulation off"
+# firmware without burst: no Burst button
+click analyzerButton
+waitfor activity == analyzer
+click connectButton
+waitfor connected == 0
+do connect sim:ultra:old
+waitfor connected == 1
+click generatorButton
+waitfor activity == generator
+check gen.burstbutton == 0
+check gen.type == CW
+quit

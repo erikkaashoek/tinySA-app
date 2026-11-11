@@ -13,8 +13,9 @@ enum class InputMode { Low, High };  // tinySA basic: LOW (0-350 MHz) / HIGH (24
 // Signal generator ("output mode"). Basic: LOW and HIGH output are separate connectors.
 enum class GenPath { Low, High };
 // The signal: a carrier, a frequency/level sweep or one modulation (the firmware cannot
-// sweep and modulate at once). FM is the Ultra's adjustable FM; NFM/WFM/External the basic's.
-enum class GenType { CW, Sweep, AM, FM, NFM, WFM, External };
+// sweep and modulate at once). FM is the Ultra's adjustable FM; NFM/WFM/External the basic's;
+// Burst keys the output on and off (Ultra firmware with burst, DeviceInfo::hasBurst).
+enum class GenType { CW, Sweep, AM, FM, NFM, WFM, External, Burst };
 
 struct GenDesc {
     double minHz, maxHz;            // LOW output; the Ultra's maximum depends on the hardware (genLimits)
@@ -68,6 +69,7 @@ struct DeviceInfo {
     int zeroDbm = 0;     // scanraw offset: dBm = raw/32 - zeroDbm
     ScanGrid deviceGrid;  // the unit's own sweep settings at connect time
     int vbatOffset = 0;   // mV, from `vbat_offset`
+    bool hasBurst = false;  // `modulation` lists burst (tinySA Ultra firmware from v1.4-305)
     UnitGenerator gen;
     QString title() const;  // "tinySA Ultra+ ZS407 - tinySA4_v1.4-..."
     bool has(const QString &cmd) const { return commands.contains(cmd); }
