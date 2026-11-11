@@ -1,0 +1,28 @@
+# Burst on hardware, step 2 of 3 (see hw_gen_burst.txt): the measuring unit M sees the 100 MHz
+# carrier in its max hold and the gaps between the bursts in its min hold (on 1 s of every 2 s).
+# A carrier that never goes off fails the min hold check.
+waitfor connected == 1 10000
+check activity == analyzer
+set stopEdit 101
+set startEdit 99
+set pointsCombo 290
+set rbwCombo 30 kHz
+set attenCombo Auto
+set calcCombo Max hold
+click scanButton
+wait 10000
+click scanButton
+waitfor idle == 1 20000
+dump level@100000000 hwburst_max.txt
+shot hwburst_max.png
+check level@100000000 ~ -40 6
+set calcCombo Min hold
+click scanButton
+wait 10000
+click scanButton
+waitfor idle == 1 20000
+dump level@100000000 hwburst_min.txt
+shot hwburst_min.png
+check level@100000000 < -70
+set calcCombo Normal
+quit

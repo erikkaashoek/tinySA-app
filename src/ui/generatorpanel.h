@@ -26,6 +26,7 @@ public:
 
 signals:
     void edited(const GenConfig &c);
+    void burstTriggered();  // Start burst
 
 protected:
     void keyPressEvent(QKeyEvent *e) override;  // Esc: RF off, also where the window shortcut does not fire
@@ -33,6 +34,7 @@ protected:
 private:
     void edit(const std::function<void(GenConfig &)> &change);
     void editSweep(QLineEdit *e);  // start, stop or span typed
+    void editBurstTime(QLineEdit *e);  // period or ON time typed
     void showSignal(const GenConfig &c, const GenDesc *g);
 
     std::unique_ptr<Ui::GeneratorPanel> ui;

@@ -134,3 +134,28 @@ std::optional<double> parseHz(QString text, double defaultUnitHz)
     // a bare "Hz" suffix means plain hertz
     return v * (text.contains("hz", Qt::CaseInsensitive) ? 1 : defaultUnitHz);
 }
+
+QString formatSeconds(double s)
+{
+    const double a = std::abs(s);
+    if (a >= 1 || a == 0)
+        return QString::number(s, 'g', 6) + " s";
+    if (a >= 1e-3)
+        return QString::number(s * 1e3, 'g', 6) + " ms";
+    return QString::number(s * 1e6, 'g', 6) + QString::fromUtf8(" µs");
+}
+
+std::optional<double> parseSeconds(const QString &text)
+{
+    static const QRegularExpression re(QString::fromUtf8(
+        R"(^\s*([-+]?\d*(?:[.,]\d*)?(?:[eE][-+]?\d+)?)\s*([mun]|\x{00b5}|\x{03bc})?\s*s?\s*$)"));
+    const auto m = re.match(text);
+    if (!m.hasMatch() || m.captured(1).isEmpty() || m.captured(1) == "." || m.captured(1) == ",")
+        return std::nullopt;
+    bool ok = false;
+    const double v = QString(m.captured(1)).replace(',', '.').toDouble(&ok);
+    if (!ok)
+        return std::nullopt;
+    const QString p = m.captured(2);  // divided: "100u" is exactly 100e-6
+    return p == "m" ? v / 1e3 : p == "n" ? v / 1e9 : p.isEmpty() ? v : v / 1e6;  // u, micro sign, mu
+}

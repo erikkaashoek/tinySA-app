@@ -138,6 +138,10 @@ void DeviceLink::handshake()
         if (ok)
             probeGenerator(lines);
     }});
+    // burst modulation (Ultra firmware from v1.4-305): `modulation` alone lists it in its usage
+    enqueue({"modulation", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+        m_info.hasBurst = ok && lines.join(' ').contains("burst");
+    }});
     enqueue({"vbat_offset", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
         bool num = false;
         const int v = lines.value(0).trimmed().toInt(&num);

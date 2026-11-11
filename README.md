@@ -21,7 +21,9 @@ the connected model.
   - Large frequency and level displays: wheel or arrow keys over a digit tune it, or type a value
     such as `433.92M`.
   - An RF on/off button (off whenever the generator is switched on; Esc switches it off).
-  - CW, sweep (frequency and/or level), AM and FM (tinySA basic: AM, NFM, WFM, external).
+  - CW, sweep (frequency and/or level), AM and FM (tinySA basic: AM, NFM, WFM, external), and
+    burst on the tinySA Ultra with firmware v1.4-305 or newer: the output on for an ON time of
+    every period, continuously or a number of bursts per Start burst.
   - The output path: LOW/HIGH port on the basic, accurate or cleanest on the Ultra.
   - External gain.
   The app follows a tinySA that is already generating when it connects, and leaves it

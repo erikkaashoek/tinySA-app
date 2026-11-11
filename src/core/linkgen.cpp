@@ -35,6 +35,13 @@ void DeviceLink::setActivity(int activity)
     pump();
 }
 
+void DeviceLink::triggerBurst()
+{
+    // the settings not sent yet go first (the diff is only made when the queue is empty)
+    if (m_ready && m_activity == Generator && m_gen.type == GenType::Burst)
+        queueChecked(genCommands(m_gen, m_genHave, *m_info.model) + QByteArrayList{"modulation trigger"}, true);
+}
+
 void DeviceLink::pumpGenerator()
 {
     if (m_paused)  // output on/off and frequency changes only take effect in the unit's sweep loop

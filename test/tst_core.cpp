@@ -410,8 +410,9 @@ private slots:
         QCOMPARE(info.hardware, QString("ZS407"));
         QCOMPARE(info.zeroDbm, 174);
         QVERIFY(info.has("scanraw"));
-        QCOMPARE(info.version, QString("tinySA4_v1.4-302-sim"));
+        QCOMPARE(info.version, QString("tinySA4_v1.4-305-sim"));
         QVERIFY(!info.directCommandRace());
+        QVERIFY(info.hasBurst);  // `modulation` lists burst
     }
 
     void singleSweepLandsOnTheGrid()
@@ -727,6 +728,95 @@ private slots:
         QCOMPARE(c.freqHz, 5.327e9);
         QCOMPARE(genCommands(c, h, *d.model),
                  QByteArrayList({"output mixer", "ext_gain 10", "sweep cw 5327000000"}));
+    }
+
+    void burstCommands()
+    {
+        DeviceInfo d = unit("tinySA ULTRA+ ZS407");
+        d.hasBurst = true;
+        AppliedGen h;
+        GenConfig c = carrier(100e6, -40);
+        genCommands(c, h, *d.model);
+        c.type = GenType::Burst;  // the unit's defaults after the mode switch: 1 ms, 100 us, continuous
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"modulation burst"}));
+        c.burstPeriodS = 2e-3;
+        c.burstOnS = 500e-6;
+        c.burstCount = 5;  // counted bursts wait for a trigger (not a setting: not in the diff)
+        QCOMPARE(genCommands(c, h, *d.model),
+                 QByteArrayList({"modulation period 2m", "modulation ontime 500u", "modulation count 5"}));
+        c.burstPeriodS = 2;
+        c.burstOnS = 1.5;
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"modulation period 2", "modulation ontime 1.5"}));
+        c.type = GenType::CW;
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"modulation off"}));
+        forgetGenCommand("modulation trigger", h);  // no setting: nothing to send again
+        QVERIFY(genCommands(c, h, *d.model).isEmpty());
+
+        GenConfig k = c;  // as set_burst_period / set_burst_on_time / set_burst_count
+        k.type = GenType::Burst;
+        k.burstPeriodS = 1e-3;
+        k.burstOnS = 5e-3;
+        k.burstCount = 100000;
+        k = clampGen(k, d);
+        QCOMPARE(k.burstOnS, 1e-3 - 1e-6);
+        QCOMPARE(k.burstCount, 65535);
+        k.burstPeriodS = 1e-7;
+        QCOMPARE(clampGen(k, d).burstPeriodS, 2e-6);
+        d.hasBurst = false;  // firmware before v1.4-305
+        QCOMPARE(clampGen(k, d).type, std::optional(GenType::CW));
+        QVERIFY(burstPossible(k));
+        k.freqHz = 2e9;
+        k.mixer = false;  // the direct path above 1.13 GHz: "MOD: BURST N/A"
+        QVERIFY(!burstPossible(k));
+    }
+
+    void secondsInAndOut()
+    {
+        QCOMPARE(parseSeconds("100u"), std::optional(100e-6));
+        QCOMPARE(parseSeconds(QString::fromUtf8("100 µs")), std::optional(100e-6));
+        QCOMPARE(parseSeconds("1,5m"), std::optional(1.5e-3));
+        QCOMPARE(parseSeconds("2 s"), std::optional(2.0));
+        QCOMPARE(parseSeconds("2"), std::optional(2.0));
+        QVERIFY(!parseSeconds("2 Hz"));
+        QCOMPARE(formatSeconds(100e-6), QString::fromUtf8("100 µs"));
+        QCOMPARE(formatSeconds(1.5e-3), QString("1.5 ms"));
+        QCOMPARE(formatSeconds(89), QString("89 s"));
+        QCOMPARE(parseSeconds(formatSeconds(0.000999)), std::optional(0.000999));
+    }
+
+    void burstDetectedAndTriggered()
+    {
+        for (const char *port : {"sim:ultra:old", "sim:basic"}) {  // no burst there
+            DeviceLink old;
+            QSignalSpy opened(&old, &DeviceLink::opened);
+            old.open(port);
+            QVERIFY(opened.wait(3000));
+            QVERIFY2(!opened.first().first().value<DeviceInfo>().hasBurst, port);
+        }
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        QVERIFY(opened.first().first().value<DeviceInfo>().hasBurst);
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        GenConfig g = carrier(100e6, -50);
+        link.setGenerator(g);
+        link.setActivity(DeviceLink::Generator);
+        link.triggerBurst();  // not bursting: nothing to trigger
+        g.type = GenType::Burst;
+        g.burstPeriodS = 4e-3;
+        g.burstOnS = 1e-3;
+        g.burstCount = 3;
+        link.setGenerator(g);
+        link.triggerBurst();  // after the settings it follows
+        QTRY_COMPARE_WITH_TIMEOUT(sim->burstTriggers(), 1, 3000);
+        QCOMPARE(sim->modulation(), QByteArray("burst"));
+        QCOMPARE(sim->burstPeriod(), 4e-3);
+        QCOMPARE(sim->burstOnTime(), 1e-3);
+        QCOMPARE(sim->burstCount(), 3);
+        const QByteArrayList rx = sim->received();
+        QVERIFY(rx.indexOf("modulation count 3") < rx.indexOf("modulation trigger"));
+        QCOMPARE(rx.count("modulation trigger"), 1);
     }
 
     void lostCommandIsSentAgain()

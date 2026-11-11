@@ -39,6 +39,10 @@ public:
     bool rfOn() const { return m_rfOn; }
     double outputLevel() const { return m_level; }
     QByteArray modulation() const { return m_modulation; }
+    double burstPeriod() const { return m_burstPeriod; }
+    double burstOnTime() const { return m_burstOn; }
+    int burstCount() const { return m_burstCount; }
+    int burstTriggers() const { return m_burstTriggers; }
     int scansWhileGenerating = 0;  // scanraw in output mode: junk, and a hang with modulation
     bool oldFirmware = false;      // v1.4-220 ZS405 (Ultra): the shell hangs on a command sent right
     bool hung() const { return m_hung; }  // after output/modulation/levelchange/ext_gain
@@ -71,6 +75,8 @@ private:
     double m_level = -18.5, m_extGain = 0, m_levelChange = 0, m_sweepTime = 2;
     QByteArray m_modulation = "off";
     int m_modHz = 1000, m_amDepth = 80, m_fmDev = 3000;
+    double m_burstPeriod = 1e-3, m_burstOn = 100e-6;
+    int m_burstCount = 0, m_burstTriggers = 0;
     QElapsedTimer m_directClock;  // old firmware: since the last direct command in output mode
     bool m_hung = false;
 

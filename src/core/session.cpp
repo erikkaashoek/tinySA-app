@@ -99,6 +99,11 @@ void Session::setGenerator(const GenConfig &want)
         emit generatorChanged(m_gen);
 }
 
+void Session::triggerBurst()
+{
+    QMetaObject::invokeMethod(m_link, &DeviceLink::triggerBurst);
+}
+
 void Session::setActivity(int activity)
 {
     if (!m_connected || activity == m_activity)

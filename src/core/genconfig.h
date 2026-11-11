@@ -24,6 +24,9 @@ struct GenConfig {
     int modHz = 1000;             // modulation frequency
     int amDepth = 80;             // Ultra AM, %
     int fmDevHz = 3000;           // Ultra FM deviation
+    double burstPeriodS = 1e-3;   // Burst: on for burstOnS of every period (2 us .. 89 s)
+    double burstOnS = 100e-6;     //   1 us .. period - 1 us
+    int burstCount = 0;           //   0 = continuous, else that many bursts per trigger
     bool operator==(const GenConfig &) const = default;
 };
 Q_DECLARE_METATYPE(GenConfig)
@@ -36,6 +39,8 @@ struct AppliedGen {
     std::optional<std::pair<qint64, qint64>> freq;  // centre, span
     std::optional<QByteArray> modulation;
     std::optional<int> modHz, amDepth, fmDevHz;
+    std::optional<double> burstPeriodS, burstOnS;
+    std::optional<int> burstCount;
 };
 
 struct GenLimits {
@@ -63,5 +68,11 @@ GenConfig adoptUnitGenerator(GenConfig c, const DeviceInfo &d, AppliedGen *have)
 // What the unit's OUTPUT line shows for this setting: "Sine", "Square wave", "Mixer".
 QString outputPathText(const GenConfig &c, const DeviceInfo &d);
 
-QString genTypeName(GenType t);  // "CW", "Sweep", "AM", "FM", "NFM", "WFM", "Ext"
+// The signal types this unit offers: the model's, plus Burst on firmware that has it.
+QVector<GenType> genTypes(const DeviceInfo &d);
+// Burst needs the Si4468 to make the output: up to 1.13 GHz, above it only the mixer path
+// ("MOD: BURST N/A" on the unit with the cleanest, direct path).
+bool burstPossible(const GenConfig &c);
+
+QString genTypeName(GenType t);  // "CW", "Sweep", "AM", "FM", "NFM", "WFM", "Ext", "Burst"
 std::optional<GenType> genTypeFromName(const QString &name);

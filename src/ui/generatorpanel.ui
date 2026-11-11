@@ -422,6 +422,25 @@
          </widget>
         </item>
         <item>
+         <widget class="QToolButton" name="burstButton">
+          <property name="minimumSize">
+           <size>
+            <width>64</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>Burst: the output on for the ON time of every period, continuously or a number of bursts (tinySA Ultra firmware v1.4-305 and newer)</string>
+          </property>
+          <property name="text">
+           <string>Burst</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="typeSpacer">
           <property name="orientation">
            <enum>Qt::Orientation::Horizontal</enum>
@@ -717,6 +736,89 @@
              </size>
             </property>
            </spacer>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="burstPage">
+         <layout class="QGridLayout" name="burstPageLayout" columnstretch="0,1,0,1,0,1,0,2">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>6</number>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="burstPeriodLabel">
+            <property name="text">
+             <string>Period</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="burstPeriodEdit">
+            <property name="toolTip">
+             <string>Time from the start of one burst to the next, 2 µs .. 89 s (e.g. 1m, 500u, 2)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QLabel" name="burstOnLabel">
+            <property name="text">
+             <string>On time</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="3">
+           <widget class="QLineEdit" name="burstOnEdit">
+            <property name="toolTip">
+             <string>How long the output is on in every period, 1 µs .. period - 1 µs (e.g. 100u, 1.5m)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="4">
+           <widget class="QLabel" name="burstCountLabel">
+            <property name="text">
+             <string>Count</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="5">
+           <widget class="QSpinBox" name="burstCountSpin">
+            <property name="toolTip">
+             <string>0: bursts continuously; 1..65535: that many bursts after each Start burst</string>
+            </property>
+            <property name="keyboardTracking">
+             <bool>false</bool>
+            </property>
+            <property name="specialValueText">
+             <string>Continuous</string>
+            </property>
+            <property name="maximum">
+             <number>65535</number>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="6" colspan="2">
+           <widget class="QPushButton" name="burstTriggerButton">
+            <property name="toolTip">
+             <string>Start the counted bursts, or restart the continuous bursts (START BURST on the tinySA)</string>
+            </property>
+            <property name="text">
+             <string>Start burst</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="8">
+           <widget class="QLabel" name="burstInfoLabel"/>
           </item>
          </layout>
         </widget>

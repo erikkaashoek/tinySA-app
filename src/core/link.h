@@ -64,6 +64,7 @@ public slots:
     // GenConfig); Analyzer: back to input mode and the scan mode from before.
     void setActivity(int activity);
     void setGenerator(const GenConfig &g);
+    void triggerBurst();  // Burst: start the counted bursts, or restart the continuous ones
 
 signals:
     void opened(const DeviceInfo &info);

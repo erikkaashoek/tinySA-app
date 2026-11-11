@@ -1,0 +1,41 @@
+# Burst on hardware, step 3 of 3 (see hw_gen_burst.txt): connecting to the bursting unit opens the
+# generator page (signal type unknown); counted bursts with Start burst, the unit's screen, RF off,
+# back to the analyzer.
+waitfor connected == 1 10000
+waitfor activity == generator 5000
+check gen.freq == 100000000
+check gen.type == ?
+check gen.burstbutton == 1
+# the console logs all traffic, with times (dumped at the end)
+set pollCheck 1
+do clearsent
+click burstButton
+set burstPeriodEdit 10m
+set burstOnEdit 2m
+set burstCountSpin 3
+waitfor idle == 1 5000
+check sent contains modulation burst
+check sent contains modulation period 10m
+check sent contains modulation ontime 2m
+check sent contains modulation count 3
+click burstTriggerButton
+waitfor sent contains "modulation trigger" 5000
+click actionScreen
+waitfor screen.width > 0 8000
+wait 1000
+shotw screenWindow hwburst_unit_count.png
+click rfButton
+waitfor sent contains "output off" 5000
+waitfor idle == 1 5000
+check messages !contains refused
+check messages !contains No reply
+do clearsent
+click analyzerButton
+waitfor activity == analyzer
+waitfor sent contains "mode low input" 5000
+set stopEdit 300
+set startEdit 1
+click onceButton
+waitfor sweeps >= 1 20000
+dump console.log hwburst_console.log
+quit

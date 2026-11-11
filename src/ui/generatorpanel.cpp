@@ -24,7 +24,7 @@ GeneratorPanel::GeneratorPanel(QWidget *parent)
         "QPushButton#rfButton[state=\"unknown\"] { background: #b07800; color: white; }"
         "QPushButton#rfButton:disabled { color: palette(mid); background: palette(window); }");
     const QList<QToolButton *> types{ui->cwButton, ui->sweepButton, ui->amButton, ui->fmButton,
-                                     ui->nfmButton, ui->wfmButton, ui->extButton};
+                                     ui->nfmButton, ui->wfmButton, ui->extButton, ui->burstButton};
     for (int i = 0; i < types.size(); ++i)  // in GenType order
         m_types->addButton(types[i], i);
 
@@ -77,7 +77,22 @@ GeneratorPanel::GeneratorPanel(QWidget *parent)
     connect(ui->fmDevSpin, &QDoubleSpinBox::valueChanged, this, [this](double khz) {
         edit([khz](GenConfig &c) { c.fmDevHz = int(std::lround(khz * 1000)); });
     });
+    for (QLineEdit *e : {ui->burstPeriodEdit, ui->burstOnEdit})
+        connect(e, &QLineEdit::editingFinished, this, [this, e] { editBurstTime(e); });
+    connect(ui->burstCountSpin, &QSpinBox::valueChanged, this, [this](int n) {
+        edit([n](GenConfig &c) { c.burstCount = n; });
+    });
+    connect(ui->burstTriggerButton, &QPushButton::clicked, this, &GeneratorPanel::burstTriggered);
     setDevice(nullptr);
+}
+
+void GeneratorPanel::editBurstTime(QLineEdit *e)
+{
+    const auto s = parseSeconds(e->text());
+    if (!s || *s <= 0)
+        return showConfig(m_config);  // revert invalid input
+    // as on the unit: an ON time that does not fit in the period is shortened (clampGen)
+    edit([&](GenConfig &c) { (e == ui->burstPeriodEdit ? c.burstPeriodS : c.burstOnS) = *s; });
 }
 
 GeneratorPanel::~GeneratorPanel() = default;
@@ -140,9 +155,10 @@ void GeneratorPanel::setDevice(const DeviceInfo *d)
                                        "high");
         }
     }
+    const QVector<GenType> offered = genTypes(m_device);  // Burst with firmware that has it
     for (QAbstractButton *b : m_types->buttons()) {
         const GenType t = GenType(m_types->id(b));
-        b->setVisible(g ? g->types.contains(t) : t <= GenType::FM);
+        b->setVisible(g ? offered.contains(t) : t <= GenType::FM);
     }
     QSignalBlocker block(ui->levelChangeSpin);
     const double change = g ? g->maxLevelChange : 90;
@@ -161,7 +177,7 @@ void GeneratorPanel::showConfig(const GenConfig &c)
     const GenLimits l = genLimits(c, m_device);
     const GenDesc *g = m_device.model ? &m_device.model->gen : nullptr;
     const QSignalBlocker b1(ui->levelSlider), b2(ui->extGainSpin), b3(ui->sweepTimeSpin), b4(ui->levelChangeSpin),
-        b5(ui->modRateSpin), b6(ui->amDepthSpin), b7(ui->fmDevSpin), b8(ui->pathCombo);
+        b5(ui->modRateSpin), b6(ui->amDepthSpin), b7(ui->fmDevSpin), b8(ui->pathCombo), b9(ui->burstCountSpin);
 
     ui->freqDisplay->setRange(l.minHz, l.maxHz);
     ui->freqDisplay->setValue(c.freqHz);
@@ -206,7 +222,21 @@ void GeneratorPanel::showSignal(const GenConfig &c, const GenDesc *g)
     ui->signalStack->setCurrentWidget(!c.type ? ui->unknownPage
                                       : t == GenType::CW ? ui->cwPage
                                       : t == GenType::Sweep ? ui->sweepPage
+                                      : t == GenType::Burst ? ui->burstPage
                                                             : ui->modPage);
+    // burst: ON time of every period, continuously or COUNT bursts per Start burst
+    ui->burstPeriodEdit->setText(formatSeconds(c.burstPeriodS));
+    ui->burstOnEdit->setText(formatSeconds(c.burstOnS));
+    ui->burstCountSpin->setValue(c.burstCount);
+    const QString duty = QString::number(100 * c.burstOnS / c.burstPeriodS, 'g', 3);
+    ui->burstInfoLabel->setText(
+        !burstPossible(c) ? QString("<span style=\"color:#d35400\">No burst above 1.13 GHz with Path Cleanest: "
+                                    "choose Accurate</span>")
+        : c.burstCount == 0 ? QString("On %1 of every %2 (%3 %), continuously")
+                                  .arg(formatSeconds(c.burstOnS), formatSeconds(c.burstPeriodS), duty)
+                            : QString("%1 bursts of %2 every %3, after each Start burst")
+                                  .arg(c.burstCount).arg(formatSeconds(c.burstOnS), formatSeconds(c.burstPeriodS)));
+    ui->burstTriggerButton->setText(c.burstCount == 0 ? "Restart burst" : "Start burst");
     // sweep: around the frequency above
     ui->sweepStartEdit->setText(formatMHz(c.freqHz - c.spanHz / 2));
     ui->sweepStopEdit->setText(formatMHz(c.freqHz + c.spanHz / 2));
