@@ -1,3 +1,6 @@
+2.0.0-42 2026-11-11
+- Signal generator: burst modulation for the tinySA Ultra with firmware v1.4-305 or newer (the Burst button only shows with such firmware). The output is on for the ON time of every PERIOD (2 us to 89 s), continuously or COUNT bursts (1 to 65535) after each Start burst. Period and on time take units such as 100u, 1.5m or 2. Above 1.13 GHz burst needs Path Accurate, as on the tinySA
+
 2.0.0-39 2026-11-10
 - Signal generator: the Analyzer | Generator switch at the top of the window turns the tinySA into a signal generator. A generator page replaces the controls and the graph, as the tinySA's own screen does
 - Generator frequency and level in large digits: the mouse wheel or Up/Down over a digit tunes that digit, Left/Right select a digit, or type a value (e.g. 433.92M) and press Enter. The level also has -10, -1, +1 and +10 dB buttons and a slider between the minimum and maximum level of the output
