@@ -14,6 +14,7 @@ DeviceLink::DeviceLink(QObject *parent)
     m_settle.setSingleShot(true);
     connect(&m_settle, &QTimer::timeout, this, &DeviceLink::pump);
     m_trackSettle.setSingleShot(true);
+    m_trackSettle.setTimerType(Qt::PreciseTimer);  // ms waits: not on the Windows tick (15.6 ms)
     connect(&m_trackSettle, &QTimer::timeout, this, &DeviceLink::measureTrackPoint);
     m_touchTimer.setInterval(30);
     connect(&m_touchTimer, &QTimer::timeout, this, [this] {

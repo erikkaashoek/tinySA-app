@@ -177,7 +177,7 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     With the screen off the unit waits in `touch_wait_release()`, and a `scanraw` of ours between
     the two waits for that wait: a deadlock until the 20 s "Command timeout". A finger's release
     comes from the touch hardware and cannot deadlock.
-- Branch `tracking` (2026-11-12): a second tinySA as tracking generator (not committed yet).
+- Branch `tracking` (merged 2026-11-12, release 2.0.0-48): a second tinySA as tracking generator.
   - **Design:** Session owns a second DeviceLink (same thread). The analyzer's link sweeps point
     by point: generator `sweep cw f` (plus `level` at each sweep's first point), settle, then
     `scanraw f f 1`. The analyzer's screen is off while scanning, the generator's the whole time
@@ -214,8 +214,10 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     Screens on (settle 150/300 ms): 51 points in 8.7 s.
   - **Settle (measured in the app, ZS407 generating):** the reply to `sweep cw` comes before the
     new frequency is out. At 0 ms 100 of 101 points missed; 5 ms missed some; 10 ms is fine.
-    The first point in another output path (823 MHz square wave, 1.13 GHz mixer) needs 30 to
-    50 ms; Auto uses 60 ms, also when RF has just gone on. My PowerShell timings had hidden
+    The first point in another output path (823 MHz square wave, 1.13 GHz mixer) needs more:
+    about 32 ms after the prompt for a step across 823 MHz or 1130 MHz (found in a firmware
+    session, 2026-11-12; two points per sweep). Auto uses 32 ms there, also when RF has just
+    gone on. My PowerShell timings had hidden
     ~15 ms of sleep granularity, so 0 ms looked fine there.
   - **Known:**
     - **Narrow RBW (1-3 kHz):** with the frequency corrected, 5-15 % of the points above about
@@ -225,6 +227,17 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
       30 kHz. Probably the generator's mixer path; for the firmware.
     - **ZS405 as generator:** no output above about 1 GHz on v1.4-316 (CW at 1.2/2 GHz:
       nothing within +-100 MHz). The ZS407 as generator is fine.
+  - **Windows timer:** the settle QTimer fired on the 15.6 ms Windows tick: 10 ms became 16-31
+    ms (22 ms on average), so a 101-point sweep took 3.2 s instead of 2.0 s. It was fast only while
+    some other program had raised the timer resolution. While tracking, the link now calls
+    `timeBeginPeriod(1)` and opts out of Windows 11 ignoring it for hidden or minimized windows
+    (`SetProcessInformation`, PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION); both are undone
+    when tracking stops (`DeviceLink::setFineTimer`). PreciseTimer alone did not help.
+    - Measured per point in the app (ZS405 analyzing, ZS407 generating, v1.4-317): generator
+      reply 2.8 ms, settle 10.6 ms, measurement 6.1 ms. 101 points in 2.0 s, three runs alike.
+    - hw_track.txt PASS: every point at 30 kHz within -30.0 to -26.9 dBm (the 847 and 1146 MHz
+      points after a crossing included); 3 kHz still has 3 random dips.
+    - The once-a-second port poll stalls the GUI thread about 150 ms, not the sweep.
   - **Not used: NOISE SOURCE accuracy (`sweep noise`, SWEEP > ACCURACY) and `hop`.** NOISE
     SOURCE stops the in-between measurements, but `scanraw f f 1` measures one point with step
     RBW/2, which is one measurement anyway.

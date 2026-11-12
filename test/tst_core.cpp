@@ -1710,8 +1710,8 @@ private slots:
         QCOMPARE(trackSettleMs(t, false), 150);  // its screen redraws before the frequency changes
         QCOMPARE(trackSettleMs(t, false, TrackChange::RfOn), 300);
         QCOMPARE(trackSettleMs(t, true), 10);
-        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 60);  // into another output path
-        QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 60);
+        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 32);  // across 823 MHz / 1130 MHz
+        QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 32);
         QCOMPARE(trackerPath(ultra, 800e6), 0);
         QCOMPARE(trackerPath(ultra, 900e6), 1);
         QCOMPARE(trackerPath(ultra, 1.2e9), 2);

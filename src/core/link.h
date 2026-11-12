@@ -148,6 +148,7 @@ private:
     void pumpTracking();       // analyzer: the next point of the tracking sweep
     void measureTrackPoint();  // analyzer: after tuning and settle
     void stopTracking(bool rfOff);  // analyzer: no point pending; rfOff: the generator's RF off
+    void setFineTimer(bool on);     // Windows: a 1 ms clock for the settle times (timeBeginPeriod)
     bool trackScreenOff() const;  // generator unit: its screen off while it tracks
     QByteArray uiOffText() const;  // shown with the screen off: "Tracking generator", ...
     bool uiTextDue() const;        // off, but with another text
@@ -195,6 +196,7 @@ private:
     bool m_trackWait = false;    // waiting for the generator unit (reply, settle)
     TrackChange m_trackRestart = TrackChange::None;  // its RF just on or a new level: settle long
     QTimer m_trackSettle;
+    bool m_fineTimer = false;    // timeBeginPeriod(1) in effect
     bool m_isTracker = false;    // generator unit: driven as tracking generator
     bool m_trackRf = false;      //   with RF on
     bool m_trackTouched = false;  //   touched: its screen stays on until the next scan

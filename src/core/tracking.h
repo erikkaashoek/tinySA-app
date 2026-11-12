@@ -34,10 +34,9 @@ int trackerPath(const DeviceInfo &tg, double hz);
 // What changed on the generator unit since the last point.
 enum class TrackChange { None, Path, RfOn };  // a step / into another output path / RF just on
 
-// Auto settle (ZS407 generating, v1.4-316): its reply to `sweep cw` comes a few ms before the
-// new frequency is out. Screen off (`ui`): 10 ms (at 5 ms some points miss), 60 ms into
-// another output path or with RF just on (needs 30 to 50 ms). Screen on: 150 ms, the unit
-// redraws its menu first; 300 ms with RF just on (150 ms missed that point).
+// Auto settle after the generator's prompt (ZS407, v1.4-316/317): screen off (`ui`) 10 ms, 32 ms
+// after a step across 823 MHz or 1130 MHz (another output path; two points per sweep) or with
+// RF just on. Screen on: 150 ms, the unit redraws its menu first; 300 ms with RF just on.
 int trackSettleMs(const TrackConfig &t, bool screenOff, TrackChange change = TrackChange::None);
 
 // What the generator unit makes as tracking generator: a carrier at hz, levelDbm, RF on/off.

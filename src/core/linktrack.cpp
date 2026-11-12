@@ -6,6 +6,10 @@
 #include "link.h"
 #include <algorithm>
 #include <cmath>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <timeapi.h>
+#endif
 
 void DeviceLink::setTracker(DeviceLink *tg)
 {
@@ -53,8 +57,33 @@ bool DeviceLink::tracking() const
     return m_tg && m_track.on && m_tg->m_ready;
 }
 
+// Windows ticks every 15.6 ms unless a process asks for a finer clock: a 10 ms settle then took
+// 16 to 31 ms (22 ms on average, 101 points 3.2 instead of 2.0 s). 1 ms while tracking, also
+// with the window hidden or minimized (Windows 11 ignores the request then, unless told not to).
+void DeviceLink::setFineTimer(bool on)
+{
+    if (on == m_fineTimer)
+        return;
+    m_fineTimer = on;
+#ifdef Q_OS_WIN
+#ifndef PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+#define PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION 0x4
+#endif
+    PROCESS_POWER_THROTTLING_STATE state{};
+    state.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+    state.ControlMask = on ? PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION : 0;  // 0: the system's
+    state.StateMask = 0;                                                           // honour it
+    SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof(state));
+    if (on)
+        timeBeginPeriod(1);
+    else
+        timeEndPeriod(1);
+#endif
+}
+
 void DeviceLink::stopTracking(bool rfOff)
 {
+    setFineTimer(false);
     m_trackNext = -1;
     m_trackWait = false;
     m_trackRestart = TrackChange::None;
@@ -71,6 +100,7 @@ void DeviceLink::stopTracking(bool rfOff)
 
 void DeviceLink::pumpTracking()
 {
+    setFineTimer(true);  // the settle times are a few ms
     if (!m_trackAligned)
         return pumpAlign();
     const ScanGrid &g = m_want.grid;

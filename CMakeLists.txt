@@ -42,6 +42,9 @@ qt_add_library(tinysa_core STATIC
 )
 target_include_directories(tinysa_core PUBLIC src/core)
 target_link_libraries(tinysa_core PUBLIC Qt6::Core Qt6::Gui Qt6::SerialPort)
+if(WIN32)
+    target_link_libraries(tinysa_core PUBLIC winmm)  # timeBeginPeriod: 1 ms settle times while tracking
+endif()
 
 # --- DFU firmware upload: DfuSe protocol + Windows USB transports ---
 add_library(tinysa_dfu STATIC

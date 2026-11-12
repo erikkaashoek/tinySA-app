@@ -87,7 +87,7 @@
          <item>
           <widget class="QSpinBox" name="trackSettleSpin">
            <property name="toolTip">
-            <string>Wait between tuning the tracking generator and measuring. Auto: 10 ms when its screen is off (tinySA Ultra firmware with `ui`), 60 ms where its output changes path (823 MHz, 1.13 GHz), 150 ms with its screen on</string>
+            <string>Wait between tuning the tracking generator and measuring. Auto: 10 ms when its screen is off (tinySA Ultra firmware with `ui`), 32 ms after a step across 823 MHz or 1130 MHz, 150 ms with its screen on</string>
            </property>
            <property name="specialValueText">
             <string>Auto</string>

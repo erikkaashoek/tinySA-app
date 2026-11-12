@@ -56,7 +56,7 @@ int trackSettleMs(const TrackConfig &t, bool screenOff, TrackChange change)
         return t.settleMs;
     if (!screenOff)
         return change == TrackChange::RfOn ? 300 : 150;
-    return change == TrackChange::None ? 10 : 60;
+    return change == TrackChange::None ? 10 : 32;
 }
 
 GenConfig trackerGen(GenConfig g, const DeviceInfo &tg, double hz, double levelDbm, bool rf)
