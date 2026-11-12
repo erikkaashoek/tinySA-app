@@ -151,6 +151,8 @@ void DeviceLink::handshake()
     enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {
         m_want = clampConfig(m_want, *m_info.model);
         m_gen = clampGen(m_gen, m_info);
+        if (m_info.has("ui"))  // left off by an app that did not close properly (no-op when on)
+            m_queue.prepend({"ui on"});
         m_ready = true;
         m_batteryDue = true;
         emit opened(m_info);
@@ -188,6 +190,8 @@ void DeviceLink::shutdown(const QString &reason)
                 io->write("abort\r");
             if (m_remote)
                 io->write("refresh off\r");
+            if (m_uiOff && m_ready)
+                io->write("ui on\r");
             if (m_paused && m_ready)
                 io->write("resume\r");
             if (sp)
@@ -199,7 +203,7 @@ void DeviceLink::shutdown(const QString &reason)
     m_queue.clear();
     m_cur.reset();
     m_rx.reset();
-    m_ready = m_paused = m_draining = m_remote = false;
+    m_ready = m_paused = m_draining = m_remote = m_uiOff = false;
     m_touchTimer.stop();
     m_pendingTouch.clear();
     if (m_mode != Off) {
@@ -239,12 +243,22 @@ void DeviceLink::setMode(int mode)
             m_io->write("abort\r");
         }
         dropQueued("pause");
+        dropQueued("ui off");
+        if (m_uiOff)  // the unit's screen and its own sweeping back
+            enqueue({"ui on"});
         if (m_paused)
             enqueue({"resume"});
     } else {
         dropQueued("resume");  // scanning again before the resume went out
+        dropQueued("ui on");
     }
     pump();
+}
+
+void DeviceLink::setScreenOffWhileScanning(bool on)
+{
+    m_screenOffWanted = on;
+    pump();  // while scanning: switched at once, between two sweeps
 }
 
 void DeviceLink::send(const QString &command)
@@ -406,6 +420,10 @@ void DeviceLink::pumpStep()
         return;
     if (!m_paused)  // the unit's own sweeping would compete with scanraw
         return enqueue({"pause"});
+    // screen off: no redraw after every command (firmware with `ui`, tinySA Ultra v1.4-314)
+    const bool uiOff = m_screenOffWanted && m_info.has("ui");
+    if (uiOff != m_uiOff)
+        return enqueue({uiOff ? "ui off" : "ui on"});
     const QByteArrayList cmds = configCommands(m_want, m_have, *m_info.model);
     if (!cmds.isEmpty())
         return queueChecked(cmds);
@@ -466,6 +484,8 @@ void DeviceLink::transmit(Cmd c)
     m_sentClock.start();
     if (c.line == "pause" || c.line == "resume")  // the unit's state from now on
         m_paused = c.line == "pause";
+    if (c.line == "ui off" || c.line == "ui on")
+        m_uiOff = c.line == "ui off";
     if (c.body != RxParser::Body::ScanRaw)
         emit traffic(true, QString::fromLatin1(c.line), c.user);
     m_timeout.start(c.timeoutMs);
@@ -497,6 +517,16 @@ void DeviceLink::handle(const RxEvent &e)
         m_echoSeen = true;
         break;
     case RxEvent::Line:
+        // "ui on" that is no reply to our own ui command: a touch or the jog on the unit gave
+        // its screen back, the user takes over (as a touch that ends a scan)
+        if (e.data == "ui on" && m_uiOff && !(m_cur && m_cur->line.startsWith("ui"))) {
+            m_uiOff = false;
+            m_queue.removeIf([](const Cmd &c) { return c.line == "ui on"; });
+            if (m_mode != Off) {
+                emit message("Scan stopped on the tinySA");
+                setMode(Off);
+            }
+        }
         emit traffic(false, QString::fromLatin1(e.data), m_cur && m_cur->user && m_echoSeen);
         if (m_cur && m_echoSeen)
             m_lines << QString::fromLatin1(e.data);

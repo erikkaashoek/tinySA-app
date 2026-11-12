@@ -1,0 +1,46 @@
+# Screen off while scanning (simulated Ultra with firmware v1.4-314): `ui off` after `pause`
+# before the first scan, `ui on` before `resume` when it stops; the setting in Settings >
+# Device; a touch on the unit gives its screen back and stops the scan; the basic (no `ui`)
+# never gets the command.
+#   del test\out\uioff.ini & tinySA-App.exe --sim --ini test\out\uioff.ini --script test\uioff.txt --out test\out\uioff
+do connect sim:ultra
+waitfor connected == 1
+do clearsent
+click onceButton
+waitfor sweeps >= 1
+waitfor idle == 1
+check sent contains pause|ui off|
+check sent contains ui on|resume
+# switched off in the settings: the screen stays on
+click actionSettings
+check @screenOffCheck == 1
+set screenOffCheck 0
+click settingsOk
+do clearsent
+click onceButton
+waitfor sweeps >= 2
+waitfor idle == 1
+check sent !contains "ui "
+# on again; while scanning, a touch on the unit gives its screen back and stops the scan
+click actionSettings
+set screenOffCheck 1
+click settingsOk
+do clearsent
+click scanButton
+waitfor sent contains "ui off"
+waitfor sweeps >= 3
+do touch
+waitfor scan == 0
+check messages contains Scan stopped on the tinySA
+waitfor idle == 1
+# the basic has no `ui`
+click connectButton
+waitfor connected == 0
+do connect sim:basic
+waitfor connected == 1
+do clearsent
+click onceButton
+waitfor sweeps >= 4
+waitfor idle == 1
+check sent !contains "ui "
+quit

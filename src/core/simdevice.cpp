@@ -191,11 +191,15 @@ double SimTransport::levelAt(double hz, double rbwHz) const
 
 void SimTransport::touchScreen()
 {
-    if (!m_scan)
-        return;
-    m_scan.reset();
-    m_timer.stop();
-    out("}");  // aborted scanraw: no prompt
+    if (m_scan) {
+        m_scan.reset();
+        m_timer.stop();
+        out("}");  // aborted scanraw: no prompt
+    }
+    if (m_uiOff) {  // ui_process(): the touch only gives the screen back, and says so
+        m_uiOff = false;
+        out("ui on\r\n");
+    }
     processInput();
 }
 
@@ -264,7 +268,8 @@ void SimTransport::execute(const QByteArray &line)
     }
     if (oldFirmware && m_outMode && QByteArrayList{"output", "modulation", "levelchange", "ext_gain"}.contains(cmd))
         m_directClock.start();
-    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-305-sim";
+    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-314-sim";
+    const bool uiCommand = ultra && !oldFirmware;  // `ui off|on` (v1.4-314)
     if (cmd == "version") {
         out(version + "\r\n" + (!ultra ? "" : oldFirmware ? "HW Version:V0.4.5.1.1\r\n" : "HW Version:V0.5.4 max2871\r\n"));
     } else if (cmd == "info") {
@@ -273,7 +278,17 @@ void SimTransport::execute(const QByteArray &line)
             "SW licensed under GPL. See: https://github.com/erikkaashoek/tinySA\r\n");
         out("Version: " + version + "\r\n");
     } else if (cmd == "help") {
-        out(ultra ? kHelpUltra : kHelpBasic);
+        QByteArray help = ultra ? kHelpUltra : kHelpBasic;
+        if (uiCommand)
+            help.replace("threshold\r\n", "threshold ui\r\n");
+        out(help);
+    } else if (cmd == "ui" && uiCommand) {
+        if (a1.isEmpty())
+            out(m_uiOff ? "ui off\r\n" : "ui on\r\n");
+        else if (a1 == "off" || a1 == "on")
+            m_uiOff = a1 == "off";
+        else
+            out("usage: ui off|on\r\n");
     } else if (cmd == "zero") {
         out(ultra ? "usage: zero {level}\r\n174dBm\r\n" : "usage: zero {level}\r\n128dBm\r\n");
     } else if (cmd == "sweep") {

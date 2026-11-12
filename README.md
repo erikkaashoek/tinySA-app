@@ -6,7 +6,10 @@ recognised from its `info` reply, so the controls always match
 the connected model.
 
 ## Features
-- Live spectrum over USB with the firmware's `scanraw`, on the exact frequency grid of the unit
+- Live spectrum over USB with the firmware's `scanraw`, on the exact frequency grid of the unit;
+  with tinySA Ultra firmware v1.4-314 or newer the tinySA's screen is switched off while
+  scanning, which gives up to 50 % more sweeps per second (Settings > Device; touch the tinySA
+  to get its screen back)
 - Start/stop/center/span, points (51–30000), RBW, attenuation, LNA (Ultra), LOW/HIGH input (basic),
   or take over the range set on the tinySA itself
 - Max/min hold, averaging over 2–64 sweeps (with a sweep counter and a restart button),

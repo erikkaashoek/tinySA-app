@@ -65,6 +65,10 @@ public slots:
     void setActivity(int activity);
     void setGenerator(const GenConfig &g);
     void triggerBurst();  // Burst: start the counted bursts, or restart the continuous ones
+    // Firmware with `ui off` (tinySA Ultra from v1.4-314): the unit's screen is off while we
+    // scan, so its commands do not wait for screen redraws. A touch on the unit gives it back
+    // ("ui on" on the console) and stops our scanning.
+    void setScreenOffWhileScanning(bool on);
 
 signals:
     void opened(const DeviceInfo &info);
@@ -136,6 +140,8 @@ private:
     int m_modeBeforeGen = Off;
     int m_mode = Off;
     bool m_paused = false;    // unit paused by us: set when pause/resume is transmitted
+    bool m_uiOff = false;     // unit's screen off by us: set when ui off/on is transmitted
+    bool m_screenOffWanted = true;
     bool m_aborting = false;  // we sent abort for the scan in flight
     bool m_busy = false, m_batteryDue = false;
     SweepFrame m_frame;

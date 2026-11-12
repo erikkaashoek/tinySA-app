@@ -99,6 +99,11 @@ void Session::setGenerator(const GenConfig &want)
         emit generatorChanged(m_gen);
 }
 
+void Session::setScreenOffWhileScanning(bool on)
+{
+    QMetaObject::invokeMethod(m_link, [l = m_link, on] { l->setScreenOffWhileScanning(on); });
+}
+
 void Session::triggerBurst()
 {
     QMetaObject::invokeMethod(m_link, &DeviceLink::triggerBurst);

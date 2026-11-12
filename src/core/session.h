@@ -26,6 +26,7 @@ public:
     GenConfig generator() const { return m_gen; }
     void setGenerator(const GenConfig &g);  // clamped to the connected unit
     void triggerBurst();                    // Burst: start the counted bursts / restart continuous
+    void setScreenOffWhileScanning(bool on);  // firmware with `ui off`: faster scans
     int scanMode() const { return m_scan; }
     bool isBusy() const { return m_busy; }  // commands in flight or queued
     void setScan(int mode);                // DeviceLink::Off / Once / Continuous
