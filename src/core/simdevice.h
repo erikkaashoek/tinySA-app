@@ -17,7 +17,15 @@ public:
     struct Carrier { double hz, dBm; };
 
     explicit SimTransport(Kind kind, QObject *parent = nullptr);
+    ~SimTransport() override;
     bool isSequential() const override { return true; }
+
+    // Bench: the input cabled to the outputs of the other simulated units (a tracking
+    // generator), directly or through a 5th-order Butterworth low-pass at 150 MHz; no antenna
+    // carriers then. None: the antenna (the carriers below).
+    enum class Dut { None, Thru, LowPass };
+    Dut dut = Dut::None;
+    static double dutGainDb(Dut d, double hz);
     qint64 bytesAvailable() const override { return m_out.size() + QIODevice::bytesAvailable(); }
 
     static QVector<Carrier> carriers();
@@ -26,6 +34,8 @@ public:
     // test hooks
     void touchScreen();                       // abort a running scanraw like a touch; screen off: back on
     bool uiOff() const { return m_uiOff; }    // `ui off` (Ultra v1.4-314)
+    QByteArray uiText() const { return m_uiText; }  // `ui off "text"` (v1.4-317)
+    bool uiWithText = true;                   // false: v1.4-314..316, ui off|on only
     QByteArrayList received() const { return m_received; }
     QByteArray pendingInput() const { return m_in; }  // written but not yet read by the shell
     double pointsPerSecond = 20000;
@@ -39,6 +49,8 @@ public:
     bool generating() const { return m_outMode; }
     bool rfOn() const { return m_rfOn; }
     double outputLevel() const { return m_level; }
+    double outputHz() const { return m_sweepStart * (1 + ppb * 1e-9); }  // CW, with its crystal's error
+    double ppb = 0;  // reference error: what it generates is off by this (a real unit: some 100 ppb)
     QByteArray modulation() const { return m_modulation; }
     double burstPeriod() const { return m_burstPeriod; }
     double burstOnTime() const { return m_burstOn; }
@@ -53,6 +65,7 @@ protected:
     qint64 writeData(const char *data, qint64 len) override;
 
 private:
+    static QList<SimTransport *> &bench();
     void out(const QByteArray &bytes);
     void processInput();
     void execute(const QByteArray &line);
@@ -81,6 +94,7 @@ private:
     QElapsedTimer m_directClock;  // old firmware: since the last direct command in output mode
     bool m_hung = false;
     bool m_uiOff = false;
+    QByteArray m_uiText;
 
     struct Scan { qint64 start, stop; int points, next; };
     std::optional<Scan> m_scan;

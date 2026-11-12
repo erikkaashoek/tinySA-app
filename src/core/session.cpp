@@ -1,13 +1,40 @@
 #include "session.h"
 
-Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink)
+Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink), m_trackerLink(new DeviceLink)
 {
     qRegisterMetaType<SweepFrame>();
     qRegisterMetaType<SweepConfig>();
     qRegisterMetaType<DeviceInfo>();
     qRegisterMetaType<GenConfig>();
+    qRegisterMetaType<TrackConfig>();
     m_link->moveToThread(&m_thread);
+    m_trackerLink->moveToThread(&m_thread);
     connect(&m_thread, &QThread::finished, m_link, &QObject::deleteLater);
+    connect(&m_thread, &QThread::finished, m_trackerLink, &QObject::deleteLater);
+    m_link->setTracker(m_trackerLink);  // the thread does not run yet
+    connect(m_trackerLink, &DeviceLink::opened, this, [this](const DeviceInfo &info) {
+        m_trackerInfo = info;
+        m_trackerConnected = true;
+        m_trackerPpb.reset();
+        emit trackerConnected(info);
+        setTrack(m_track);    // its level limits
+        setConfig(m_config);  // its frequency range
+    });
+    connect(m_trackerLink, &DeviceLink::closed, this, [this](const QString &reason) {
+        m_trackerConnected = false;
+        m_trackerPpb.reset();
+        emit trackerDisconnected(reason);
+    });
+    connect(m_link, &DeviceLink::trackerAligned, this, [this](double ppb, bool measured) {
+        m_trackerPpb = measured ? std::optional<double>(ppb) : std::nullopt;
+        emit trackerAligned();
+    });
+    connect(m_trackerLink, &DeviceLink::message, this, [this](const QString &text) {
+        emit message("Tracking generator: " + text);
+    });
+    connect(m_trackerLink, &DeviceLink::traffic, this, [this](bool sent, const QString &text) {
+        emit trackerTraffic(sent, text);
+    });
 
     connect(m_link, &DeviceLink::opened, this, [this](const DeviceInfo &info) {
         m_info = info;
@@ -60,14 +87,20 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink)
 
 Session::~Session()
 {
-    // close synchronously so the unit gets its `resume` before the app exits
+    // close synchronously so the unit gets its `resume` before the app exits (the tracking
+    // generator its `output off`)
     QMetaObject::invokeMethod(m_link, &DeviceLink::close, Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(m_trackerLink, &DeviceLink::close, Qt::BlockingQueuedConnection);
     m_thread.quit();
     m_thread.wait();
 }
 
 void Session::connectDevice(const QString &port)
 {
+    if (m_trackerConnected && port == m_trackerInfo.port) {
+        emit disconnected(port + " is the tracking generator");
+        return;
+    }
     QMetaObject::invokeMethod(m_link, [l = m_link, port] { l->open(port); });
 }
 
@@ -76,9 +109,37 @@ void Session::disconnectDevice()
     QMetaObject::invokeMethod(m_link, &DeviceLink::close);
 }
 
+void Session::connectTracker(const QString &port)
+{
+    if (m_connected && port == m_info.port) {
+        emit trackerDisconnected(port + " is the analyzer");
+        return;
+    }
+    QMetaObject::invokeMethod(m_trackerLink, [l = m_trackerLink, port] { l->open(port); });
+}
+
+void Session::disconnectTracker()
+{
+    QMetaObject::invokeMethod(m_trackerLink, &DeviceLink::close);
+}
+
+void Session::setTrack(const TrackConfig &t)
+{
+    const TrackConfig clamped = m_trackerInfo.model ? clampTrack(t, m_trackerInfo) : t;
+    const bool changed = !(clamped == m_track), switched = clamped.on != m_track.on;
+    m_track = clamped;
+    QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setTracking(clamped); });
+    if (changed || !(clamped == t))
+        emit trackChanged(m_track);
+    if (switched)
+        setConfig(m_config);  // tracking: the range inside the generator's
+}
+
 void Session::setConfig(const SweepConfig &c)
 {
-    const SweepConfig clamped = m_info.model ? clampConfig(c, *m_info.model) : c;
+    const SweepConfig clamped = !m_info.model ? c
+                                : isTracking() ? clampToTracker(c, *m_info.model, m_trackerInfo)
+                                               : clampConfig(c, *m_info.model);
     const bool changed = !(clamped == m_config);
     m_config = clamped;
     QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setConfig(clamped); });
@@ -102,6 +163,7 @@ void Session::setGenerator(const GenConfig &want)
 void Session::setScreenOffWhileScanning(bool on)
 {
     QMetaObject::invokeMethod(m_link, [l = m_link, on] { l->setScreenOffWhileScanning(on); });
+    QMetaObject::invokeMethod(m_trackerLink, [l = m_trackerLink, on] { l->setScreenOffWhileScanning(on); });
 }
 
 void Session::triggerBurst()

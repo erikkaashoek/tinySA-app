@@ -164,9 +164,81 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     - ZS407 with 101 points: 43 against 28 (238 / 359 ms).
     - The unit shows "Remote only mode"; a remote touch stopped the scan.
     - The basic (v1.4-311, no `ui`) never got the command, and its sweep rate was unchanged.
-  - **Still in the firmware:** with the screen off, `scanraw` over 1–301 MHz at RBW auto costs
-    about 210 ms whatever the points (11: 214 ms, 101: 216, 450: 278). That is the point-0 setup:
-    `scanraw` ends with `dirty = true`.
+  - **v1.4-316 (f2fc331, `scanraw` no longer sets `dirty`):** scanning with the screen on is now
+    as fast as with it off (ZS407 450 points 37 against 38 sweeps in 10 s, 101 points 42 against
+    43; ZS405 31 against 31). The screen-off rate is unchanged, so on the Ultra the gain is for
+    screen-on scanning; the basic also saves its 80 ms re-setup.
+  - **Measurement time, not overhead:** the time per sweep is now the measurement. A `scanraw` of
+    11 points over 1 or 10 MHz takes 30 ms (RBW auto, USB included). Over 300 MHz it takes about
+    215 ms whatever the points, because steps wider than the RBW are sub-stepped (about span ÷
+    RBW measurements, RBW auto at most 850 kHz); 10 MHz at a fixed 100 kHz RBW takes 246 ms.
+    (Not a point-0 setup, as first assumed.)
+  - **Remote touch in scripts:** queue `touch` and `release` together (`do send touch x y|release`).
+    With the screen off the unit waits in `touch_wait_release()`, and a `scanraw` of ours between
+    the two waits for that wait: a deadlock until the 20 s "Command timeout". A finger's release
+    comes from the touch hardware and cannot deadlock.
+- Branch `tracking` (2026-11-12): a second tinySA as tracking generator (not committed yet).
+  - **Design:** Session owns a second DeviceLink (same thread). The analyzer's link sweeps point
+    by point: generator `sweep cw f` (plus `level` at each sweep's first point), settle, then
+    `scanraw f f 1`. The analyzer's screen is off while scanning, the generator's the whole time
+    (`ui`). The generator's RF is on only while scanning. linktrack.cpp, tracking.h.
+  - **Screen texts (firmware v1.4-317, 7ea5749: `ui off "text"`, a line under "Remote only
+    mode"):** the generator unit `ui off "Tracking generator"`; the analyzer
+    `ui off "Spectrum analyzer"` while a generator unit is connected, otherwise `ui off ""`
+    (clears an earlier text). The text changes while the screen is off when the generator
+    comes or goes. Older firmware answers with its usage: the link then sends a plain `ui off`.
+    Verified on hardware (both Ultras on v1.4-317): the analyzer's capture shows the line. The
+    script runner strips quotes from values: check `contains Spectrum analyzer`.
+  - **Generator unit:** gets `ui off` and then output mode when it connects, RF off. Its screen
+    stays off until it is disconnected (goodbye: `output off`, `ui on`) or touched. A touch stops
+    the scan and leaves its screen on until the next scan. Losing it stops the scan.
+  - **Output frequency step (ZS407, screen off, `sweep cw` from sending to the prompt, 29.9 MHz
+    steps 10 MHz-3 GHz):** 95 of 100 steps 5-10 ms (typically 8.6 ms), mean 8.9 ms. The steps
+    to 877 MHz and 1176 MHz took 28 ms; a few others 11-15 ms.
+  - **Range and level:** the sweep is clamped to the generator's LOW output (Ultra: mixer path
+    limits). The level is clamped to its limits.
+  - **RBW:** auto means 30 kHz while tracking. The firmware's auto RBW for a single point
+    misreads around 3 GHz (ZS405: -66.9 against -30.4 dBm with 30 or 3 kHz).
+  - **Frequency error:** measured once per connection of the generator unit, at 3 GHz (0.9 x the
+    common top, at most 3 GHz; the sweep's top as fallback). Coarse scan (3 kHz RBW), then fine
+    (1 kHz RBW, 100 Hz steps), interpolated peak. Every generator frequency is set to
+    f / (1 + ppb 1e-9). Not with the firmware's `freq_correction`: it saves the unit's config.
+    The ppb is shown next to the unit.
+  - **UI:** "Tracking generator" group on the analyzer page (port, Connect, unit + top
+    frequency + ppb, Track, level). Settings > Device: settle time (Auto). ini tracker/*.
+  - **Tests:** tst_core TstTracking (12). Sim bench: `sim:ultra:thru` / `:lpf` (150 MHz
+    5th-order low-pass) sees the other sim unit's output; `:ppb=N` gives a generator error.
+    test/track.txt. Full regression PASS. The sim's noise is now 0.05 dB 40 dB above the floor.
+  - **Hardware (hw_track.txt; ZS405 analyzer COM12, ZS407 generator COM21, RF to RF, -30 dBm):**
+    PASS. Measured -433 to -450 ppb. 101 points over 10 MHz-3 GHz in 2.1 s, -30.0 to -27.2 dBm.
+    Screens on (settle 150/300 ms): 51 points in 8.7 s.
+  - **Settle (measured in the app, ZS407 generating):** the reply to `sweep cw` comes before the
+    new frequency is out. At 0 ms 100 of 101 points missed; 5 ms missed some; 10 ms is fine.
+    The first point in another output path (823 MHz square wave, 1.13 GHz mixer) needs 30 to
+    50 ms; Auto uses 60 ms, also when RF has just gone on. My PowerShell timings had hidden
+    ~15 ms of sleep granularity, so 0 ms looked fine there.
+  - **Known:**
+    - **Narrow RBW (1-3 kHz):** with the frequency corrected, 5-15 % of the points above about
+      1.1 GHz read about 10 dB low, at random frequencies. Correcting on the analyzer side
+      instead does the same, spur removal off too. With round generator frequencies and no
+      correction there are none (but the offset costs 20 dB at 3 GHz with 1 kHz). No dips at
+      30 kHz. Probably the generator's mixer path; for the firmware.
+    - **ZS405 as generator:** no output above about 1 GHz on v1.4-316 (CW at 1.2/2 GHz:
+      nothing within +-100 MHz). The ZS407 as generator is fine.
+  - **Not used: NOISE SOURCE accuracy (`sweep noise`, SWEEP > ACCURACY) and `hop`.** NOISE
+    SOURCE stops the in-between measurements, but `scanraw f f 1` measures one point with step
+    RBW/2, which is one measurement anyway.
+    - Measured on the ZS405 with a new frequency each time: 30 kHz 5.89 against 5.87 ms per
+      point, 3 kHz 8.73 against 8.71 ms.
+    - At a fixed 3 GHz: `hop` is slower (auto 6.2, 30 kHz 7.8, 3 kHz 13.0 ms against 5.0 / 6.1
+      / 8.2 ms).
+    - RBW auto reads 6 dB low at 3 GHz in both modes (-37 against -31.5 dBm with 30 kHz).
+    - A point costs: generator reply (~5 ms) + settle (10 ms) + measurement (~6 ms).
+  - **Firmware notes:**
+    - `scanraw` with a huge step: `vbwSteps` (uint16) up to 65535 sub-steps in one
+      `perform()`, which `abort` cannot interrupt.
+    - `scanraw f f 1` (v1.4-316) measures one point as in a sweep, step RBW/2 (300 kHz with
+      auto). Before v1.4-316 it is zero span: basic 150 ms per point.
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -217,13 +289,14 @@ build a release from a clean, committed tree.
 | src/core/sweepconfig.h | `SweepConfig` value + `configCommands()` diff vs `AppliedConfig`, `clampConfig()` |
 | src/core/genconfig.h | `GenConfig` (generator) + `genCommands()` diff vs `AppliedGen` in firmware order, `clampGen()`/`genLimits()` (Ultra limits per ZS405/406/407), `adoptUnitGenerator()`, `outputPathText()` |
 | src/core/link.h | `DeviceLink` (own thread): handshake, 1 command in flight, per-sweep scanraw loop, battery poll, timeouts/resync, `SweepFrame`; linkgen.cpp = analyzer/generator activity, GenConfig diff, mode probe + follow |
-| src/core/simdevice.h | `SimTransport` QIODevice: firmware-exact simulated tinySA (carriers 100/250/433.92/868 MHz, 2.4/5.8 GHz) |
+| src/core/tracking.h | `TrackConfig` (tracking generator), range/level clamps, settle rules, `trackerPath`; linktrack.cpp = the point-by-point sweep + the generator's ppb measurement |
+| src/core/simdevice.h | `SimTransport` QIODevice: firmware-exact simulated tinySA (carriers 100/250/433.92/868 MHz, 2.4/5.8 GHz; bench: `:thru`/`:lpf` input sees the other sim units' output) |
 | src/core/session.h | GUI-thread facade owning the link thread; the only API controllers use |
 | src/core/appsettings.h | `AppSettings` (+ `ViewSettings`, `Theme`): every persistent setting listed once in `visit()` |
 | src/core/traces.h | `Trace` (grid + dBm, interpolating `at()`), `TraceSet`: average/hold/memories/normalisation |
 | src/core/csvio.h | trace CSV write/read (separator + decimal detection), `SweepRecorder` |
 | src/core/markers.h | `MarkerSet` (normal/delta, readings at nearest point), `tracePeak`/`interpolatePeak` (parabolic) |
-| src/ui/mainwindow.* | main window: Designer form + controller (wiring, device, config); mainfiles.cpp = traces/memories/files; maintest.cpp = TestHost; maingenerator.cpp = mode switch + generator page wiring |
+| src/ui/mainwindow.* | main window: Designer form + controller (wiring, device, config); mainfiles.cpp = traces/memories/files; maintest.cpp = TestHost; maingenerator.cpp = mode switch + generator page wiring; maintracking.cpp = tracking generator group |
 | src/ui/generatorpanel.* | generator page (own .ui, promoted into the main window's `modeStack`): shows a GenConfig, emits edits |
 | src/ui/digitedit.* | big-digit number editor (wheel/keys per digit, inline typed entry) for frequency and level |
 | src/ui/spectrumview.* | `SpectrumView` (QCustomPlot subclass, promoted in the .ui): traces, levels, hover, menu, image; spectrummouse.cpp = mouse/wheel/keys; `SiTicker` |

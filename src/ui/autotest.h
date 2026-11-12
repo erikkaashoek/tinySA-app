@@ -13,7 +13,8 @@
 //                                 <value> is one word: quote it if it has spaces ("output off")
 //   check <query> <op> <value> [tolerance]   ops: == != contains !contains < <= > >= ~
 //                                 (~ uses tolerance); for == != (!)contains the value is the rest of the line
-//   do <action> [args...]         host action, e.g. "do connect sim:ultra"
+//   do <action> [args...]         host action, e.g. "do connect sim:ultra"; "do send a|b" queues
+//                                 the commands a and b together
 //   shot <file.png>               grab the main window into the out dir
 //   shotw <widget> <file.png>     grab one widget
 //   dump <query> <file>           write a query result (e.g. trace CSV) into the out dir

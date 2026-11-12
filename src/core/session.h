@@ -27,6 +27,17 @@ public:
     void setGenerator(const GenConfig &g);  // clamped to the connected unit
     void triggerBurst();                    // Burst: start the counted bursts / restart continuous
     void setScreenOffWhileScanning(bool on);  // firmware with `ui off`: faster scans
+    // Tracking generator: a second tinySA (its own port) whose output follows the sweep.
+    void connectTracker(const QString &port);
+    void disconnectTracker();
+    bool isTrackerConnected() const { return m_trackerConnected; }
+    const DeviceInfo &tracker() const { return m_trackerInfo; }
+    TrackConfig track() const { return m_track; }
+    void setTrack(const TrackConfig &t);  // clamped to the generator unit; the sweep range too
+    bool isTracking() const { return m_track.on && m_trackerConnected; }
+    // its frequency error against the analyzer, corrected on every point; nullopt = not
+    // measured yet (at the first tracking sweep) or no signal to measure
+    std::optional<double> trackerPpb() const { return m_trackerPpb; }
     int scanMode() const { return m_scan; }
     bool isBusy() const { return m_busy; }  // commands in flight or queued
     void setScan(int mode);                // DeviceLink::Off / Once / Continuous
@@ -46,6 +57,11 @@ signals:
     void configChanged(const SweepConfig &c);
     void activityChanged(int activity);
     void generatorChanged(const GenConfig &g);
+    void trackerConnected(const DeviceInfo &info);
+    void trackerDisconnected(const QString &reason);
+    void trackChanged(const TrackConfig &t);
+    void trackerTraffic(bool sent, const QString &text);
+    void trackerAligned();  // trackerPpb() measured
     void frame(const SweepFrame &f);
     void scanChanged(int mode);
     void busyChanged(bool busy);
@@ -58,8 +74,11 @@ signals:
 private:
     QThread m_thread;
     DeviceLink *m_link;
-    DeviceInfo m_info;
-    bool m_connected = false;
+    DeviceLink *m_trackerLink;  // the tracking generator's unit, same thread
+    DeviceInfo m_info, m_trackerInfo;
+    bool m_connected = false, m_trackerConnected = false;
+    TrackConfig m_track;
+    std::optional<double> m_trackerPpb;
     SweepConfig m_config;
     int m_activity = DeviceLink::Analyzer;
     GenConfig m_gen;

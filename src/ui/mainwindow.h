@@ -73,6 +73,10 @@ private:
     void showActivity(int activity);    // analyzer or generator page, toolbar, status bar
     void showGeneratorStatus();
     void escape();                      // Esc: stop scanning, or RF off when generating
+    void setupTracking();               // tracking generator group (maintracking.cpp)
+    void showTrack(const TrackConfig &t);
+    void showTrackerLabel();
+    void connectTrackerTo(const QString &port);
     void applyAppearance();  // theme to the graphs, colour scheme to the application
     void error(const QString &what);
 
@@ -97,5 +101,6 @@ private:
     QElapsedTimer m_cycle;
     double m_cycleMs = 0, m_sweepMs = 0;  // last sweep-to-sweep time, last sweep duration
     QStringList m_sent;      // commands sent to the unit (console + tests)
+    QStringList m_trackerSent;  // commands sent to the tracking generator (tests)
     QStringList m_messages;  // status messages from the session (tests)
 };

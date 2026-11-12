@@ -35,6 +35,26 @@ SimTransport::SimTransport(Kind kind, QObject *parent)
         }
     m_pushTimer.setInterval(100);
     connect(&m_pushTimer, &QTimer::timeout, this, &SimTransport::pushTick);
+    bench().append(this);
+}
+
+SimTransport::~SimTransport()
+{
+    bench().removeAll(this);
+}
+
+// every simulated unit; one thread (the links' thread, or the test's)
+QList<SimTransport *> &SimTransport::bench()
+{
+    static QList<SimTransport *> units;
+    return units;
+}
+
+double SimTransport::dutGainDb(Dut d, double hz)
+{
+    if (d != Dut::LowPass)
+        return 0;
+    return -10 * std::log10(1 + std::pow(hz / 150e6, 10));  // |H|^2 = 1 / (1 + (f/fc)^2n), n = 5
 }
 
 // DiSlord's packbits() (NanoVNA-D common.c), byte for byte.
@@ -179,7 +199,15 @@ double SimTransport::levelAt(double hz, double rbwHz) const
     const double floorDbm = (m_kind == Kind::Ultra ? -105 : -100) + std::max(m_atten, 0);
     double mw = std::pow(10.0, floorDbm / 10);
     const double half = std::max(rbwHz, 100.0) / 2;
-    for (const Carrier &c : carriers()) {
+    QVector<Carrier> in;
+    if (dut == Dut::None) {
+        in = carriers();
+    } else {  // cabled: what the other units generate, through the DUT
+        for (const SimTransport *u : bench())
+            if (u != this && u->m_outMode && u->m_rfOn)
+                in.append({u->outputHz(), u->m_level + dutGainDb(dut, u->outputHz())});
+    }
+    for (const Carrier &c : in) {
         if (m_kind == Kind::Basic && c.hz > 960e6)
             continue;
         const double x = (hz - c.hz) / half;
@@ -268,8 +296,8 @@ void SimTransport::execute(const QByteArray &line)
     }
     if (oldFirmware && m_outMode && QByteArrayList{"output", "modulation", "levelchange", "ext_gain"}.contains(cmd))
         m_directClock.start();
-    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-314-sim";
-    const bool uiCommand = ultra && !oldFirmware;  // `ui off|on` (v1.4-314)
+    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-317-sim";
+    const bool uiCommand = ultra && !oldFirmware;  // `ui off|on` (v1.4-314), `ui off "text"` (v1.4-317)
     if (cmd == "version") {
         out(version + "\r\n" + (!ultra ? "" : oldFirmware ? "HW Version:V0.4.5.1.1\r\n" : "HW Version:V0.5.4 max2871\r\n"));
     } else if (cmd == "info") {
@@ -283,12 +311,19 @@ void SimTransport::execute(const QByteArray &line)
             help.replace("threshold\r\n", "threshold ui\r\n");
         out(help);
     } else if (cmd == "ui" && uiCommand) {
-        if (a1.isEmpty())
+        const int quote = line.indexOf('"');  // ui off "text": up to the next quote (parse_line)
+        if (a1.isEmpty()) {
             out(m_uiOff ? "ui off\r\n" : "ui on\r\n");
-        else if (a1 == "off" || a1 == "on")
-            m_uiOff = a1 == "off";
-        else
-            out("usage: ui off|on\r\n");
+        } else if (a1 == "off" && quote > 0 && uiWithText) {
+            m_uiOff = true;
+            m_uiText = line.mid(quote + 1);
+            if (const int end = int(m_uiText.indexOf('"')); end >= 0)
+                m_uiText.truncate(end);
+        } else if ((a1 == "off" || a1 == "on") && tok.size() == 2) {
+            m_uiOff = a1 == "off";  // a plain ui off keeps the text
+        } else {
+            out(uiWithText ? "usage: ui [off [\"text\"]|on]\r\n" : "usage: ui off|on\r\n");
+        }
     } else if (cmd == "zero") {
         out(ultra ? "usage: zero {level}\r\n174dBm\r\n" : "usage: zero {level}\r\n128dBm\r\n");
     } else if (cmd == "sweep") {
@@ -483,16 +518,21 @@ void SimTransport::scanTick()
     Scan &s = *m_scan;
     const int due = std::min<int>(s.points, int(m_clock.elapsed() * pointsPerSecond / 1000) + 1);
     const double step = double(s.stop - s.start) / s.points;  // as firmware: /points
-    const double rbw = m_rbwKHz > 0 ? m_rbwKHz * 1e3 : std::max(step * 1.5, 1e3);
+    // one point at one frequency (`scanraw f f 1`): measured as a sweep point with a 300 kHz
+    // step when the RBW is auto (v1.4-316)
+    const double autoStep = step == 0 && s.points == 1 ? 300e3 : step;
+    const double rbw = m_rbwKHz > 0 ? m_rbwKHz * 1e3 : std::max(autoStep * 1.5, 1e3);
     const int zero = m_kind == Kind::Ultra ? 174 : 128;
     while (s.next + 20 <= due || (s.next < due && due == s.points)) {
         QByteArray chunk = s.next == 0 ? "{" : "";
         for (int k = 0; k < 20 && s.next < due; ++k, ++s.next) {
             const double hz = s.start + step * s.next;
-            // deterministic +-1.5 dB noise, different every sweep
+            // deterministic +-1.5 dB noise at the noise floor, different every sweep; a signal
+            // well above it is steady (0.05 dB 40 dB up)
             const unsigned h = (unsigned(s.next) * 2654435761u) ^ (m_sweeps * 40503u);
-            const double noise = ((h >> 8) % 3000) / 1000.0 - 1.5;
-            const int v = int(std::lround((levelAt(hz, rbw) + noise + zero) * 32));
+            const double level = levelAt(hz, rbw), floor = (m_kind == Kind::Ultra ? -105 : -100) + std::max(m_atten, 0);
+            const double noise = (((h >> 8) % 3000) / 1000.0 - 1.5) * std::clamp(1 - (level - floor) / 40, 0.03, 1.0);
+            const int v = int(std::lround((level + noise + zero) * 32));
             chunk += 'x';
             chunk += char(v & 0xff);
             chunk += char((v >> 8) & 0xff);

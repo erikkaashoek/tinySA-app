@@ -4,6 +4,7 @@
 #include "csvio.h"
 #include "genconfig.h"
 #include "sweepconfig.h"
+#include "tracking.h"
 #include <QColor>
 #include <QString>
 #include <QStringList>
@@ -62,6 +63,8 @@ struct AppSettings {
     int colorScheme = 0;          // application: 0 system, 1 light, 2 dark
     bool screenInvert = false;    // screen window: inverted colours (printer friendly)
     bool screenOffScanning = true;  // the tinySA's screen off while scanning (firmware with `ui off`)
+    TrackConfig track;            // tracking generator
+    QString trackerPort;          // its last connected port
 
     template <class V> void visit(V &&v)
     {
@@ -74,6 +77,10 @@ struct AppSettings {
         v("device/high_input", m_highInput);
         v("device/port", port);
         v("device/screen_off_scanning", screenOffScanning);
+        v("tracker/port", trackerPort);
+        v("tracker/on", track.on);
+        v("tracker/level_dbm", track.levelDbm);
+        v("tracker/settle_ms", track.settleMs);
         v("generator/high_output", m_genHigh);
         v("generator/mixer", gen.mixer);
         v("generator/freq_hz", gen.freqHz);

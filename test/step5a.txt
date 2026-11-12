@@ -4,7 +4,7 @@ do connect sim:ultra
 waitfor connected == 1
 click actionConsole
 set commandEdit version
-waitfor console.log contains tinySA4_v1.4-314-sim 3000
+waitfor console.log contains tinySA4_v1.4-317-sim 3000
 check console.log contains > version
 # the app's own traffic (sweep settings, battery polls) is hidden unless asked for
 check console.log !contains vbat

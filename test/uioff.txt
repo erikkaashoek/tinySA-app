@@ -9,7 +9,7 @@ do clearsent
 click onceButton
 waitfor sweeps >= 1
 waitfor idle == 1
-check sent contains pause|ui off|
+check sent contains pause|ui off
 check sent contains ui on|resume
 # switched off in the settings: the screen stays on
 click actionSettings

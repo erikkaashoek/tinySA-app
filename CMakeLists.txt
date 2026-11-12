@@ -32,6 +32,8 @@ qt_add_library(tinysa_core STATIC
     src/core/simdevice.cpp
     src/core/link.cpp
     src/core/linkgen.cpp
+    src/core/linktrack.cpp
+    src/core/tracking.cpp
     src/core/session.cpp
     src/core/appsettings.cpp
     src/core/traces.cpp
@@ -75,6 +77,7 @@ qt_add_executable(tinySA-App WIN32
     src/ui/mainmarkers.cpp
     src/ui/maintools.cpp
     src/ui/maingenerator.cpp
+    src/ui/maintracking.cpp
     src/ui/generatorpanel.cpp
     src/ui/generatorpanel.ui
     src/ui/digitedit.cpp

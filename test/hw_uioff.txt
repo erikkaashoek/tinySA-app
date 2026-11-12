@@ -42,15 +42,17 @@ dump sweeps.new sweeps_on.txt
 dump cyclems cycle_on.txt
 dump sweepms sweepms_on.txt
 check sent !contains "ui "
-# a touch on the unit (here a remote touch + release) gives its screen back and stops the scan
+# a touch on the unit (here a remote touch + release) gives its screen back and stops the scan.
+# Both queued together: with the screen off the unit waits in touch_wait_release() for the
+# release, and a scanraw of ours between them would wait for that wait (a deadlock until the
+# shell's 20 s "Command timeout"; a finger's release comes from the touch hardware instead).
 click actionSettings
 set screenOffCheck 1
 click settingsOk
 do clearsent
 click scanButton
 wait 2000
-do send touch 240 160
-do send release
+do send touch 240 160|release
 waitfor scan == 0 10000
 check messages contains Scan stopped on the tinySA
 waitfor idle == 1 10000

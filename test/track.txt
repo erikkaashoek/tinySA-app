@@ -1,0 +1,72 @@
+# Tracking generator with two simulated units: the analyzer's input cabled through a 150 MHz
+# low-pass (5th order) to the generator unit's output.
+#   build\tinySA-App.exe --sim --script test\track.txt --out test\out --ini test\out\track.ini
+do connect sim:ultra:lpf
+waitfor connected == 1 5000
+check tracker.connected == 0
+check tracking == 0
+set startEdit 10
+set stopEdit 300
+set pointsCombo 51
+# the generator unit: output mode, RF off until the analyzer scans
+do trackerconnect sim:ultra
+waitfor tracker.connected == 1 5000
+check tracker.model == tinySA Ultra+
+check @trackerLabel contains tinySA Ultra+ ZS407
+waitfor tracker.sent contains "mode low output" 3000
+check tracker.sent !contains "output on"
+# its screen off from the start, and it stays off
+check tracker.sent contains "ui off"
+check tracker.sent !contains "ui on"
+set trackLevelSpin -30
+set trackCheck 1
+waitfor tracking == 1 2000
+check track.level == -30.0
+do clearsent
+click onceButton
+waitfor idle == 1 15000
+check points == 51
+check level@50000000 ~ -30 2
+check level@150000000 ~ -33 2
+check level@300000000 ~ -60.1 2.5
+check tracker.sent contains "sweep cw 300000000"
+check tracker.sent contains "output on"
+check tracker.sent contains "output off"
+check tracker.sent !contains "ui"
+check sent contains "ui off"
+shot track_lpf.png
+# level edit while scanning
+click scanButton
+waitfor sweeps.new >= 1 15000
+set trackLevelSpin -40
+do mark
+waitfor sweeps.new >= 2 20000
+check level@50000000 ~ -40 2
+click scanButton
+waitfor idle == 1 10000
+# a tinySA basic as generator: its LOW output ends at 350 MHz, the sweep with it
+click trackerConnectButton
+waitfor tracker.connected == 0 3000
+check tracking == 0
+set stopEdit 500
+check stop == 500000000
+do clearsent
+do trackerconnect sim:basic
+waitfor tracker.connected == 1 5000
+check tracking == 1
+check stop == 350000000
+check tracker.sent !contains "ui off"
+click onceButton
+waitfor idle == 1 30000
+check level@50000000 ~ -40 2
+check level@300000000 ~ -70.1 2.5
+shot track_basic.png
+# Track off: an ordinary sweep with the generator's RF off (nothing in the input)
+set trackCheck 0
+check tracking == 0
+do clearsent
+click onceButton
+waitfor idle == 1 5000
+check level@50000000 < -90
+check tracker.sent !contains "sweep cw"
+quit

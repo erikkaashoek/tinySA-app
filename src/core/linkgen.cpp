@@ -46,9 +46,46 @@ void DeviceLink::pumpGenerator()
 {
     if (m_paused)  // output on/off and frequency changes only take effect in the unit's sweep loop
         return enqueue({"resume"});
+    // tracking generator: its screen off before anything else (no command waits for a redraw),
+    // on again when touched or no longer wanted
+    if (trackScreenOff() && (!m_uiOff || uiTextDue()))
+        return enqueue(uiCommand(true));
     const QByteArrayList cmds = genCommands(m_gen, m_genHave, *m_info.model);
     if (!cmds.isEmpty())
-        queueChecked(cmds, true);
+        return queueChecked(cmds, true);
+    if (!trackScreenOff() && m_uiOff)
+        enqueue(uiCommand(false));
+}
+
+// The text under the "Remote only mode" message (firmware from v1.4-317): which tinySA is
+// which when two work together
+QByteArray DeviceLink::uiOffText() const
+{
+    if (m_isTracker)
+        return "Tracking generator";
+    return m_tg && m_tg->m_ready ? "Spectrum analyzer" : "";  // "": an earlier text goes
+}
+
+bool DeviceLink::uiTextDue() const
+{
+    return m_uiOff && m_uiTextOk && m_uiText != uiOffText();
+}
+
+DeviceLink::Cmd DeviceLink::uiCommand(bool off)
+{
+    if (!off)
+        return {"ui on"};
+    if (!m_uiTextOk)
+        return {"ui off"};
+    Cmd c{"ui off \"" + uiOffText() + "\""};
+    c.done = [this](bool, const QStringList &lines) {
+        if (!lines.join(' ').contains("usage"))
+            return;
+        m_uiTextOk = false;  // firmware before v1.4-317 (ui off|on): its screen stayed on
+        m_uiOff = false;
+        pump();              // plain ui off
+    };
+    return c;
 }
 
 // "usage: sweeptime 0.003..60\r\n 2.003s" -> 2.003; the unit prints SI prefixes (500m).
