@@ -1,3 +1,11 @@
+2.0.0-48 2026-11-12
+- Tracking generator: a second tinySA, connected in the new "Tracking generator" group, generates while this one analyses, for the frequency response of filters, amplifiers and cables. Every point is measured with the generator set to that frequency. Track switches it on, Level sets the generator's output level. Normalize with a cable in place of the device under test shows the response relative to the cable
+- The tracking generator's frequency error against the analyzer is measured once at 3 GHz and corrected (shown in ppb next to its name), so narrow RBWs can be used. RBW Auto means 30 kHz while tracking. The sweep range and the level are limited to what the generator can do
+- A tracking sweep of 101 points from 10 MHz to 3 GHz takes about 2 s with two tinySA Ultra. Settings > Device: settle time of the tracking generator (Auto: 10 ms, 32 ms where its output changes path at 823 MHz and 1130 MHz, 150 ms with its screen on)
+- The tracking generator's screen stays off while it is connected. Touching it gives the screen back and stops the scan. With tinySA Ultra firmware v1.4-317 or newer the screens show "Tracking generator" and "Spectrum analyzer"
+- The tinySA's screen is turned off while the app scans (tinySA Ultra firmware v1.4-314 or newer), so commands no longer wait for screen redraws. Touching the tinySA gives the screen back and stops the scan. Settings > Device > "Turn the tinySA screen off while scanning (faster)"
+- Known: with a tracking generator at RBW 1 to 3 kHz, some points above about 1.1 GHz can read about 10 dB low
+
 2.0.0-42 2026-11-11
 - Signal generator: burst modulation for the tinySA Ultra with firmware v1.4-305 or newer (the Burst button only shows with such firmware). The output is on for the ON time of every PERIOD (2 us to 89 s), continuously or COUNT bursts (1 to 65535) after each Start burst. Period and on time take units such as 100u, 1.5m or 2. Above 1.13 GHz burst needs Path Accurate, as on the tinySA
 
