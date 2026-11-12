@@ -24,7 +24,8 @@ public:
     double levelAt(double hz, double rbwHz) const;  // noiseless model value
 
     // test hooks
-    void touchScreen();                       // abort a running scanraw like a touch
+    void touchScreen();                       // abort a running scanraw like a touch; screen off: back on
+    bool uiOff() const { return m_uiOff; }    // `ui off` (Ultra v1.4-314)
     QByteArrayList received() const { return m_received; }
     QByteArray pendingInput() const { return m_in; }  // written but not yet read by the shell
     double pointsPerSecond = 20000;
@@ -79,6 +80,7 @@ private:
     int m_burstCount = 0, m_burstTriggers = 0;
     QElapsedTimer m_directClock;  // old firmware: since the last direct command in output mode
     bool m_hung = false;
+    bool m_uiOff = false;
 
     struct Scan { qint64 start, stop; int points, next; };
     std::optional<Scan> m_scan;

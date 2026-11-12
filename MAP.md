@@ -143,6 +143,30 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   - **Firmware display race (v1.4-305):** `output on` right after `modulation burst` sometimes
     leaves "LOW OUTPUT OFF" on the unit's screen (3 of 4 fast sequences, never with AM). The
     mute flag is on: the next menu redraw shows ON.
+- Branch `ui-off` (2026-11-12): the tinySA's screen is off while the app scans (firmware with
+  `ui`, tinySA Ultra from v1.4-314), so commands no longer wait for screen redraws.
+  - **When:** the link sends `ui off` after `pause` and before the first scan, and `ui on` before
+    `resume` when scanning stops. Remote control and the generator stop the scan first, so they
+    get `ui on` too.
+  - **Disconnect and connect:** disconnecting writes `ui on` with the goodbye commands, and the
+    handshake sends `ui on` in case an earlier app died with the screen off.
+  - **Which units:** only those whose `help` lists `ui`.
+  - **Touch:** the unit's own "ui on" line (touch or jog while off), when it is no reply to our
+    command, stops the scan with "Scan stopped on the tinySA".
+  - **Setting:** Settings > Device "Turn the tinySA screen off while scanning (faster)", ini
+    device/screen_off_scanning, on by default; a change applies between two sweeps.
+  - **Tests:** tst_core screenOffWhileScanning, touchGivesTheScreenBack,
+    closingWhileScanningGivesTheScreenBack; sim uioff.txt (the default sim Ultra is v1.4-314
+    with `ui`); full regression PASS.
+  - **Hardware (hw_uioff.txt, 1–300 MHz, 450 points, RBW auto, 10 s each):**
+    - ZS407: 38 sweeps with the screen off against 26 on (270 / 391 ms per sweep).
+    - ZS405: 31 against 23 (329 / 451 ms).
+    - ZS407 with 101 points: 43 against 28 (238 / 359 ms).
+    - The unit shows "Remote only mode"; a remote touch stopped the scan.
+    - The basic (v1.4-311, no `ui`) never got the command, and its sweep rate was unchanged.
+  - **Still in the firmware:** with the screen off, `scanraw` over 1–301 MHz at RBW auto costs
+    about 210 ms whatever the points (11: 214 ms, 101: 216, 450: 278). That is the point-0 setup:
+    `scanraw` ends with `dirty = true`.
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -271,6 +295,15 @@ build a release from a clean, committed tree.
     - With count > 0 the output waits for `trigger`, and every settings change re-arms it. A
       wait-mutex command stops the bursts while it runs.
     - No burst on the direct path above 1.13 GHz ("MOD: BURST N/A").
+  - **`ui off|on` (Ultra, v1.4-314, firmware a092e6b):**
+    - While off nothing draws, and the screen shows "Remote only mode. Touch screen to enable
+      UI". `ui` alone prints "ui on|off".
+    - A touch or jog gives the UI back without acting on the screen, and prints an unsolicited
+      "ui on"; during a `scanraw` the touch also ends it with an early `}`.
+    - Unplugging USB and the commands that need the user (`selftest`, `touchcal`, `touchtest`,
+      `menu`) also give it back. Not stored; it survives mode changes.
+    - A remote `touch` + `release` wakes it like a finger (the firmware waits in
+      `touch_wait_release()` until the release, so send the two back to back).
   - **Old firmware:** before v1.4-266, a wait-mutex command right after one of the direct
     commands `output`, `modulation`, `levelchange` or `ext_gain` can lose its request in
     output mode. That hangs until "Command timeout" on v1.4-252..265, and for good before

@@ -46,6 +46,7 @@ void MainWindow::setupTools()
     connect(m_settingsDialog, &QDialog::accepted, this, [this] {
         m_settingsDialog->store(m_settings);
         applyAppearance();
+        m_session.setScreenOffWhileScanning(m_settings.screenOffScanning);
     });
     connect(m_settingsDialog, &SettingsDialog::commandRequested, &m_session, &Session::send);
 

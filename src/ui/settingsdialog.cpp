@@ -85,6 +85,7 @@ void SettingsDialog::load(const AppSettings &s, const DeviceInfo &info, bool con
     ui->csvSeparatorCombo->setCurrentIndex(s.csv.separator == ',' ? 1 : s.csv.separator == '\t' ? 2 : 0);
     ui->decimalCommaCheck->setChecked(s.csv.decimalComma);
     ui->mhzCsvCheck->setChecked(s.csv.mhz);
+    ui->screenOffCheck->setChecked(s.screenOffScanning);
 }
 
 void SettingsDialog::store(AppSettings &s) const
@@ -97,6 +98,7 @@ void SettingsDialog::store(AppSettings &s) const
     s.csv.separator = QList<QChar>{';', ',', '\t'}.value(ui->csvSeparatorCombo->currentIndex(), ';');
     s.csv.decimalComma = ui->decimalCommaCheck->isChecked();
     s.csv.mhz = ui->mhzCsvCheck->isChecked();
+    s.screenOffScanning = ui->screenOffCheck->isChecked();
 }
 
 void SettingsDialog::showTheme()

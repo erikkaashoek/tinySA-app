@@ -66,6 +66,16 @@
         </layout>
        </item>
        <item>
+        <widget class="QCheckBox" name="screenOffCheck">
+         <property name="toolTip">
+          <string>The tinySA then does not redraw its screen after every command, which makes scanning faster. Touch the tinySA to get its screen back (this stops the scan). Needs tinySA Ultra firmware v1.4-314 or newer.</string>
+         </property>
+         <property name="text">
+          <string>Turn the tinySA screen off while scanning (faster)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="deviceButtons">
          <item>
           <widget class="QPushButton" name="setTimeButton">

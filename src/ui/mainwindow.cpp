@@ -177,6 +177,7 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
         if (QFile::exists(memoryFile(m)))
             loadMemory(m, memoryFile(m));
     applyModel(nullptr);
+    m_session.setScreenOffWhileScanning(m_settings.screenOffScanning);
     m_session.setConfig(m_settings.config);
     showConfig(m_session.config());
     onScanChanged(DeviceLink::Off);

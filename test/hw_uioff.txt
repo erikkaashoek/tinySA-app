@@ -1,0 +1,59 @@
+# Screen off while scanning on hardware (tinySA Ultra with firmware v1.4-314 or newer):
+# 10 s of scanning with the screen off, then 10 s with it on (sweep counts, sweep-to-sweep and
+# scan times dumped); the unit's screen captured while off; a remote touch while scanning gives
+# the screen back and stops the scan. A unit without `ui` (basic) must never get the command.
+#   tinySA-App.exe --port COMx --ini test\out\hwui.ini --script test\hw_uioff.txt --out test\out\hwuioff
+waitfor connected == 1 10000
+check activity == analyzer
+set stopEdit 300
+set startEdit 1
+set pointsCombo 450
+set rbwCombo Auto
+click actionSettings
+set screenOffCheck 1
+click settingsOk
+# screen off
+do clearsent
+do mark
+click scanButton
+wait 3000
+click actionScreen
+waitfor screen.width > 0 8000
+wait 1000
+shotw screenWindow hwuioff_unit.png
+wait 6000
+click scanButton
+waitfor idle == 1 10000
+dump sweeps.new sweeps_off.txt
+dump cyclems cycle_off.txt
+dump sweepms sweepms_off.txt
+dump sent sent_off.txt
+# screen on
+click actionSettings
+set screenOffCheck 0
+click settingsOk
+do clearsent
+do mark
+click scanButton
+wait 10000
+click scanButton
+waitfor idle == 1 10000
+dump sweeps.new sweeps_on.txt
+dump cyclems cycle_on.txt
+dump sweepms sweepms_on.txt
+check sent !contains "ui "
+# a touch on the unit (here a remote touch + release) gives its screen back and stops the scan
+click actionSettings
+set screenOffCheck 1
+click settingsOk
+do clearsent
+click scanButton
+wait 2000
+do send touch 240 160
+do send release
+waitfor scan == 0 10000
+check messages contains Scan stopped on the tinySA
+waitfor idle == 1 10000
+dump sent sent_touch.txt
+check messages !contains No reply
+quit

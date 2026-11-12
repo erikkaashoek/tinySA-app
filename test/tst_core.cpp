@@ -410,7 +410,8 @@ private slots:
         QCOMPARE(info.hardware, QString("ZS407"));
         QCOMPARE(info.zeroDbm, 174);
         QVERIFY(info.has("scanraw"));
-        QCOMPARE(info.version, QString("tinySA4_v1.4-305-sim"));
+        QCOMPARE(info.version, QString("tinySA4_v1.4-314-sim"));
+        QVERIFY(info.has("ui"));  // screen off while scanning
         QVERIFY(!info.directCommandRace());
         QVERIFY(info.hasBurst);  // `modulation` lists burst
     }
@@ -442,6 +443,76 @@ private slots:
         QVERIFY(rx.indexOf("pause") < scanAt);
         QVERIFY(rx.indexOf("rbw auto") < scanAt);
         QVERIFY(rx.indexOf("resume") > scanAt);
+        QVERIFY(!rx.contains("ui off"));  // the basic has no `ui`
+    }
+
+    void screenOffWhileScanning()
+    {
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), frames(&link, &DeviceLink::frame);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        link.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), 3000);
+        QVERIFY(sim->uiOff());
+        QByteArrayList rx = sim->received();
+        const auto firstScan = std::find_if(rx.begin(), rx.end(), [](const QByteArray &l) { return l.startsWith("scanraw"); });
+        QVERIFY(rx.indexOf("pause") < rx.indexOf("ui off"));
+        QVERIFY(rx.indexOf("ui off") < int(firstScan - rx.begin()));
+        link.setScreenOffWhileScanning(false);  // switched between two sweeps
+        QTRY_VERIFY_WITH_TIMEOUT(!sim->uiOff(), 3000);
+        link.setScreenOffWhileScanning(true);
+        QTRY_VERIFY_WITH_TIMEOUT(sim->uiOff(), 3000);
+        link.setScan(DeviceLink::Off);  // the screen back, then the unit's own sweeping
+        QTRY_VERIFY_WITH_TIMEOUT(!sim->received().isEmpty() && sim->received().last() == "resume", 3000);
+        QVERIFY(!sim->uiOff());
+        rx = sim->received();
+        QVERIFY(rx.lastIndexOf("ui on") < rx.lastIndexOf("resume"));
+    }
+
+    void touchGivesTheScreenBack()
+    {
+        // between two sweeps a touch only gives the screen back; its "ui on" stops our scanning
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), scan(&link, &DeviceLink::scanChanged),
+            msg(&link, &DeviceLink::message);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        bool touched = false;
+        connect(&link, &DeviceLink::frame, this, [&](const SweepFrame &f) {
+            if (f.complete && !touched) {  // the sim finished the scan already: no scan to abort
+                touched = true;
+                QVERIFY(sim->uiOff());
+                sim->touchScreen();
+            }
+        });
+        link.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(touched && scan.last().first().toInt() == DeviceLink::Off, 3000);
+        QVERIFY(msg.size() >= 1);
+        QCOMPARE(msg.last().first().toString(), QString("Scan stopped on the tinySA"));
+        QVERIFY(!sim->uiOff());
+        QTest::qWait(300);
+        QCOMPARE(sim->received().count("ui on"), 1);  // the handshake's; the unit is on already
+    }
+
+    void closingWhileScanningGivesTheScreenBack()
+    {
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), frames(&link, &DeviceLink::frame);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        QPointer<SimTransport> sim = qobject_cast<SimTransport *>(link.transport());
+        sim->pointsPerSecond = 500;
+        SweepConfig c;
+        c.grid = {1e6, 300e6, 3000};
+        link.setConfig(c);
+        link.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), 3000);  // a long scan in flight
+        link.close();
+        QVERIFY(sim);
+        QCOMPARE(sim->pendingInput(), QByteArray("abort\rui on\rresume\r"));
     }
 
     void touchOnTheUnitStopsScanning()
