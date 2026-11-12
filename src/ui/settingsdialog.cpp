@@ -86,6 +86,7 @@ void SettingsDialog::load(const AppSettings &s, const DeviceInfo &info, bool con
     ui->decimalCommaCheck->setChecked(s.csv.decimalComma);
     ui->mhzCsvCheck->setChecked(s.csv.mhz);
     ui->screenOffCheck->setChecked(s.screenOffScanning);
+    ui->trackSettleSpin->setValue(s.track.settleMs);
 }
 
 void SettingsDialog::store(AppSettings &s) const
@@ -99,6 +100,7 @@ void SettingsDialog::store(AppSettings &s) const
     s.csv.decimalComma = ui->decimalCommaCheck->isChecked();
     s.csv.mhz = ui->mhzCsvCheck->isChecked();
     s.screenOffScanning = ui->screenOffCheck->isChecked();
+    s.track.settleMs = ui->trackSettleSpin->value();
 }
 
 void SettingsDialog::showTheme()

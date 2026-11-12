@@ -40,6 +40,7 @@ void MainWindow::setupTools()
 
     m_settingsDialog = new SettingsDialog(this);
     connect(ui->actionSettings, &QAction::triggered, this, [this] {
+        m_settings.track = m_session.track();
         m_settingsDialog->load(m_settings, m_session.device(), m_session.isConnected());
         m_settingsDialog->open();
     });
@@ -47,6 +48,9 @@ void MainWindow::setupTools()
         m_settingsDialog->store(m_settings);
         applyAppearance();
         m_session.setScreenOffWhileScanning(m_settings.screenOffScanning);
+        TrackConfig t = m_session.track();
+        t.settleMs = m_settings.track.settleMs;
+        m_session.setTrack(t);
     });
     connect(m_settingsDialog, &SettingsDialog::commandRequested, &m_session, &Session::send);
 

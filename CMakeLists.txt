@@ -32,6 +32,8 @@ qt_add_library(tinysa_core STATIC
     src/core/simdevice.cpp
     src/core/link.cpp
     src/core/linkgen.cpp
+    src/core/linktrack.cpp
+    src/core/tracking.cpp
     src/core/session.cpp
     src/core/appsettings.cpp
     src/core/traces.cpp
@@ -40,6 +42,9 @@ qt_add_library(tinysa_core STATIC
 )
 target_include_directories(tinysa_core PUBLIC src/core)
 target_link_libraries(tinysa_core PUBLIC Qt6::Core Qt6::Gui Qt6::SerialPort)
+if(WIN32)
+    target_link_libraries(tinysa_core PUBLIC winmm)  # timeBeginPeriod: 1 ms settle times while tracking
+endif()
 
 # --- DFU firmware upload: DfuSe protocol + Windows USB transports ---
 add_library(tinysa_dfu STATIC
@@ -75,6 +80,7 @@ qt_add_executable(tinySA-App WIN32
     src/ui/mainmarkers.cpp
     src/ui/maintools.cpp
     src/ui/maingenerator.cpp
+    src/ui/maintracking.cpp
     src/ui/generatorpanel.cpp
     src/ui/generatorpanel.ui
     src/ui/digitedit.cpp

@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QMenu>
 #include <QRegularExpression>
+#include <QSerialPortInfo>
 #include <QTimer>
 #include <cmath>
 
@@ -52,6 +53,12 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
             return std::any_of(edits.begin(), edits.end(), [](DigitEdit *d) { return d->isEditing(); }) ? "1" : "0";
         }
     }
+    if (name == "tracker.connected") return m_session.isTrackerConnected() ? "1" : "0";
+    if (name == "tracker.model") return m_session.tracker().model ? m_session.tracker().model->name : "";
+    if (name == "tracking") return m_session.isTracking() ? "1" : "0";
+    if (name == "track.level") return num(m_session.track().levelDbm, 1);
+    if (name == "tracker.ppb") return m_session.trackerPpb() ? num(*m_session.trackerPpb()) : "?";
+    if (name == "tracker.sent") return QStringList(m_trackerSent).filter(QRegularExpression("^(?!vbat$)")).join('|');
     if (name == "model") return m_session.device().model ? m_session.device().model->name : "";
     if (name == "version") return m_session.device().version;
     if (name == "sweeps") return num(m_sweeps);
@@ -138,14 +145,24 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
     const QString a0 = args.value(0), a1 = args.value(1);
     if (name == "connect" && args.size() == 1) {
         connectTo(a0);
+    } else if (name == "trackerconnect" && args.size() == 1) {  // tracking generator; auto =
+        QString port = a0;                                         // the other tinySA's port
+        for (const auto &p : QSerialPortInfo::availablePorts())
+            if (a0 == "auto" && port == "auto" && p.portName() != m_session.device().port
+                && DeviceLink::isTinySAUsbId(p.vendorIdentifier(), p.productIdentifier()))
+                port = p.portName();
+        connectTrackerTo(port);
     } else if (name == "touch") {
         m_session.simTouch();
     } else if (name == "clearsent") {
         m_sent.clear();
+        m_trackerSent.clear();
     } else if (name == "mark") {
         m_sweepsMark = m_sweeps;
     } else if (name == "send" && !args.isEmpty()) {  // raw command, e.g. "caloutput 10"
-        m_session.send(args.join(' '));
+        // "a|b": queued together, nothing of ours goes out between them (touch|release)
+        for (const QString &command : args.join(' ').split('|'))
+            m_session.send(command.trimmed());
     } else if (name == "savecsv") {
         return saveCsv(a0);
     } else if (name == "saveimage") {

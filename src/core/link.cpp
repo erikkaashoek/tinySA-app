@@ -8,11 +8,14 @@
 #include <utility>
 
 DeviceLink::DeviceLink(QObject *parent)
-    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_settle(this), m_screenTimer(this),
-      m_touchTimer(this)
+    : QObject(parent), m_timeout(this), m_battery(this), m_drain(this), m_settle(this), m_trackSettle(this),
+      m_screenTimer(this), m_touchTimer(this)
 {
     m_settle.setSingleShot(true);
     connect(&m_settle, &QTimer::timeout, this, &DeviceLink::pump);
+    m_trackSettle.setSingleShot(true);
+    m_trackSettle.setTimerType(Qt::PreciseTimer);  // ms waits: not on the Windows tick (15.6 ms)
+    connect(&m_trackSettle, &QTimer::timeout, this, &DeviceLink::measureTrackPoint);
     m_touchTimer.setInterval(30);
     connect(&m_touchTimer, &QTimer::timeout, this, [this] {
         if (m_pendingTouch.isEmpty())
@@ -63,10 +66,20 @@ void DeviceLink::open(const QString &port)
     m_have = AppliedConfig{};
     m_genHave = AppliedGen{};
     m_activity = Analyzer;
-    if (port.startsWith("sim:")) {  // sim:basic, sim:ultra; ":old" = v1.4-220 ZS405, ":gen" = left generating
+    m_uiText.clear();
+    m_uiTextOk = true;  // until the firmware answers ui off "text" with its usage
+    // sim:basic, sim:ultra; ":old" = v1.4-220 ZS405, ":gen" = left generating; ":thru" / ":lpf" =
+    // input cabled to the other simulated unit's output (directly / through a 150 MHz low-pass);
+    // ":ppb=N" = its output frequency N ppb off
+    if (port.startsWith("sim:")) {
         auto *sim = new SimTransport(port.contains("basic") ? SimTransport::Kind::Basic
                                                             : SimTransport::Kind::Ultra, this);
         sim->oldFirmware = port.contains(":old");
+        sim->dut = port.contains(":lpf") ? SimTransport::Dut::LowPass
+                   : port.contains(":thru") ? SimTransport::Dut::Thru : SimTransport::Dut::None;
+        static const QRegularExpression ppb(R"(:ppb=(-?\d+))");  // its generator's frequency error
+        if (const auto m = ppb.match(port); m.hasMatch())
+            sim->ppb = m.captured(1).toDouble();
         if (port.contains(":gen"))
             sim->startGenerating();
         sim->open(QIODevice::ReadWrite | QIODevice::Unbuffered);
@@ -151,12 +164,19 @@ void DeviceLink::handshake()
     enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {
         m_want = clampConfig(m_want, *m_info.model);
         m_gen = clampGen(m_gen, m_info);
-        if (m_info.has("ui"))  // left off by an app that did not close properly (no-op when on)
+        // left off by an app that did not close properly (no-op when on); a tracking generator's
+        // goes off right away
+        if (m_info.has("ui") && !m_isTracker)
             m_queue.prepend({"ui on"});
         m_ready = true;
         m_batteryDue = true;
         emit opened(m_info);
         adoptGenerator();
+        if (m_isTracker) {  // its role: output mode, RF off until the analyzer scans
+            m_gen = trackerGen(m_gen, m_info, m_gen.freqHz, m_gen.levelDbm, m_trackRf);
+            if (m_activity != Generator)
+                setActivity(Generator);
+        }
     }});
 }
 
@@ -190,6 +210,8 @@ void DeviceLink::shutdown(const QString &reason)
                 io->write("abort\r");
             if (m_remote)
                 io->write("refresh off\r");
+            if (m_trackRf && m_ready)  // tracking generator: no signal into the DUT after us
+                io->write("output off\r");
             if (m_uiOff && m_ready)
                 io->write("ui on\r");
             if (m_paused && m_ready)
@@ -203,7 +225,8 @@ void DeviceLink::shutdown(const QString &reason)
     m_queue.clear();
     m_cur.reset();
     m_rx.reset();
-    m_ready = m_paused = m_draining = m_remote = m_uiOff = false;
+    m_ready = m_paused = m_draining = m_remote = m_uiOff = m_trackRf = false;
+    stopTracking(true);  // analyzer: the generator's RF off
     m_touchTimer.stop();
     m_pendingTouch.clear();
     if (m_mode != Off) {
@@ -232,8 +255,8 @@ void DeviceLink::setMode(int mode)
         return;
     m_mode = mode;
     emit scanChanged(mode);
-    auto dropQueued = [this](const char *line) {
-        return m_queue.removeIf([line](const Cmd &c) { return c.line == line; }) > 0;
+    auto dropQueued = [this](const char *line) {  // "ui off" also drops `ui off "text"`
+        return m_queue.removeIf([line](const Cmd &c) { return c.line.startsWith(line); }) > 0;
     };
     if (mode == Off) {
         // Stop now rather than after a possibly minutes-long sweep. The shell reads the
@@ -242,6 +265,7 @@ void DeviceLink::setMode(int mode)
             m_aborting = true;
             m_io->write("abort\r");
         }
+        stopTracking(true);
         dropQueued("pause");
         dropQueued("ui off");
         if (m_uiOff)  // the unit's screen and its own sweeping back
@@ -422,11 +446,21 @@ void DeviceLink::pumpStep()
         return enqueue({"pause"});
     // screen off: no redraw after every command (firmware with `ui`, tinySA Ultra v1.4-314)
     const bool uiOff = m_screenOffWanted && m_info.has("ui");
-    if (uiOff != m_uiOff)
-        return enqueue({uiOff ? "ui off" : "ui on"});
-    const QByteArrayList cmds = configCommands(m_want, m_have, *m_info.model);
-    if (!cmds.isEmpty())
+    if (uiOff != m_uiOff || (uiOff && uiTextDue()))
+        return enqueue(uiCommand(uiOff));
+    SweepConfig want = m_want;
+    if (tracking() && want.rbwKHz <= 0)  // the firmware's auto RBW misreads single points
+        want.rbwKHz = kTrackAutoRbwKHz;
+    const QByteArrayList cmds = configCommands(want, m_have, *m_info.model);
+    if (!cmds.isEmpty()) {
+        stopTracking(false);  // a tracking sweep starts again with the new settings
         return queueChecked(cmds);
+    }
+    if (m_trackWait || m_aligning)  // the generator unit is being tuned or measured
+        return;
+    if (tracking())
+        return pumpTracking();
+    stopTracking(true);  // tracking wanted but its unit is gone: ordinary sweeps
     startSweep();
 }
 
@@ -457,6 +491,7 @@ void DeviceLink::startSweep()
     c.line = QString("scanraw %1 %2 %3").arg(std::llround(g.startHz)).arg(g.scanrawStop())
                  .arg(g.points).toLatin1();
     c.body = RxParser::Body::ScanRaw;
+    c.points = g.points;
     c.timeoutMs = 15000;  // inactivity watchdog, restarted by every data chunk
     c.done = [this](bool, const QStringList &lines) {
         if (m_frame.received == 0 && !lines.isEmpty()) {  // refused, e.g. range invalid
@@ -484,10 +519,19 @@ void DeviceLink::transmit(Cmd c)
     m_sentClock.start();
     if (c.line == "pause" || c.line == "resume")  // the unit's state from now on
         m_paused = c.line == "pause";
-    if (c.line == "ui off" || c.line == "ui on")
-        m_uiOff = c.line == "ui off";
-    if (c.body != RxParser::Body::ScanRaw)
+    if (c.line.startsWith("ui off") || c.line == "ui on") {
+        m_uiOff = c.line != "ui on";
+        if (c.line.startsWith("ui off \""))  // ui off "text"; a plain ui off keeps the text
+            m_uiText = c.line.mid(8).chopped(1);
+    }
+    if (c.body == RxParser::Body::ScanRaw) {
+        m_scanExpect = c.points;
+        m_alignScan = c.align;
+        m_alignValues.clear();
+        m_aborting = false;
+    } else {
         emit traffic(true, QString::fromLatin1(c.line), c.user);
+    }
     m_timeout.start(c.timeoutMs);
     m_cur = std::move(c);
 }
@@ -526,6 +570,14 @@ void DeviceLink::handle(const RxEvent &e)
                 emit message("Scan stopped on the tinySA");
                 setMode(Off);
             }
+            if (m_isTracker) {  // the tracking generator: the user's until the next scan
+                m_trackTouched = true;
+                if (m_trackRf) {  // the analyzer stops, its RF goes off
+                    emit trackerStopped();
+                    if (m_trackRf)
+                        setTrackOutput(false, m_gen.levelDbm, m_gen.freqHz);
+                }
+            }
         }
         emit traffic(false, QString::fromLatin1(e.data), m_cur && m_cur->user && m_echoSeen);
         if (m_cur && m_echoSeen)
@@ -539,6 +591,11 @@ void DeviceLink::handle(const RxEvent &e)
         if (!scanning)
             break;
         m_timeout.start(m_cur->timeoutMs);
+        if (m_alignScan) {  // not a sweep: no frame
+            for (qint16 v : e.values)
+                m_alignValues << v / 32.0 - m_info.zeroDbm;
+            break;
+        }
         for (qint16 v : e.values)
             if (m_frame.received < m_frame.dBm.size())
                 m_frame.dBm[m_frame.received++] = v / 32.0 - m_info.zeroDbm;
@@ -550,7 +607,7 @@ void DeviceLink::handle(const RxEvent &e)
     case RxEvent::ScanEnd:
         if (!scanning)
             break;
-        if (e.count < m_frame.grid.points) {  // our abort, or touch/jog: no prompt follows
+        if (e.count < m_scanExpect) {  // our abort, or touch/jog: no prompt follows
             m_scanDone = true;
             if (!m_aborting) {
                 emit message("Scan stopped on the tinySA");
@@ -558,9 +615,11 @@ void DeviceLink::handle(const RxEvent &e)
             }
             finish(true);
         } else {
-            m_frame.complete = true;
-            m_frame.seconds = m_sweepClock.elapsed() / 1000.0;
-            emit frame(m_frame);
+            if (m_scanExpect == m_frame.grid.points && !m_alignScan) {  // a whole sweep (tracking: one point)
+                m_frame.complete = true;
+                m_frame.seconds = m_sweepClock.elapsed() / 1000.0;
+                emit frame(m_frame);
+            }
             m_scanDone = true;
             m_timeout.start(500);  // the prompt follows at once unless aborted late
         }

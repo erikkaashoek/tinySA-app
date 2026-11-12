@@ -410,7 +410,7 @@ private slots:
         QCOMPARE(info.hardware, QString("ZS407"));
         QCOMPARE(info.zeroDbm, 174);
         QVERIFY(info.has("scanraw"));
-        QCOMPARE(info.version, QString("tinySA4_v1.4-314-sim"));
+        QCOMPARE(info.version, QString("tinySA4_v1.4-317-sim"));
         QVERIFY(info.has("ui"));  // screen off while scanning
         QVERIFY(!info.directCommandRace());
         QVERIFY(info.hasBurst);  // `modulation` lists burst
@@ -443,7 +443,7 @@ private slots:
         QVERIFY(rx.indexOf("pause") < scanAt);
         QVERIFY(rx.indexOf("rbw auto") < scanAt);
         QVERIFY(rx.indexOf("resume") > scanAt);
-        QVERIFY(!rx.contains("ui off"));  // the basic has no `ui`
+        QVERIFY(std::none_of(rx.begin(), rx.end(), [](const QByteArray &l) { return l.startsWith("ui "); }));  // no `ui`
     }
 
     void screenOffWhileScanning()
@@ -456,10 +456,11 @@ private slots:
         link.setScan(DeviceLink::Continuous);
         QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty(), 3000);
         QVERIFY(sim->uiOff());
+        QCOMPARE(sim->uiText(), QByteArray());  // ui off "": no text from an earlier session
         QByteArrayList rx = sim->received();
         const auto firstScan = std::find_if(rx.begin(), rx.end(), [](const QByteArray &l) { return l.startsWith("scanraw"); });
-        QVERIFY(rx.indexOf("pause") < rx.indexOf("ui off"));
-        QVERIFY(rx.indexOf("ui off") < int(firstScan - rx.begin()));
+        QVERIFY(rx.indexOf("pause") < rx.indexOf("ui off \"\""));
+        QVERIFY(rx.indexOf("ui off \"\"") < int(firstScan - rx.begin()));
         link.setScreenOffWhileScanning(false);  // switched between two sweeps
         QTRY_VERIFY_WITH_TIMEOUT(!sim->uiOff(), 3000);
         link.setScreenOffWhileScanning(true);
@@ -469,6 +470,27 @@ private slots:
         QVERIFY(!sim->uiOff());
         rx = sim->received();
         QVERIFY(rx.lastIndexOf("ui on") < rx.lastIndexOf("resume"));
+    }
+
+    void olderFirmwareGetsAPlainUiOff()
+    {
+        // v1.4-314..316: ui off|on only; ui off "text" answers with its usage, the screen stays on
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), frames(&link, &DeviceLink::frame),
+            msg(&link, &DeviceLink::message);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        sim->uiWithText = false;
+        link.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(frames.size() >= 3 && sim->uiOff(), 3000);
+        const QByteArrayList rx = sim->received();
+        QCOMPARE(rx.count("ui off \"\""), 1);  // tried once
+        QVERIFY(rx.indexOf("ui off \"\"") < rx.indexOf("ui off"));
+        QCOMPARE(rx.count("ui off"), 1);
+        QVERIFY(msg.isEmpty());
+        link.setScan(DeviceLink::Off);
+        QTRY_VERIFY_WITH_TIMEOUT(!sim->uiOff(), 3000);
     }
 
     void touchGivesTheScreenBack()
@@ -1436,6 +1458,270 @@ private slots:
     }
 };
 
+// Tracking generator: two simulated units on one bench, the analyzer's input cabled to the
+// generator's output (":thru") or through a 150 MHz low-pass (":lpf").
+class TstTracking : public QObject {
+    Q_OBJECT
+    struct Bench {
+        DeviceLink analyzer, tg;
+        QSignalSpy frames{&analyzer, &DeviceLink::frame}, scan{&analyzer, &DeviceLink::scanChanged},
+            msg{&analyzer, &DeviceLink::message};
+        SimTransport *a = nullptr, *g = nullptr;
+        bool open(const QString &analyzerPort, const QString &tgPort)
+        {
+            analyzer.setTracker(&tg);
+            QSignalSpy ao(&analyzer, &DeviceLink::opened), go(&tg, &DeviceLink::opened);
+            analyzer.open(analyzerPort);
+            if (!tgPort.isEmpty())
+                tg.open(tgPort);
+            if (!ao.wait(3000) || (!tgPort.isEmpty() && go.isEmpty() && !go.wait(3000)))
+                return false;
+            a = qobject_cast<SimTransport *>(analyzer.transport());
+            g = qobject_cast<SimTransport *>(tg.transport());
+            return true;
+        }
+        SweepFrame last() const { return frames.last().first().value<SweepFrame>(); }
+        bool complete() const { return !frames.isEmpty() && last().complete; }
+    };
+
+private slots:
+    void initTestCase() { qRegisterMetaType<SweepFrame>(); qRegisterMetaType<DeviceInfo>(); }
+
+    void generatorUnitGoesToOutputMode()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra"));
+        QTRY_VERIFY_WITH_TIMEOUT(b.g->generating(), 3000);  // its role: output mode, RF off
+        QVERIFY(!b.g->rfOn());
+        QTRY_VERIFY_WITH_TIMEOUT(b.g->uiOff(), 3000);  // screen off from the start (no redraws)
+        QCOMPARE(b.g->uiText(), QByteArray("Tracking generator"));  // which tinySA is which
+        const QByteArrayList g = b.g->received();
+        QVERIFY(g.indexOf("ui off \"Tracking generator\"") < g.indexOf("mode low output"));
+        QVERIFY(!g.contains("ui on"));
+    }
+
+    void screenTextsTellTheUnitsApart()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra"));
+        b.analyzer.setScan(DeviceLink::Continuous);  // an ordinary sweep (Track off)
+        QTRY_VERIFY_WITH_TIMEOUT(b.a->uiOff() && b.a->uiText() == "Spectrum analyzer", 3000);
+        QCOMPARE(b.g->uiText(), QByteArray("Tracking generator"));
+        b.tg.close();  // its screen back; the analyzer's text goes, its screen stays off
+        QTRY_VERIFY_WITH_TIMEOUT(b.a->uiText().isEmpty(), 3000);
+        QVERIFY(b.a->uiOff());
+        b.analyzer.setScan(DeviceLink::Off);
+        QTRY_VERIFY_WITH_TIMEOUT(!b.a->uiOff(), 3000);
+    }
+
+    void sweepFollowsTheGenerator()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra:lpf", "sim:ultra"));
+        SweepConfig c;
+        c.grid = {10e6, 300e6, 30};
+        b.analyzer.setConfig(c);
+        b.analyzer.setTracking({true, -30, -1});
+        b.analyzer.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 10000);
+        const SweepFrame f = b.last();
+        QCOMPARE(f.received, 30);
+        for (int i = 0; i < f.grid.points; ++i) {  // the low-pass, ±1.5 dB simulated noise
+            const double want = -30 + SimTransport::dutGainDb(SimTransport::Dut::LowPass, f.grid.freq(i));
+            QVERIFY2(std::abs(f.dBm[i] - want) < 2, qPrintable(QString("%1 Hz: %2 dBm, want %3")
+                                                                   .arg(f.grid.freq(i)).arg(f.dBm[i]).arg(want)));
+        }
+        QVERIFY(f.dBm[29] < -55);  // 300 MHz: 30 dB down
+        // stopped: RF off, the analyzer's screen back; the generator's stays off
+        QTRY_VERIFY_WITH_TIMEOUT(!b.g->rfOn() && b.g->uiOff() && !b.a->uiOff(), 3000);
+        const QByteArrayList g = b.g->received(), a = b.a->received();
+        // its frequency measured first: at 3 GHz the low-pass leaves nothing, then at the top
+        QVERIFY(g.indexOf("ui off \"Tracking generator\"") < g.indexOf("sweep cw 3000000000"));  // no redraws
+        QVERIFY(g.indexOf("sweep cw 3000000000") < g.indexOf("level -30"));
+        QVERIFY(g.indexOf("level -30") < g.indexOf("output on"));
+        QVERIFY(g.indexOf("output on") < g.indexOf("sweep cw 300000000"));
+        QCOMPARE(g.count("sweep cw 10000000"), 1);
+        QVERIFY(g.indexOf("sweep cw 300000000") < g.indexOf("sweep cw 10000000"));
+        QVERIFY(g.lastIndexOf("output off") > g.lastIndexOf("sweep cw 300000000"));
+        QVERIFY(!g.contains("ui on"));
+        // the sweep's RBW again; auto is 30 kHz while tracking (the firmware's misreads single points)
+        QVERIFY(a.lastIndexOf("rbw 30") > a.lastIndexOf("rbw 1"));
+        QVERIFY(a.lastIndexOf("rbw 30") < a.indexOf("scanraw 10000000 10000000 1"));
+        QVERIFY(!g.contains("scanraw"));
+        QCOMPARE(b.g->scansWhileGenerating, 0);
+        QVERIFY(a.contains("scanraw 10000000 10000000 1"));
+        QVERIFY(a.contains("scanraw 300000000 300000000 1"));
+        QVERIFY(!a.contains("scanraw 10000000 310000000 30"));  // no ordinary sweep
+    }
+
+    void generatorFrequencyErrorIsCorrected()
+    {
+        // 1500 ppb: 4.5 kHz at 3 GHz, three times the half bandwidth of a 3 kHz RBW
+        Bench b;
+        QSignalSpy aligned(&b.analyzer, &DeviceLink::trackerAligned);
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra:ppb=1500"));
+        SweepConfig c;
+        c.grid = {100e6, 3000e6, 30};
+        c.rbwKHz = 3;
+        b.analyzer.setConfig(c);
+        b.analyzer.setTracking({true, -30, -1});
+        b.analyzer.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 15000);
+        QCOMPARE(aligned.size(), 1);
+        QVERIFY(aligned.first().at(1).toBool());
+        const double ppb = aligned.first().first().toDouble();
+        QVERIFY2(std::abs(ppb - 1500) < 20, qPrintable(QString("measured %1 ppb").arg(ppb)));
+        for (double v : b.last().dBm)
+            QVERIFY2(std::abs(v - -30) < 0.5, qPrintable(QString("%1 dBm").arg(v)));
+        const QByteArrayList g = b.g->received(), a = b.a->received();
+        QVERIFY(g.contains("sweep cw " + QByteArray::number(std::llround(3e9 / (1 + ppb * 1e-9)))));  // ~2999995500
+        QVERIFY(a.contains("rbw 1"));                 // the fine scan
+        QVERIFY(a.lastIndexOf("rbw 3") > a.lastIndexOf("rbw 1"));  // the sweep's RBW again
+        // measured once per connection of the generator unit
+        b.analyzer.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(b.frames.size() > 1 && b.complete() && b.scan.last().first().toInt() == DeviceLink::Off, 15000);
+        QCOMPARE(aligned.size(), 1);
+        QCOMPARE(b.a->received().count("rbw 1"), 1);
+    }
+
+    void noSignalLeavesTheFrequencyUncorrected()
+    {
+        Bench b;
+        QSignalSpy aligned(&b.analyzer, &DeviceLink::trackerAligned);
+        QVERIFY(b.open("sim:ultra", "sim:ultra:ppb=1500"));  // the input on the antenna
+        SweepConfig c;
+        c.grid = {50e6, 150e6, 11};
+        b.analyzer.setConfig(c);
+        b.analyzer.setTracking({true, -30, -1});
+        b.analyzer.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 15000);
+        QCOMPARE(aligned.size(), 1);
+        QVERIFY(!aligned.first().at(1).toBool());
+        QVERIFY(b.msg.size() >= 1);
+        QCOMPARE(b.msg.first().first().toString(),
+                 QString("No signal from the tracking generator to measure its frequency: not corrected"));
+        QVERIFY(b.g->received().contains("sweep cw 150000000"));  // tried at the top too
+    }
+
+    void continuousSweepsResendTheLevel()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:basic"));
+        SweepConfig c;
+        c.grid = {50e6, 150e6, 11};
+        b.analyzer.setConfig(c);
+        b.analyzer.setTracking({true, -40, 0});
+        b.analyzer.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(std::count_if(b.frames.begin(), b.frames.end(), [](const QList<QVariant> &v) {
+                                     return v.first().value<SweepFrame>().complete; }) >= 3, 10000);
+        b.analyzer.setScan(DeviceLink::Off);
+        QTRY_VERIFY_WITH_TIMEOUT(!b.g->rfOn(), 3000);
+        const SweepFrame f = b.last();
+        for (double v : f.dBm)
+            QVERIFY(std::abs(v - -40) < 2);
+        QVERIFY(b.g->received().count("level -40") >= 3);  // once per sweep (at its first point)
+        const QByteArrayList g = b.g->received();  // the basic has no `ui`
+        QVERIFY(std::none_of(g.begin(), g.end(), [](const QByteArray &l) { return l.startsWith("ui "); }));
+    }
+
+    void levelChangeAppliesDuringTheSweep()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra"));
+        SweepConfig c;
+        c.grid = {50e6, 150e6, 11};
+        b.analyzer.setConfig(c);
+        b.analyzer.setTracking({true, -40, -1});
+        b.analyzer.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 5000);
+        b.analyzer.setTracking({true, -25, -1});
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete() && std::abs(b.last().dBm[0] - -25) < 2
+                                     && std::abs(b.last().dBm[10] - -25) < 2, 5000);
+        b.analyzer.setScan(DeviceLink::Off);
+    }
+
+    void touchOnTheGeneratorStopsTheScan()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra"));
+        b.analyzer.setTracking({true, -30, -1});
+        b.analyzer.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(b.g->uiOff() && b.g->rfOn(), 5000);
+        b.g->touchScreen();  // "ui on" from the generator unit
+        QTRY_COMPARE_WITH_TIMEOUT(b.scan.last().first().toInt(), int(DeviceLink::Off), 3000);
+        QTRY_VERIFY_WITH_TIMEOUT(!b.g->rfOn(), 3000);
+        QVERIFY(b.msg.size() >= 1);
+        QCOMPARE(b.msg.last().first().toString(), QString("Scan stopped on the tracking generator"));
+        QTest::qWait(200);
+        QVERIFY(!b.g->uiOff());  // the user's: not switched off again
+        b.analyzer.setScan(DeviceLink::Continuous);  // until the next scan
+        QTRY_VERIFY_WITH_TIMEOUT(b.g->uiOff() && b.g->rfOn(), 5000);
+        b.analyzer.setScan(DeviceLink::Off);
+    }
+
+    void losingTheGeneratorStopsTheScan()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra"));
+        b.analyzer.setTracking({true, -30, -1});
+        b.analyzer.setScan(DeviceLink::Continuous);
+        QTRY_VERIFY_WITH_TIMEOUT(b.g->rfOn(), 5000);
+        QPointer<SimTransport> g = b.g;
+        b.tg.close();  // its goodbye: RF off, screen on
+        QVERIFY(g);
+        QVERIFY(!g->rfOn());
+        QVERIFY(!g->uiOff());
+        QTRY_COMPARE_WITH_TIMEOUT(b.scan.last().first().toInt(), int(DeviceLink::Off), 3000);
+        QCOMPARE(b.msg.last().first().toString(), QString("Tracking generator lost: scan stopped"));
+    }
+
+    void withoutGeneratorUnitTheSweepIsOrdinary()
+    {
+        Bench b;
+        QVERIFY(b.open("sim:ultra", {}));
+        SweepConfig c;
+        c.grid = {50e6, 150e6, 101};
+        b.analyzer.setConfig(c);
+        b.analyzer.setTracking({true, -30, -1});
+        b.analyzer.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 5000);
+        QVERIFY(b.a->received().contains("scanraw 50000000 151000000 101"));
+        QVERIFY(std::abs(b.last().dBm[50] - -30) < 2);  // the antenna's 100 MHz carrier
+        QVERIFY(!b.a->received().contains("rbw 30"));    // auto stays auto
+    }
+
+    void rangeAndLevelInsideTheGenerator()
+    {
+        DeviceInfo basic, ultra;
+        basic.model = detectModel("tinySA v0.3ZS304", {});
+        ultra.model = detectModel("tinySA ULTRA+ ZS407", {});
+        ultra.hardware = "ZS407";
+        QVERIFY(basic.model && ultra.model);
+        SweepConfig c;
+        c.grid = {1e6, 800e6, 101};
+        const SweepConfig clamped = clampToTracker(c, *ultra.model, basic);  // basic LOW output
+        QCOMPARE(clamped.grid.startHz, std::max(1e6, basic.model->gen.minHz));
+        QCOMPARE(clamped.grid.stopHz, basic.model->gen.maxHz);
+        QCOMPARE(clampToTracker(c, *ultra.model, DeviceInfo{}).grid.stopHz, 800e6);  // none connected
+        TrackConfig t{true, -10, -1};
+        QCOMPARE(clampTrack(t, ultra).levelDbm, ultra.model->gen.maxDbm);
+        t.levelDbm = -200;
+        QCOMPARE(clampTrack(t, basic).levelDbm, basic.model->gen.minDbm);
+        QCOMPARE(trackSettleMs(t, false), 150);  // its screen redraws before the frequency changes
+        QCOMPARE(trackSettleMs(t, false, TrackChange::RfOn), 300);
+        QCOMPARE(trackSettleMs(t, true), 10);
+        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 32);  // across 823 MHz / 1130 MHz
+        QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 32);
+        QCOMPARE(trackerPath(ultra, 800e6), 0);
+        QCOMPARE(trackerPath(ultra, 900e6), 1);
+        QCOMPARE(trackerPath(ultra, 1.2e9), 2);
+        QCOMPARE(trackerPath(basic, 300e6), 0);
+        t.settleMs = 20;
+        QCOMPARE(trackSettleMs(t, true), 20);
+        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 20);
+    }
+};
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -1456,6 +1742,8 @@ int main(int argc, char **argv)
     run(&link);
     TstGenerator generator;
     run(&generator);
+    TstTracking tracking;
+    run(&tracking);
     TstTraces traces;
     run(&traces);
     TstCsv csv;

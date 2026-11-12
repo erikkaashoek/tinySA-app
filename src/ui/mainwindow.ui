@@ -450,6 +450,98 @@
           </widget>
          </item>
          <item>
+          <widget class="QGroupBox" name="trackGroup">
+           <property name="toolTip">
+            <string>A second tinySA as tracking generator: its output follows the sweep point by point. Cable its RF output to the input of the device under test, the device's output to this tinySA.</string>
+           </property>
+           <property name="title">
+            <string>Tracking generator</string>
+           </property>
+           <layout class="QGridLayout" name="trackLayout">
+            <property name="leftMargin">
+             <number>6</number>
+            </property>
+            <property name="topMargin">
+             <number>4</number>
+            </property>
+            <property name="rightMargin">
+             <number>6</number>
+            </property>
+            <property name="bottomMargin">
+             <number>6</number>
+            </property>
+            <property name="spacing">
+             <number>4</number>
+            </property>
+            <item row="0" column="0" colspan="2">
+             <widget class="QComboBox" name="trackerPortCombo">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                <horstretch>1</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="toolTip">
+               <string>Port of the tinySA that generates</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="2">
+             <widget class="QPushButton" name="trackerConnectButton">
+              <property name="text">
+               <string>Connect</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0" colspan="3">
+             <widget class="QLabel" name="trackerLabel">
+              <property name="text">
+               <string>Not connected</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QCheckBox" name="trackCheck">
+              <property name="toolTip">
+               <string>Sweep with the tracking generator: one point at a time, the generator at that frequency (Normalize with a cable in place of the device gives its response)</string>
+              </property>
+              <property name="text">
+               <string>Track</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1" colspan="2">
+             <widget class="QDoubleSpinBox" name="trackLevelSpin">
+              <property name="toolTip">
+               <string>Output level of the tracking generator</string>
+              </property>
+              <property name="keyboardTracking">
+               <bool>false</bool>
+              </property>
+              <property name="suffix">
+               <string> dBm</string>
+              </property>
+              <property name="decimals">
+               <number>1</number>
+              </property>
+              <property name="minimum">
+               <double>-115.000000000000000</double>
+              </property>
+              <property name="maximum">
+               <double>13.000000000000000</double>
+              </property>
+              <property name="value">
+               <double>-30.000000000000000</double>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
           <widget class="QGroupBox" name="traceGroup">
            <property name="title">
             <string>Trace</string>

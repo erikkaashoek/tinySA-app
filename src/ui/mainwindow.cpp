@@ -109,6 +109,7 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     setupMarkers();
     setupTools();
     setupGenerator();
+    setupTracking();
 
     // --- graph intents ---
     connect(ui->spectrum, &SpectrumView::rangeRequested, this, &MainWindow::applyRangeOp);
@@ -178,6 +179,8 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
             loadMemory(m, memoryFile(m));
     applyModel(nullptr);
     m_session.setScreenOffWhileScanning(m_settings.screenOffScanning);
+    m_session.setTrack(m_settings.track);
+    showTrack(m_session.track());
     m_session.setConfig(m_settings.config);
     showConfig(m_session.config());
     onScanChanged(DeviceLink::Off);
@@ -198,6 +201,7 @@ void MainWindow::closeEvent(QCloseEvent *e)
     QSettings qs(m_settingsPath, QSettings::IniFormat);
     m_settings.config = m_session.config();
     m_settings.gen = m_session.generator();
+    m_settings.track = m_session.track();
     m_settings.view = ui->spectrum->view();
     m_settings.hold = int(m_session.traces().hold());
     m_settings.average = m_session.traces().average();
@@ -229,36 +233,43 @@ void MainWindow::refreshPorts()
     QStringList names;
     for (const auto &p : ports)
         names << p.portName();
-    const QString connectedPort = m_session.device().port;
+    const QString connectedPort = m_session.device().port, trackerPort = m_session.tracker().port;
     if (m_session.isConnected() && !connectedPort.startsWith("sim:") && !names.contains(connectedPort)) {
         m_session.disconnectDevice();  // unplugged; the serial error may come later or never
         statusBar()->showMessage("tinySA unplugged", 5000);
     }
+    if (m_session.isTrackerConnected() && !trackerPort.startsWith("sim:") && !names.contains(trackerPort))
+        m_session.disconnectTracker();
     if (names == m_portNames && ui->portCombo->count())
         return;
     m_portNames = names;
 
-    const QString current = ui->portCombo->count() ? ui->portCombo->currentData().toString()
-                                                   : m_settings.port;
     QStringList tinySAs;
-    QSignalBlocker block(ui->portCombo);
-    ui->portCombo->clear();
-    for (const auto &p : ports) {
-        const bool isTinySA = DeviceLink::isTinySAUsbId(p.vendorIdentifier(), p.productIdentifier());
-        ui->portCombo->addItem(isTinySA ? p.portName() + " - tinySA" : p.portName(), p.portName());
-        if (isTinySA)
+    for (const auto &p : ports)
+        if (DeviceLink::isTinySAUsbId(p.vendorIdentifier(), p.productIdentifier()))
             tinySAs << p.portName();
-    }
-    if (m_simulators) {
-        ui->portCombo->addItem("Simulated tinySA", "sim:basic");
-        ui->portCombo->addItem("Simulated tinySA Ultra", "sim:ultra");
-    }
-    // keep a tinySA selection; otherwise pick a (newly plugged) tinySA
-    int at = ui->portCombo->findData(current);
-    const bool keep = at >= 0 && (tinySAs.contains(current) || current.startsWith("sim:"));
-    if (!keep && !tinySAs.isEmpty() && !m_session.isConnected())
-        at = ui->portCombo->findData(tinySAs.first());
-    ui->portCombo->setCurrentIndex(std::max(at, 0));
+    // keep a tinySA selection; otherwise pick a (newly plugged) tinySA, not the other one's
+    auto fill = [&](QComboBox *combo, const QString &saved, bool connected, const QString &other) {
+        const QString current = combo->count() ? combo->currentData().toString() : saved;
+        QSignalBlocker block(combo);
+        combo->clear();
+        for (const auto &p : ports)
+            combo->addItem(tinySAs.contains(p.portName()) ? p.portName() + " - tinySA" : p.portName(), p.portName());
+        if (m_simulators) {
+            combo->addItem("Simulated tinySA", "sim:basic");
+            combo->addItem("Simulated tinySA Ultra", "sim:ultra");
+        }
+        int at = combo->findData(current);
+        const bool keep = at >= 0 && (tinySAs.contains(current) || current.startsWith("sim:"));
+        QStringList free = tinySAs;
+        free.removeAll(other);
+        if (!keep && !free.isEmpty() && !connected)
+            at = combo->findData(free.first());
+        combo->setCurrentIndex(std::max(at, 0));
+    };
+    fill(ui->portCombo, m_settings.port, m_session.isConnected(), trackerPort);
+    fill(ui->trackerPortCombo, m_settings.trackerPort, m_session.isTrackerConnected(),
+         ui->portCombo->currentData().toString());
 }
 
 void MainWindow::connectTo(const QString &port)

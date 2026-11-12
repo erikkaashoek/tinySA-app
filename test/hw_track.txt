@@ -1,0 +1,95 @@
+# Tracking generator on hardware: two tinySA, the generator's RF output cabled to the analyzer's
+# RF input (no device in between: a flat line at the generator level). The analyzer is --port,
+# the generator the other tinySA port (`trackerconnect auto`: plug in only these two, or put
+# the generator's port there). Levels stay at -30 dBm. The generator must reach 3 GHz (a ZS405
+# on v1.4-316 does not generate above about 1 GHz: use it as the analyzer).
+#   tinySA-App.exe --port COMa --ini test\out\hwtrack.ini --script test\hw_track.txt --out test\out\hwtrack
+waitfor connected == 1 10000
+check activity == analyzer
+click actionSettings
+set screenOffCheck 1
+click settingsOk
+do trackerconnect auto
+waitfor tracker.connected == 1 10000
+# output mode (`mode low output`, or a unit left generating taken over), RF off; its screen off
+# with the text "Tracking generator" (firmware v1.4-317; older: a plain ui off)
+waitfor tracker.sent contains "output off" 5000
+check tracker.sent contains Tracking generator
+set startEdit 10
+set stopEdit 3000
+set pointsCombo 101
+set rbwCombo Auto
+set trackLevelSpin -30
+set trackCheck 1
+waitfor tracking == 1 3000
+bail
+# one sweep, screens off: settle 0 (30 ms into another output path); first the generator's
+# frequency error is measured at 3 GHz (RBW auto = 30 kHz while tracking)
+do clearsent
+click onceButton
+waitfor idle == 1 60000
+dump sweepms sweepms_once.txt
+dump trace trace_once.csv
+dump tracker.sent tracker_sent_once.txt
+dump tracker.ppb ppb.txt
+dump sent sent_once.txt
+check sent contains Spectrum analyzer
+check tracker.ppb != ?
+check messages !contains No signal
+check level@10000000 ~ -32 6
+check level@100000000 ~ -32 6
+check level@1000000000 ~ -32 6
+check level@2000000000 ~ -32 6
+check level@3000000000 ~ -32 6
+check tracker.sent contains "output off"
+check messages !contains No reply
+shot hwtrack_once.png
+# 3 kHz RBW: only flat with the frequency error corrected (some 100 ppb: over 1 kHz at 3 GHz)
+set rbwCombo 3 kHz
+click onceButton
+waitfor idle == 1 120000
+dump sweepms sweepms_rbw3k.txt
+dump trace trace_rbw3k.csv
+check level@10000000 ~ -32 6
+check level@100000000 ~ -32 6
+check level@1000000000 ~ -32 6
+check level@2000000000 ~ -32 6
+check level@3000000000 ~ -32 6
+set rbwCombo Auto
+# continuous for 10 s: the sweep rate
+do mark
+click scanButton
+wait 10000
+click scanButton
+waitfor idle == 1 20000
+dump sweeps.new sweeps_10s.txt
+dump cyclems cycle.txt
+dump trace trace_cont.csv
+check level@10000000 ~ -32 6
+check level@1000000000 ~ -32 6
+# screens on: settle Auto becomes 150 ms, 300 ms with RF just on (the generator redraws its
+# menu before the new frequency)
+click actionSettings
+set screenOffCheck 0
+click settingsOk
+set pointsCombo 51
+do clearsent
+click onceButton
+waitfor idle == 1 60000
+dump sweepms sweepms_screen_on.txt
+dump trace trace_screen_on.csv
+dump tracker.sent tracker_sent_screen_on.txt
+check tracker.sent !contains "ui off"
+check level@10000000 ~ -32 6
+check level@100000000 ~ -32 6
+check level@1000000000 ~ -32 6
+check level@3000000000 ~ -32 6
+# leave both units as found: RF off, screens on, analyzer back to its own sweeping
+click actionSettings
+set screenOffCheck 1
+click settingsOk
+set trackCheck 0
+click trackerConnectButton
+waitfor tracker.connected == 0 5000
+check messages !contains No reply
+quit
