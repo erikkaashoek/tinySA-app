@@ -75,6 +75,8 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "rbw") return QString::number(c.rbwKHz);
     if (name == "atten") return num(c.atten);
     if (name == "lna") return c.lna ? "1" : "0";
+    if (name == "extgain") return num(c.extGainDb, 1);  // the analyzer's
+    if (name == "ylabel") return ui->spectrum->yAxis->label();
     if (name == "input") return c.input == InputMode::High ? "high" : "low";
     if (name == "points") return num(live.grid.points);
     if (name == "sweepms") return num(m_sweepMs, 1);

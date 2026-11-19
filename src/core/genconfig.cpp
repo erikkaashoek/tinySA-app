@@ -37,7 +37,7 @@ static bool isFm(GenType t) { return t == GenType::FM || t == GenType::NFM || t 
 
 GenConfig clampGen(GenConfig c, const DeviceInfo &d)
 {
-    c.extGainDb = std::clamp(c.extGainDb, -100.0, 100.0);
+    c.extGainDb = std::clamp(std::round(c.extGainDb * 10) / 10, -100.0, 100.0);  // as clampConfig
     c.sweepS = std::clamp(c.sweepS, 0.0, 600.0);
     c.modHz = std::clamp(c.modHz, 1, d.model ? d.model->gen.maxModHz : 10000);
     c.amDepth = std::clamp(c.amDepth, 0, 100);

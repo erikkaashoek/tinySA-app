@@ -57,6 +57,8 @@ public:
     int burstCount() const { return m_burstCount; }
     int burstTriggers() const { return m_burstTriggers; }
     int modulationHz() const { return m_modHz; }
+    double extGain() const { return m_extGain; }  // `ext_gain`: shifts the reported levels, both modes
+    void setExtGain(double db) { m_extGain = db; }  // as left by an earlier session (backup memory)
     int fmDeviation() const { return m_fmDev; }
     // "CTCSS + 1 kHz" (config.wfm_1khz_harmonic): kept over mode switches; `modulation ctcss`
     bool ctcssTone = false;

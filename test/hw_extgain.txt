@@ -1,0 +1,73 @@
+# External gain on hardware (one value for analyzer and generator): measuring unit M (this
+# script), its RF input cabled to a
+# second unit G generating 10 MHz -20 dBm CW (e.g. `mode low output`, `sweep cw 10000000`,
+# `level -20`, `output on` in G's console):
+#   tinySA-App.exe --port <M> --ini test\out\hwextgain.ini --script test\hw_extgain.txt --out test\out\hwextgain
+# Fixed attenuation (auto attenuation moves the floor between sweeps). Leaves M's ext_gain at 0
+# (the unit keeps it in its backup memory, also over restarts).
+waitfor connected == 1 10000
+check activity == analyzer
+# the unit's own value at connect is replaced by the app's, with a message
+set analyzerGainSpin 0
+do send ext_gain 5
+waitfor idle == 1 5000
+click connectButton
+waitfor connected == 0 5000
+click connectButton
+waitfor connected == 1 10000
+waitfor messages contains "external gain was +5.0 dB" 5000
+check messages contains the app sets its own, +0.0 dB
+set startEdit 9.9
+set stopEdit 10.1
+set rbwCombo 10 kHz
+set attenCombo 10 dB
+do clearsent
+click onceButton
+waitfor sweeps >= 1 20000
+waitfor idle == 1 5000
+check sent contains ext_gain 0
+check peak.dbm ~ -20 3
+dump peak.dbm hwextgain_0.txt
+# +20 dB: an amplifier in front of the input, levels 20 dB lower
+set analyzerGainSpin 20
+do clearsent
+do mark
+click onceButton
+waitfor sweeps.new >= 1 20000
+waitfor idle == 1 5000
+check sent contains ext_gain 20
+check peak.dbm ~ -40 3
+dump peak.dbm hwextgain_20.txt
+shot hwextgain_20.png
+# one value: the generator page shows it; set there to -6 (RF stays off), the analyzer uses it too
+click generatorButton
+waitfor activity == generator
+waitfor idle == 1 5000
+check gen.extgain == 20.0
+do clearsent
+set extGainSpin -6
+waitfor sent contains "ext_gain -6" 5000
+waitfor idle == 1 5000
+check extgain == -6.0
+click analyzerButton
+waitfor activity == analyzer
+do clearsent
+do mark
+click onceButton
+waitfor sweeps.new >= 1 20000
+waitfor idle == 1 5000
+check sent contains ext_gain -6
+check peak.dbm ~ -14 3
+dump peak.dbm hwextgain_back.txt
+# leave 0 on the unit
+set analyzerGainSpin 0
+do clearsent
+do mark
+click onceButton
+waitfor sweeps.new >= 1 20000
+waitfor idle == 1 5000
+check sent contains ext_gain 0
+check peak.dbm ~ -20 3
+check messages !contains refused
+check messages !contains No reply
+quit

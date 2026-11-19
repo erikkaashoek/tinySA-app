@@ -71,13 +71,16 @@ void DeviceLink::open(const QString &port)
     // sim:basic, sim:ultra; ":old" = v1.4-220 ZS405, ":gen" = left generating; ":thru" / ":lpf" =
     // input cabled to the other simulated unit's output (directly / through a 150 MHz low-pass);
     // ":ppb=N" = its output frequency N ppb off; ":ctcss" = its CTCSS tone on, ":noctcss" =
-    // firmware without `modulation ctcss` (v1.4-317)
+    // firmware without `modulation ctcss` (v1.4-317); ":extgain=N" = its ext_gain N dB
     if (port.startsWith("sim:")) {
         auto *sim = new SimTransport(port.contains("basic") ? SimTransport::Kind::Basic
                                                             : SimTransport::Kind::Ultra, this);
         sim->oldFirmware = port.contains(":old");
         sim->ctcssCommand = !port.contains(":noctcss");  // ":noctcss": firmware before v1.4-341
         sim->ctcssTone = port.contains(":ctcss");        // ":ctcss": its CTCSS + 1 kHz tone is on
+        static const QRegularExpression extGain(R"(:extgain=(-?\d+(?:\.\d+)?))");  // its ext_gain
+        if (const auto m = extGain.match(port); m.hasMatch())
+            sim->setExtGain(m.captured(1).toDouble());
         sim->dut = port.contains(":lpf") ? SimTransport::Dut::LowPass
                    : port.contains(":thru") ? SimTransport::Dut::Thru : SimTransport::Dut::None;
         static const QRegularExpression ppb(R"(:ppb=(-?\d+))");  // its generator's frequency error
@@ -149,6 +152,7 @@ void DeviceLink::handshake()
         if (ok && v.size() >= 3)
             m_info.deviceGrid = {v[0].toDouble(), v[1].toDouble(), v[2].toInt()};
     }});
+    enqueue(extGainRead());
     // mode probe: `level` without a value prints its usage only in output mode
     enqueue({"level", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
         if (ok)
@@ -176,6 +180,11 @@ void DeviceLink::handshake()
         m_want = clampConfig(m_want, *m_info.model);
         m_gen = clampGen(m_gen, m_info);
         m_gen.ctcss = m_genHave.ctcss = m_info.ctcssTone;  // the unit's, not the last unit's
+        // the app sends its own external gain: say so when the unit had another one (a unit
+        // that generates is followed: the app takes its value)
+        if (!m_isTracker && !m_info.gen.active && m_info.extGainDb && std::abs(*m_info.extGainDb - m_want.extGainDb) >= 0.05)
+            emit message(QString("The tinySA's external gain was %1 dB: the app sets its own, %2 dB (Ext. gain)")
+                             .arg(QString::asprintf("%+.1f", *m_info.extGainDb), QString::asprintf("%+.1f", m_want.extGainDb)));
         // left off by an app that did not close properly (no-op when on); a tracking generator's
         // goes off right away
         if (m_info.has("ui") && !m_isTracker)

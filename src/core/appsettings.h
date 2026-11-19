@@ -74,6 +74,7 @@ struct AppSettings {
         v("device/rbw_khz", config.rbwKHz);
         v("device/atten_db", config.atten);
         v("device/lna", config.lna);
+        v("device/ext_gain_db", config.extGainDb);
         v("device/high_input", m_highInput);
         v("device/port", port);
         v("device/screen_off_scanning", screenOffScanning);
@@ -85,7 +86,6 @@ struct AppSettings {
         v("generator/mixer", gen.mixer);
         v("generator/freq_hz", gen.freqHz);
         v("generator/level_dbm", gen.levelDbm);
-        v("generator/ext_gain_db", gen.extGainDb);
         v("generator/type", m_genType);
         v("generator/span_hz", gen.spanHz);
         v("generator/sweep_s", gen.sweepS);

@@ -128,6 +128,7 @@ private:
     void pump();      // send the next command, or start the next sweep
     void pumpStep();
     void pumpGenerator();
+    Cmd extGainRead();                                   // handshake: the unit's ext_gain
     void probeGenerator(const QStringList &levelReply);  // handshake: is the unit generating?
     void adoptGenerator();                               // handshake end: follow a generating unit
     void updateBusy();

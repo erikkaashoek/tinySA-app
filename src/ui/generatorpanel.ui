@@ -252,7 +252,7 @@
       <item row="2" column="1">
        <widget class="QDoubleSpinBox" name="extGainSpin">
         <property name="toolTip">
-         <string>Gain of an external amplifier (+) or attenuator (-) after the tinySA: levels are shown and entered at the device under test</string>
+         <string>Gain of an external amplifier (+) or attenuator (-) after the tinySA: levels are shown and entered at the device under test. The tinySA's EXT GAIN, one value for analyzer and generator.</string>
         </property>
         <property name="keyboardTracking">
          <bool>false</bool>

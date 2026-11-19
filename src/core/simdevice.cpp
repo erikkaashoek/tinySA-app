@@ -418,7 +418,7 @@ void SimTransport::setMode(bool output, bool high)
     m_modulation = "off";
     m_modHz = 1000, m_amDepth = 80, m_fmDev = 3000;
     m_burstPeriod = 1e-3, m_burstOn = 100e-6, m_burstCount = 0;
-    m_levelChange = m_extGain = 0;
+    m_levelChange = 0;  // not ext_gain: reset_settings() keeps it (one value for both modes)
     m_sweepTime = 2;
     m_rbwKHz = 0;
     m_atten = -1;
@@ -541,7 +541,8 @@ void SimTransport::scanTick()
             const unsigned h = (unsigned(s.next) * 2654435761u) ^ (m_sweeps * 40503u);
             const double level = levelAt(hz, rbw), floor = (m_kind == Kind::Ultra ? -105 : -100) + std::max(m_atten, 0);
             const double noise = (((h >> 8) % 3000) / 1000.0 - 1.5) * std::clamp(1 - (level - floor) / 40, 0.03, 1.0);
-            const int v = int(std::lround((level + noise + zero) * 32));
+            // reported at the device under test: minus the external gain (correct_RSSI)
+            const int v = int(std::lround((level + noise - m_extGain + zero) * 32));
             chunk += 'x';
             chunk += char(v & 0xff);
             chunk += char((v >> 8) & 0xff);

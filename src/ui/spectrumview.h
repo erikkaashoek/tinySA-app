@@ -38,6 +38,7 @@ public:
     void setShown(int i, bool on);
     void setNormalized(bool on);           // levels are dB relative to the reference
     void setLinear(bool on);
+    void setExtGain(double db);            // named on the level axis while not 0
     void setSpan(double startHz, double stopHz);
     void setMarkers(const QList<MarkerMark> &marks);
     void autoScale();                      // once, from the visible traces
@@ -99,6 +100,7 @@ private:
     Theme m_theme;
     ViewSettings m_view;
     bool m_normalized = false;
+    double m_extGainDb = 0;
     Trace m_trace[kTraces];
     QCPGraph *m_graph[kTraces];
     QCPItemStraightLine *m_hoverLine;

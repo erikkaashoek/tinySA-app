@@ -72,6 +72,7 @@ signals:
     void message(const QString &text);
 
 private:
+    void syncExtGain();  // the generator's external gain -> the analyzer's (one value)
     QThread m_thread;
     DeviceLink *m_link;
     DeviceLink *m_trackerLink;  // the tracking generator's unit, same thread
@@ -80,6 +81,8 @@ private:
     TrackConfig m_track;
     std::optional<double> m_trackerPpb;
     SweepConfig m_config;
+    int m_lastSeq = -1;                    // SweepFrame::seq of the last frame
+    std::optional<int> m_restartAfterSeq;  // ext gain changed during this sweep: restart after it
     int m_activity = DeviceLink::Analyzer;
     GenConfig m_gen;
     int m_scan = DeviceLink::Off;

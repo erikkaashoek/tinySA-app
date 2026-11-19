@@ -103,6 +103,16 @@ static std::optional<double> lastValue(const QStringList &lines)
     return std::nullopt;
 }
 
+// Handshake: `ext_gain` alone prints "usage: ext_gain -100.0..+100.0" and the value, in either
+// mode (one value for analyzer and generator, kept in the unit's backup memory)
+DeviceLink::Cmd DeviceLink::extGainRead()
+{
+    return {"ext_gain", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+        if (ok && !lines.join(' ').contains('?'))
+            m_info.extGainDb = lastValue(lines);
+    }};
+}
+
 void DeviceLink::probeGenerator(const QStringList &levelReply)
 {
     const QString usage = levelReply.join(' ');
@@ -110,19 +120,13 @@ void DeviceLink::probeGenerator(const QStringList &levelReply)
         return;  // input mode: `level` printed nothing
     m_info.gen.active = true;
     m_info.gen.high = usage.contains("-38");  // basic HIGH output: "usage: level -38..13"
+    m_info.gen.extGainDb = m_info.extGainDb;  // read just before
     // read what else the unit can tell, before the rest of the handshake (not the level:
     // `attenuate` reports the attenuator, on a ZS407 5 dB below the level)
-    QList<Cmd> probes;
-    probes.append({"ext_gain", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
-        if (ok && !lines.join(' ').contains('?'))
-            m_info.gen.extGainDb = lastValue(lines);
-    }});
-    probes.append({"sweeptime", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+    m_queue.prepend({"sweeptime", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
         if (ok)
             m_info.gen.sweepS = lastValue(lines);
     }});
-    for (int i = int(probes.size()) - 1; i >= 0; --i)
-        m_queue.prepend(probes[i]);
 }
 
 void DeviceLink::adoptGenerator()

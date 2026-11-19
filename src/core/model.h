@@ -74,6 +74,7 @@ struct DeviceInfo {
     // ~1 kHz tone added. Read with `modulation ctcss` (Ultra firmware from v1.4-341); nullopt =
     // firmware without the command.
     std::optional<bool> ctcssTone;
+    std::optional<double> extGainDb;  // the unit's `ext_gain` at connect (one value for both modes)
     UnitGenerator gen;
     QString title() const;  // "tinySA Ultra+ ZS407 - tinySA4_v1.4-..."
     bool has(const QString &cmd) const { return commands.contains(cmd); }

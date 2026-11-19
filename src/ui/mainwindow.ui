@@ -446,6 +446,35 @@
               </item>
              </widget>
             </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="analyzerGainLabel">
+              <property name="text">
+               <string>Ext. gain</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1" colspan="2">
+             <widget class="QDoubleSpinBox" name="analyzerGainSpin">
+              <property name="toolTip">
+               <string>Gain of an external amplifier (+) or attenuator (-) at the tinySA's RF port: levels are shown at the device under test. The tinySA's EXT GAIN, one value for analyzer and generator.</string>
+              </property>
+              <property name="keyboardTracking">
+               <bool>false</bool>
+              </property>
+              <property name="suffix">
+               <string> dB</string>
+              </property>
+              <property name="decimals">
+               <number>1</number>
+              </property>
+              <property name="minimum">
+               <double>-100.000000000000000</double>
+              </property>
+              <property name="maximum">
+               <double>100.000000000000000</double>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>

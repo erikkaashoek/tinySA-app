@@ -273,6 +273,36 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     1 kHz, off 8 Hz (-42 dB); the reconnect read it back.
   - **Firmware note:** `modulation` is a direct command, so `modulation ctcss on|off` calls
     draw_menu() from the shell thread (main.c: two threads on the SPI DMA can hang the unit).
+- Branch `ext-gain` (2026-11-19, user request "adjust the external gain in the app"): Ext. gain
+  for the analyzer, one value with the generator's.
+  - **Firmware fact:** one `ext_gain` for both modes, kept over mode switches (reset_settings
+    has it commented out) and restarts (backup registers); it shifts the levels `scanraw`
+    reports (correct_RSSI). Measured on the ZS407: ext_gain 10 moves a -20.1 dBm carrier to
+    -29.6, and an output/input mode switch keeps 10.0. Before this branch the generator page's
+    value stayed on the unit and shifted the analyzer's levels unseen.
+  - **Decided (user, after first choosing one value per page):** one value for analyzer (SA) and
+    generator (SG), as on the unit. SweepConfig::extGainDb and GenConfig::extGainDb stay, the
+    Session keeps them equal (setConfig -> generator with its port level kept, setGenerator /
+    take-over -> `syncExtGain`). One ini key device/ext_gain_db; an ini with only
+    generator/ext_gain_db (older versions) loads that, save removes it.
+  - **Link:** SweepConfig::extGainDb goes out with the receiver settings; it is sent again on the
+    way back from the generator (AppliedConfig reset; same value, harmless), an input mode switch
+    keeps it. The generator's diff sends it after its mode switch as before.
+  - **Connect:** the handshake reads `ext_gain` in either mode (`DeviceInfo::extGainDb`). A unit
+    in input mode with another value gets the app's and a message: "The tinySA's external gain
+    was +5.0 dB: the app sets its own, +0.0 dB (Ext. gain)". A generating unit is followed: its
+    value becomes the app's (both pages), no message.
+  - **UI:** Receiver group row "Ext. gain" (analyzerGainSpin, -100..100 dB, 0.1 dB), the
+    generator's Output group Ext. gain the same value; the level axis says "dBm, ext. gain
+    +20.0 dB" while not 0 (not when normalised). A change restarts average and hold with the
+    first sweep that has the new gain (Session, SweepFrame::seq).
+  - **Sim:** ext_gain survives mode switches and shifts the scanraw values, as the firmware;
+    `:extgain=N` = a unit left at N dB.
+  - **Tests:** tst_core configDiffSendsOnlyChanges, extGainOneValue, extGainOneKeyInTheIni; sim
+    extgain.txt; full regression 21 of 22 in one run, uioff failed once on its touch timing
+    (`waitfor scan == 0`) and passed 3 of 3 alone. Hardware hw_extgain.txt (ZS407 COM21
+    measuring the ZS405's 10 MHz -20 dBm): PASS, 0 dB -19.63, +20 dB -39.59, -6 set on the
+    generator page -> analyzer -13.63 dBm; the unit left at 0.
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -402,6 +432,9 @@ build a release from a clean, committed tree.
     - With count > 0 the output waits for `trigger`, and every settings change re-arms it. A
       wait-mutex command stops the bursts while it runs.
     - No burst on the direct path above 1.13 GHz ("MOD: BURST N/A").
+  - **`ext_gain [dB]`:** one value for input and output mode, kept over mode switches and
+    restarts (backup registers). Input mode: reported levels (scanraw too) are minus it. Alone it
+    prints "usage: ext_gain -100.0..+100.0" and the value, in either mode.
   - **`modulation ctcss [on|off]` (Ultra, v1.4-341):** "on"/"off" = config.wfm_1khz_harmonic
     (the MODULATION menu's CTCSS + 1 kHz). FM below 255 Hz then gets the rate's harmonic nearest
     1 kHz at the full deviation, the rate at a seventh. In the config: a mode switch keeps it,
