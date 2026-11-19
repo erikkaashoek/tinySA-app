@@ -1,0 +1,70 @@
+# CTCSS + 1 kHz (simulated Ultra+ with v1.4-341, its tone on): the app shows the unit's state,
+# the check box acts below 255 Hz only, changes reach the unit, a mode switch keeps the unit's
+# setting, and firmware without `modulation ctcss` gets a hint instead of the check box.
+#   del test\out\gen.ini & tinySA-App.exe --sim --ini test\out\gen.ini --script test\gen_ctcss.txt --out test\out\gen_ctcss
+do connect sim:ultra:ctcss
+waitfor connected == 1
+check sent contains modulation ctcss
+check sent !contains modulation ctcss on
+click generatorButton
+waitfor activity == generator
+check gen.ctcss == 1
+set freqDisplay 10M
+click fmButton
+check gen.type == FM
+set modRateSpin 1000
+check gen.ctcssbox == disabled
+check @ctcssCheck == 1
+check @modInfoLabel == 1 kHz tone only below 255 Hz
+do clearsent
+set modRateSpin 100
+waitfor sent contains "modulation freq 100"
+check gen.ctcssbox == enabled
+check @modInfoLabel == Adds 1000 Hz at 3 kHz deviation, 100 Hz at 0.4 kHz
+check gen.status contains FM + 1000 Hz tone
+check sent !contains ctcss
+set fmDevSpin 1
+check @modInfoLabel == Adds 1000 Hz at 1 kHz deviation, 100 Hz at 0.1 kHz
+set modRateSpin 150
+check @modInfoLabel contains Adds 1050 Hz
+# off and on again from the app
+do clearsent
+set ctcssCheck 0
+waitfor sent contains "modulation ctcss off"
+check gen.ctcss == 0
+check @modInfoLabel ==
+check gen.status !contains tone
+set ctcssCheck 1
+waitfor sent contains "modulation ctcss on"
+check gen.ctcss == 1
+click rfButton
+waitfor sent contains "output on"
+shot gen_ctcss.png
+# the tone is the unit's config: back to the analyzer and again generator, no command for it
+click analyzerButton
+waitfor activity == analyzer
+do clearsent
+click generatorButton
+waitfor activity == generator
+waitfor sent contains "modulation fm"
+waitfor idle == 1 5000
+check sent !contains ctcss
+check gen.ctcss == 1
+# firmware before v1.4-341 cannot tell: no check box, a hint below 255 Hz
+click analyzerButton
+waitfor activity == analyzer
+click connectButton
+waitfor connected == 0
+do connect sim:ultra:noctcss
+waitfor connected == 1
+click generatorButton
+waitfor activity == generator
+check gen.type == FM
+check gen.ctcss == ?
+check gen.ctcssbox == hidden
+check @modInfoLabel contains CTCSS + 1 kHz is on in its MODULATION menu
+check sent !contains ctcss
+set modRateSpin 1000
+check @modInfoLabel ==
+shot gen_ctcss_oldfw.png
+quit

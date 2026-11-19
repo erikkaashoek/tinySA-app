@@ -77,6 +77,7 @@ GeneratorPanel::GeneratorPanel(QWidget *parent)
     connect(ui->fmDevSpin, &QDoubleSpinBox::valueChanged, this, [this](double khz) {
         edit([khz](GenConfig &c) { c.fmDevHz = int(std::lround(khz * 1000)); });
     });
+    connect(ui->ctcssCheck, &QCheckBox::clicked, this, [this](bool on) { edit([on](GenConfig &c) { c.ctcss = on; }); });
     for (QLineEdit *e : {ui->burstPeriodEdit, ui->burstOnEdit})
         connect(e, &QLineEdit::editingFinished, this, [this, e] { editBurstTime(e); });
     connect(ui->burstCountSpin, &QSpinBox::valueChanged, this, [this](int n) {
@@ -258,11 +259,26 @@ void GeneratorPanel::showSignal(const GenConfig &c, const GenDesc *g)
     ui->fmDevLabel->setVisible(adjustable && t == GenType::FM);
     ui->fmDevSpin->setVisible(adjustable && t == GenType::FM);
     ui->fmDevSpin->setValue(c.fmDevHz / 1000.0);
+    // the unit's CTCSS + 1 kHz: shown and set where the firmware can (v1.4-341), only acts below 255 Hz
+    const bool fm = adjustable && t == GenType::FM;
+    const bool ctcssRate = c.modHz < kCtcssMaxHz;
+    ui->ctcssCheck->setVisible(fm && c.ctcss.has_value());
+    ui->ctcssCheck->setChecked(c.ctcss.value_or(false));
+    ui->ctcssCheck->setEnabled(ctcssRate);
+    auto khz = [](int hz) { return QString::number(hz / 1000.0, 'g', 3) + " kHz"; };
+    QString fmInfo;
+    if (const auto tone = ctcssTone(c))
+        fmInfo = QString("Adds %1 Hz at %2 deviation, %3 Hz at %4")
+                     .arg(tone->toneHz).arg(khz(tone->toneDevHz)).arg(c.modHz).arg(khz(tone->rateDevHz));
+    else if (fm && c.ctcss == true)
+        fmInfo = "1 kHz tone only below 255 Hz";
+    else if (fm && !c.ctcss && ctcssRate && m_device.firmware() >= 1004220)  // the tone, but no command
+        fmInfo = "Below 255 Hz the tinySA adds a 1 kHz tone if CTCSS + 1 kHz is on in its MODULATION menu";
     ui->modInfoLabel->setText(t == GenType::AM && !adjustable ? "Depth about 30 %"
                               : t == GenType::NFM            ? "Deviation 3 kHz"
                               : t == GenType::WFM            ? "Deviation 75 kHz"
                               : t == GenType::External       ? "Modulation from the external input"
-                                                             : "");
+                                                             : fmInfo);
 }
 
 QString GeneratorPanel::statusText() const
@@ -274,5 +290,7 @@ QString GeneratorPanel::statusText() const
         s += " · " + dbm(c.levelDbm);
     if (c.type && *c.type != GenType::CW)
         s += " · " + genTypeName(*c.type);
+    if (const auto tone = ctcssTone(c))
+        s += QString(" + %1 Hz tone").arg(tone->toneHz);
     return s;
 }

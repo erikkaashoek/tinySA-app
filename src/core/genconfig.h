@@ -27,9 +27,24 @@ struct GenConfig {
     double burstPeriodS = 1e-3;   // Burst: on for burstOnS of every period (2 us .. 89 s)
     double burstOnS = 100e-6;     //   1 us .. period - 1 us
     int burstCount = 0;           //   0 = continuous, else that many bursts per trigger
+    // Ultra FM below 255 Hz: the unit adds a ~1 kHz tone ("CTCSS + 1 kHz", `modulation ctcss`).
+    // A setting of the unit (its config), not of the app: read at connect, never stored in the
+    // ini; nullopt = the firmware cannot tell (before v1.4-341)
+    std::optional<bool> ctcss;
     bool operator==(const GenConfig &) const = default;
 };
 Q_DECLARE_METATYPE(GenConfig)
+
+constexpr double kCtcssMaxHz = 255;  // MAX_CTCSS_FREQ: the tone is added below this rate
+
+// What the unit makes of FM with the CTCSS tone on (sa_core.c, the FM table): the rate's
+// harmonic nearest 1 kHz at the full deviation, the rate itself at a seventh of it.
+struct CtcssTone {
+    int toneHz;      // the added tone: round(1000 / rate) x rate
+    int toneDevHz;   // the deviation, in the unit's 100 Hz steps
+    int rateDevHz;   // the CTCSS tone's own deviation (deviation / 7, 100 Hz steps)
+};
+std::optional<CtcssTone> ctcssTone(const GenConfig &c);  // nullopt: no tone added
 
 // Generator state of the unit as far as the link knows it; nullopt = unknown -> resend.
 struct AppliedGen {
@@ -41,7 +56,12 @@ struct AppliedGen {
     std::optional<int> modHz, amDepth, fmDevHz;
     std::optional<double> burstPeriodS, burstOnS;
     std::optional<int> burstCount;
+    std::optional<bool> ctcss;  // in the unit's config: a mode switch keeps it
 };
+
+// What is still known after a mode switch or when the generator state is forgotten: the
+// settings in the unit's config (the CTCSS tone).
+AppliedGen keepUnitConfig(const AppliedGen &h);
 
 struct GenLimits {
     double minHz, maxHz;
@@ -57,7 +77,8 @@ QByteArrayList genCommands(const GenConfig &want, AppliedGen &have, const ModelD
 // diff sends it again (an `output off` must not get lost).
 void forgetGenCommand(const QByteArray &cmd, AppliedGen &have);
 
-// Clamp to the connected unit: frequency/level limits of the path, types of the model.
+// Clamp to the connected unit: frequency/level limits of the path, types of the model; the
+// CTCSS tone unknown on firmware that cannot read or set it.
 GenConfig clampGen(GenConfig c, const DeviceInfo &d);
 
 // The unit was already generating at connect: take over what it reports (mode, frequency,

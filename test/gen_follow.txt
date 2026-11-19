@@ -14,7 +14,11 @@ check @levelDisplay == ?
 check gen.status contains RF ?
 wait 300
 check sent !contains output
-check sent !contains "modulation "
+# no modulation setting (the handshake reads `modulation` and `modulation ctcss`; "ctcss o" = on/off)
+check sent !contains "modulation off"
+check sent !contains "modulation fm"
+check sent !contains "modulation freq"
+check sent !contains "modulation ctcss o"
 check sent !contains mode
 shot gen_follow.png
 # the first click on "RF ?" switches RF off (the safe way), the next one on again

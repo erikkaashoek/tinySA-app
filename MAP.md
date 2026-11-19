@@ -252,6 +252,27 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
       `perform()`, which `abort` cannot interrupt.
     - `scanraw f f 1` (v1.4-316) measures one point as in a sweep, step RBW/2 (300 kHz with
       auto). Before v1.4-316 it is zero span: basic 150 ms per point.
+- Branch `ctcss` (2026-11-19, firmware v1.4-341 `modulation ctcss on|off`): the unit's
+  "CTCSS + 1 kHz" for FM below 255 Hz.
+  - **Why:** a user report of an impure tone from the app. Measured on the bench (ZS405 generating,
+    ZS407 measuring): AM/FM from the app equal raw commands; the tone is the unit's config flag
+    (menu only before v1.4-341), which the app could neither show nor set.
+  - **Model:** a setting of the unit (config.wfm_1khz_harmonic), not of the app. The handshake
+    reads `modulation ctcss` when `modulation` lists it (`DeviceInfo::ctcssTone`); connect takes
+    it into GenConfig::ctcss (never in the ini). A mode switch keeps it (`keepUnitConfig`), so only
+    a change sends `modulation ctcss on|off` (before `modulation fm`). nullopt = firmware without it.
+  - **UI:** FM page check box "+ 1 kHz tone" (ctcssCheck), enabled below 255 Hz; info line "Adds
+    1000 Hz at 3 kHz deviation, 100 Hz at 0.4 kHz" (`ctcssTone()`, as sa_core.c: harmonic
+    round(1000/rate), deviation in 100 Hz steps, the rate at /7); status bar "FM + 1000 Hz tone".
+    Firmware v1.4-220..340 (the tone, no command): a hint below 255 Hz to check the unit's menu.
+  - **Tests:** tst_core ctcssToneCommands, ctcssReadAtConnectAndSet; sim gen_ctcss.txt (the
+    default sim Ultra is now v1.4-341; `:ctcss` tone on, `:noctcss` = v1.4-317); full
+    regression PASS (gen_follow's "no modulation sent" check now allows the read).
+  - **Hardware (hw_gen_ctcss.txt, ZS405 COM11 generating, v1.4-342):** PASS. Slope-demodulated
+    on the ZS407 (zero span 3 kHz above the carrier, RBW 3 kHz): tone on 989 Hz deviation at
+    1 kHz, off 8 Hz (-42 dB); the reconnect read it back.
+  - **Firmware note:** `modulation` is a direct command, so `modulation ctcss on|off` calls
+    draw_menu() from the shell thread (main.c: two threads on the SPI DMA can hang the unit).
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -381,6 +402,10 @@ build a release from a clean, committed tree.
     - With count > 0 the output waits for `trigger`, and every settings change re-arms it. A
       wait-mutex command stops the bursts while it runs.
     - No burst on the direct path above 1.13 GHz ("MOD: BURST N/A").
+  - **`modulation ctcss [on|off]` (Ultra, v1.4-341):** "on"/"off" = config.wfm_1khz_harmonic
+    (the MODULATION menu's CTCSS + 1 kHz). FM below 255 Hz then gets the rate's harmonic nearest
+    1 kHz at the full deviation, the rate at a seventh. In the config: a mode switch keeps it,
+    a restart loses it unless saved. `modulation` alone lists `ctcss`.
   - **`ui off|on` (Ultra, v1.4-314, firmware a092e6b):**
     - While off nothing draws, and the screen shows "Remote only mode. Touch screen to enable
       UI". `ui` alone prints "ui on|off".

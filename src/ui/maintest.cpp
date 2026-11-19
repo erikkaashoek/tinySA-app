@@ -47,6 +47,11 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
         if (f == "count") return num(g.burstCount);
         if (f == "burstbutton")  // offered: firmware with burst
             return ui->generatorPanel->findChild<QWidget *>("burstButton")->isHidden() ? "0" : "1";
+        if (f == "ctcss") return !g.ctcss ? "?" : *g.ctcss ? "1" : "0";  // the unit's CTCSS tone
+        if (f == "ctcssbox") {  // the + 1 kHz tone check box: hidden, disabled (rate >= 255 Hz) or enabled
+            const auto *b = ui->generatorPanel->findChild<QWidget *>("ctcssCheck");
+            return b->isHidden() ? "hidden" : b->isEnabled() ? "enabled" : "disabled";
+        }
         if (f == "status") return m_genLabel->text();
         if (f == "editing") {  // an inline entry of the big displays is open
             const auto edits = ui->generatorPanel->findChildren<DigitEdit *>();

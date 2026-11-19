@@ -56,6 +56,11 @@ public:
     double burstOnTime() const { return m_burstOn; }
     int burstCount() const { return m_burstCount; }
     int burstTriggers() const { return m_burstTriggers; }
+    int modulationHz() const { return m_modHz; }
+    int fmDeviation() const { return m_fmDev; }
+    // "CTCSS + 1 kHz" (config.wfm_1khz_harmonic): kept over mode switches; `modulation ctcss`
+    bool ctcssTone = false;
+    bool ctcssCommand = true;      // false: Ultra firmware before v1.4-341 (the tone only in the menu)
     int scansWhileGenerating = 0;  // scanraw in output mode: junk, and a hang with modulation
     bool oldFirmware = false;      // v1.4-220 ZS405 (Ultra): the shell hangs on a command sent right
     bool hung() const { return m_hung; }  // after output/modulation/levelchange/ext_gain
