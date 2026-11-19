@@ -70,9 +70,14 @@ struct DeviceInfo {
     ScanGrid deviceGrid;  // the unit's own sweep settings at connect time
     int vbatOffset = 0;   // mV, from `vbat_offset`
     bool hasBurst = false;  // `modulation` lists burst (tinySA Ultra firmware from v1.4-305)
+    // The unit's "CTCSS + 1 kHz" (MODULATION menu, kept in its config): FM below 255 Hz gets a
+    // ~1 kHz tone added. Read with `modulation ctcss` (Ultra firmware from v1.4-341); nullopt =
+    // firmware without the command.
+    std::optional<bool> ctcssTone;
     UnitGenerator gen;
     QString title() const;  // "tinySA Ultra+ ZS407 - tinySA4_v1.4-..."
     bool has(const QString &cmd) const { return commands.contains(cmd); }
+    int firmware() const;   // tinySA4_v1.4-341-g.. -> 1004341; 0 when the version does not parse
     // Firmware before v1.4-266 (or a version that does not parse): a command sent right after
     // `output`, `modulation`, `levelchange` or `ext_gain` can hang in output mode, until
     // "Command timeout" (v1.4-252..265) or for good (older; changelog V1.4266, V1.4252).

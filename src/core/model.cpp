@@ -50,14 +50,16 @@ QString DeviceInfo::title() const
     return version.isEmpty() ? t : t + " - " + version;
 }
 
-bool DeviceInfo::directCommandRace() const
+int DeviceInfo::firmware() const
 {
     static const QRegularExpression re(R"(v(\d+)\.(\d+)-(\d+))");  // tinySA4_v1.4-220-gbc09086
     const auto m = re.match(version);
-    if (!m.hasMatch())
-        return true;
-    const int v = m.captured(1).toInt() * 1000000 + m.captured(2).toInt() * 1000 + m.captured(3).toInt();
-    return v < 1004266;
+    return m.hasMatch() ? m.captured(1).toInt() * 1000000 + m.captured(2).toInt() * 1000 + m.captured(3).toInt() : 0;
+}
+
+bool DeviceInfo::directCommandRace() const
+{
+    return firmware() < 1004266;  // also when the version does not parse
 }
 
 QStringList parseHelp(const QStringList &lines)

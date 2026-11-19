@@ -18,7 +18,7 @@ void DeviceLink::setActivity(int activity)
         m_modeBeforeGen = m_mode;
         setMode(Off);  // abort + resume: a paused unit does not apply output changes
         m_activity = Generator;
-        m_genHave = AppliedGen{};  // unknown: the diff starts with the mode switch
+        m_genHave = keepUnitConfig(m_genHave);  // unknown: the diff starts with the mode switch
     } else {
         m_activity = Analyzer;
         // generator commands not sent yet are obsolete: no `output on` just before the switch
@@ -27,7 +27,7 @@ void DeviceLink::setActivity(int activity)
         // at once, so the unit shows its own spectrum again; it resets the unit's settings
         queueChecked({input == InputMode::High ? "mode high input" : "mode low input"});
         m_have = AppliedConfig{input};
-        m_genHave = AppliedGen{};
+        m_genHave = keepUnitConfig(m_genHave);
     }
     emit activityChanged(m_activity);
     if (activity == Analyzer)

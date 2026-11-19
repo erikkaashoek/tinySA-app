@@ -296,7 +296,10 @@ void SimTransport::execute(const QByteArray &line)
     }
     if (oldFirmware && m_outMode && QByteArrayList{"output", "modulation", "levelchange", "ext_gain"}.contains(cmd))
         m_directClock.start();
-    const QByteArray version = !ultra ? "tinySA_v1.4-302-sim" : oldFirmware ? "tinySA4_v1.4-220-sim" : "tinySA4_v1.4-317-sim";
+    const QByteArray version = !ultra        ? "tinySA_v1.4-302-sim"
+                               : oldFirmware ? "tinySA4_v1.4-220-sim"
+                               : ctcssCommand ? "tinySA4_v1.4-341-sim"
+                                              : "tinySA4_v1.4-317-sim";
     const bool uiCommand = ultra && !oldFirmware;  // `ui off|on` (v1.4-314), `ui off "text"` (v1.4-317)
     if (cmd == "version") {
         out(version + "\r\n" + (!ultra ? "" : oldFirmware ? "HW Version:V0.4.5.1.1\r\n" : "HW Version:V0.5.4 max2871\r\n"));
@@ -472,6 +475,7 @@ bool SimTransport::generatorCommand(const QByteArrayList &tok)
             m_extGain = a1.toDouble();
     } else if (cmd == "modulation") {
         const bool burst = ultra && !oldFirmware;  // v1.4-305
+        const bool ctcss = burst && ctcssCommand;  // v1.4-341
         const QByteArrayList types = burst ? QByteArrayList{"off", "am", "fm", "burst"}
                                      : ultra ? QByteArrayList{"off", "am", "fm"}
                                              : QByteArrayList{"off", "am", "nfm", "wfm", "extern"};
@@ -492,8 +496,13 @@ bool SimTransport::generatorCommand(const QByteArrayList &tok)
             m_burstCount = std::clamp(a2.toInt(), 0, 65535);
         else if (burst && a1 == "trigger")
             ++m_burstTriggers;
+        else if (ctcss && a1 == "ctcss" && a2.isEmpty())  // the state, as config.wfm_1khz_harmonic
+            out(ctcssTone ? "on\r\n" : "off\r\n");
+        else if (ctcss && a1 == "ctcss" && (a2 == "on" || a2 == "off"))
+            ctcssTone = a2 == "on";
         else if (burst)
-            out("usage: modulation off|am|fm|freq|depth|deviation|burst|period|ontime|count|trigger [value]\r\n");
+            out("usage: modulation off|am|fm|freq|depth|deviation|burst|period|ontime|count|trigger"
+                + QByteArray(ctcss ? "|ctcss" : "") + " [value]\r\n");
         else
             out("usage: modulation " + types.join('|') + "|freq 100..6000\r\n");
     } else {

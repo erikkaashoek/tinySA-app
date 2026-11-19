@@ -410,10 +410,12 @@ private slots:
         QCOMPARE(info.hardware, QString("ZS407"));
         QCOMPARE(info.zeroDbm, 174);
         QVERIFY(info.has("scanraw"));
-        QCOMPARE(info.version, QString("tinySA4_v1.4-317-sim"));
+        QCOMPARE(info.version, QString("tinySA4_v1.4-341-sim"));
+        QCOMPARE(info.firmware(), 1004341);
         QVERIFY(info.has("ui"));  // screen off while scanning
         QVERIFY(!info.directCommandRace());
         QVERIFY(info.hasBurst);  // `modulation` lists burst
+        QCOMPARE(info.ctcssTone, std::optional(false));  // `modulation ctcss` read: off
     }
 
     void singleSweepLandsOnTheGrid()
@@ -910,6 +912,102 @@ private slots:
         const QByteArrayList rx = sim->received();
         QVERIFY(rx.indexOf("modulation count 3") < rx.indexOf("modulation trigger"));
         QCOMPARE(rx.count("modulation trigger"), 1);
+    }
+
+    void ctcssToneCommands()
+    {
+        DeviceInfo d = unit("tinySA ULTRA+ ZS407");
+        d.ctcssTone = false;  // read at connect
+        const ModelDesc &m = *d.model;
+        GenConfig c = clampGen(carrier(10e6, -20), d);
+        c.ctcss = false;
+        c.type = GenType::FM;
+        c.modHz = 100;
+        AppliedGen h;
+        h.ctcss = false;
+        QByteArrayList cmds = genCommands(c, h, m);  // the unit's state already: nothing about it
+        QCOMPARE(cmds.first(), QByteArray("mode low output"));
+        QVERIFY(cmds.contains("modulation fm"));
+        QVERIFY(!cmds.join(' ').contains("ctcss"));
+        QVERIFY(!ctcssTone(c));
+
+        c.ctcss = true;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"modulation ctcss on"}));
+        auto tone = ctcssTone(c);  // as sa_core.c: 10 x 100 Hz at 3 kHz, the rate at 3 kHz / 7
+        QVERIFY(tone);
+        QCOMPARE(tone->toneHz, 1000);
+        QCOMPARE(tone->toneDevHz, 3000);
+        QCOMPARE(tone->rateDevHz, 400);
+        c.modHz = 67;  // the lowest CTCSS tone: 15 x 67 Hz
+        c.fmDevHz = 1000;
+        QCOMPARE(ctcssTone(c)->toneHz, 1005);
+        QCOMPARE(ctcssTone(c)->rateDevHz, 100);
+        c.modHz = 240;  // 4 x 240 Hz
+        QCOMPARE(ctcssTone(c)->toneHz, 960);
+        c.modHz = 255;  // from MAX_CTCSS_FREQ on: no tone
+        QVERIFY(!ctcssTone(c));
+        genCommands(c, h, m);
+
+        h.mode.reset();  // a mode switch keeps the unit's config
+        cmds = genCommands(c, h, m);
+        QCOMPARE(cmds.first(), QByteArray("mode low output"));
+        QVERIFY(!cmds.join(' ').contains("ctcss"));
+        const AppliedGen k = keepUnitConfig(h);
+        QCOMPARE(k.ctcss, std::optional(true));
+        QVERIFY(!k.mode && !k.freq && !k.modulation);
+
+        forgetGenCommand("modulation ctcss on", h);  // no reply: sent again
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"modulation ctcss on"}));
+        forgetGenCommand("modulation fm", h);  // the type, not the tone
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"modulation fm"}));
+        c.type = GenType::CW;
+        c.ctcss = false;
+        QCOMPARE(genCommands(c, h, m), QByteArrayList({"modulation off", "modulation ctcss off"}));
+
+        d.ctcssTone.reset();  // firmware before v1.4-341: unknown, never sent
+        c = clampGen(c, d);
+        QVERIFY(!c.ctcss);
+        h = AppliedGen{};
+        QVERIFY(!genCommands(c, h, m).join(' ').contains("ctcss"));
+        d.ctcssTone = true;  // a generating unit taken over: its tone with it
+        d.gen.active = true;
+        QCOMPARE(adoptUnitGenerator(carrier(), d, &h).ctcss, std::optional(true));
+        QCOMPARE(h.ctcss, std::optional(true));
+    }
+
+    void ctcssReadAtConnectAndSet()
+    {
+        for (const char *port : {"sim:ultra:noctcss", "sim:ultra:old", "sim:basic"}) {  // no command
+            DeviceLink old;
+            QSignalSpy opened(&old, &DeviceLink::opened);
+            old.open(port);
+            QVERIFY(opened.wait(3000));
+            QVERIFY2(!opened.first().first().value<DeviceInfo>().ctcssTone, port);
+        }
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened);
+        link.open("sim:ultra:ctcss");  // its tone is on
+        QVERIFY(opened.wait(3000));
+        QCOMPARE(opened.first().first().value<DeviceInfo>().ctcssTone, std::optional(true));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        GenConfig g = carrier(10e6, -20);
+        g.type = GenType::FM;
+        g.modHz = 100;
+        g.ctcss = true;  // as the session takes it from the unit
+        link.setGenerator(g);
+        link.setActivity(DeviceLink::Generator);
+        QTRY_COMPARE_WITH_TIMEOUT(sim->modulation(), QByteArray("fm"), 3000);
+        QCOMPARE(sim->modulationHz(), 100);
+        QVERIFY(!sim->received().contains("modulation ctcss on"));  // the unit had it already
+        g.ctcss = false;
+        link.setGenerator(g);
+        QTRY_VERIFY_WITH_TIMEOUT(!sim->ctcssTone, 3000);
+        link.setActivity(DeviceLink::Analyzer);  // back and forth: the mode switches keep it
+        link.setActivity(DeviceLink::Generator);
+        QTRY_COMPARE_WITH_TIMEOUT(sim->received().count("modulation fm"), 2, 3000);  // the FM set up again
+        const QByteArrayList rx = sim->received();
+        QCOMPARE(rx.count("modulation ctcss off"), 1);
+        QCOMPARE(rx.count("modulation ctcss"), 1);  // the read at connect
     }
 
     void lostCommandIsSentAgain()

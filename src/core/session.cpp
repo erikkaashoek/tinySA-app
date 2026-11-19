@@ -42,7 +42,8 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink), m_t
         setConfig(m_config);  // clamp to the model's limits
         // the link clamps its own copy (and may take over a generating unit's settings
         // next): sending ours would race with that
-        const GenConfig g = clampGen(m_gen, m_info);
+        GenConfig g = clampGen(m_gen, m_info);
+        g.ctcss = m_info.ctcssTone;  // the unit's CTCSS tone, as the link takes it
         if (!(g == m_gen)) {
             m_gen = g;
             emit generatorChanged(m_gen);

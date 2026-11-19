@@ -70,11 +70,14 @@ void DeviceLink::open(const QString &port)
     m_uiTextOk = true;  // until the firmware answers ui off "text" with its usage
     // sim:basic, sim:ultra; ":old" = v1.4-220 ZS405, ":gen" = left generating; ":thru" / ":lpf" =
     // input cabled to the other simulated unit's output (directly / through a 150 MHz low-pass);
-    // ":ppb=N" = its output frequency N ppb off
+    // ":ppb=N" = its output frequency N ppb off; ":ctcss" = its CTCSS tone on, ":noctcss" =
+    // firmware without `modulation ctcss` (v1.4-317)
     if (port.startsWith("sim:")) {
         auto *sim = new SimTransport(port.contains("basic") ? SimTransport::Kind::Basic
                                                             : SimTransport::Kind::Ultra, this);
         sim->oldFirmware = port.contains(":old");
+        sim->ctcssCommand = !port.contains(":noctcss");  // ":noctcss": firmware before v1.4-341
+        sim->ctcssTone = port.contains(":ctcss");        // ":ctcss": its CTCSS + 1 kHz tone is on
         sim->dut = port.contains(":lpf") ? SimTransport::Dut::LowPass
                    : port.contains(":thru") ? SimTransport::Dut::Thru : SimTransport::Dut::None;
         static const QRegularExpression ppb(R"(:ppb=(-?\d+))");  // its generator's frequency error
@@ -154,6 +157,14 @@ void DeviceLink::handshake()
     // burst modulation (Ultra firmware from v1.4-305): `modulation` alone lists it in its usage
     enqueue({"modulation", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
         m_info.hasBurst = ok && lines.join(' ').contains("burst");
+        // the CTCSS + 1 kHz tone (Ultra firmware from v1.4-341): the unit's state, before the
+        // rest of the handshake
+        if (ok && lines.join(' ').contains("ctcss"))
+            m_queue.prepend({"modulation ctcss", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
+                const QString state = lines.value(0).trimmed();
+                if (ok && (state == "on" || state == "off"))
+                    m_info.ctcssTone = state == "on";
+            }});
     }});
     enqueue({"vbat_offset", {}, 0, 3000, [this](bool ok, const QStringList &lines) {
         bool num = false;
@@ -164,6 +175,7 @@ void DeviceLink::handshake()
     enqueue({"", {}, 0, 0, [this](bool, const QStringList &) {
         m_want = clampConfig(m_want, *m_info.model);
         m_gen = clampGen(m_gen, m_info);
+        m_gen.ctcss = m_genHave.ctcss = m_info.ctcssTone;  // the unit's, not the last unit's
         // left off by an app that did not close properly (no-op when on); a tracking generator's
         // goes off right away
         if (m_info.has("ui") && !m_isTracker)

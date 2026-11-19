@@ -1,0 +1,56 @@
+# CTCSS + 1 kHz on hardware (tinySA Ultra, firmware from v1.4-341; generator unit G in analyzer
+# mode, RF port cabled to a second tinySA M that demodulates):
+#   tinySA-App.exe --port <G> --ini test\out\hwctcss.ini --script test\hw_gen_ctcss.txt --out test\out\hwctcss
+# 10 MHz -20 dBm FM 100 Hz, 1 kHz deviation. Two 15 s windows for measuring on M: first with the
+# tone on (a 1000 Hz tone at 1 kHz deviation, 100 Hz at 0.1 kHz), then off. Then the tone on
+# again and a reconnect: the handshake reads it back from the unit. Leaves the tone and RF off.
+waitfor connected == 1 10000
+waitfor activity == analyzer
+check gen.ctcss != ?
+click generatorButton
+waitfor activity == generator
+set freqDisplay 10M
+set levelDisplay -20
+click fmButton
+set modRateSpin 100
+set fmDevSpin 1
+set ctcssCheck 1
+check gen.ctcssbox == enabled
+click rfButton
+waitfor sent contains "output on" 5000
+waitfor idle == 1 5000
+check gen.ctcss == 1
+check gen.status contains FM + 1000 Hz tone
+check messages !contains refused
+check messages !contains No reply
+shot hwctcss_on.png
+# window 1: tone on
+wait 15000
+do clearsent
+set ctcssCheck 0
+waitfor sent contains "modulation ctcss off" 5000
+waitfor idle == 1 5000
+check gen.status !contains tone
+# window 2: tone off
+wait 15000
+# read back by the handshake: on again, reconnect
+set ctcssCheck 1
+waitfor sent contains "modulation ctcss on" 5000
+waitfor idle == 1 5000
+do clearsent
+click connectButton
+waitfor connected == 0 5000
+click connectButton
+waitfor connected == 1 10000
+waitfor activity == generator 5000
+check gen.ctcss == 1
+check sent !contains modulation ctcss on
+# leave the unit with the tone off and RF off
+click fmButton
+set ctcssCheck 0
+waitfor sent contains "modulation ctcss off" 5000
+click rfButton
+waitfor sent contains "output off" 5000
+waitfor idle == 1 5000
+check messages !contains refused
+quit

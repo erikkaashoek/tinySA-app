@@ -722,6 +722,16 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="ctcssCheck">
+            <property name="toolTip">
+             <string>CTCSS + 1 kHz, a setting of the tinySA: below 255 Hz it adds the rate's harmonic nearest 1 kHz at the full deviation and keeps the rate at a seventh of it. The tinySA keeps this until it restarts (for good after Save config on the tinySA).</string>
+            </property>
+            <property name="text">
+             <string>+ 1 kHz tone</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QLabel" name="modInfoLabel"/>
           </item>
           <item>

@@ -61,6 +61,8 @@ GenConfig clampGen(GenConfig c, const DeviceInfo &d)
             c.levelChangeDb = 0;
         }
         c.levelChangeDb = std::clamp(c.levelChangeDb, -g.maxLevelChange, g.maxLevelChange);
+        if (!d.ctcssTone)  // firmware without `modulation ctcss`
+            c.ctcss.reset();
     }
     const GenLimits l = genLimits(c, d);
     c.levelDbm = std::clamp(std::round(c.levelDbm * 10) / 10, l.minDbm, l.maxDbm);
@@ -106,6 +108,23 @@ bool burstPossible(const GenConfig &c)
     return c.mixer || c.freqHz <= 1130e6;
 }
 
+std::optional<CtcssTone> ctcssTone(const GenConfig &c)
+{
+    if (c.type != GenType::FM || c.ctcss != true || c.modHz < 1 || c.modHz >= kCtcssMaxHz)
+        return std::nullopt;
+    // as sa_core.c: hn = (int)(1000.0 / f + 0.5); deviation in steps of 100 Hz, the rate's own /7
+    const int hn = int(1000.0 / c.modHz + 0.5);
+    const int div100 = c.fmDevHz / 100;
+    return CtcssTone{hn * c.modHz, div100 * 100, div100 / 7 * 100};
+}
+
+AppliedGen keepUnitConfig(const AppliedGen &h)
+{
+    AppliedGen k;
+    k.ctcss = h.ctcss;
+    return k;
+}
+
 QByteArrayList genCommands(const GenConfig &w, AppliedGen &h, const ModelDesc &m)
 {
     const GenDesc &g = m.gen;
@@ -115,8 +134,8 @@ QByteArrayList genCommands(const GenConfig &w, AppliedGen &h, const ModelDesc &m
         cmds << (path == GenPath::High ? "mode high output" : "mode low output");
         // a mode switch resets the unit (sa_core.c reset_settings): output off, no modulation
         // (1 kHz, 80 %, 3 kHz; burst 1 ms, 100 us, continuous), no level change, not sweeping,
-        // mixer output; level at maximum
-        h = AppliedGen{};
+        // mixer output; level at maximum. Its config (the CTCSS tone) stays.
+        h = keepUnitConfig(h);
         h.mode = path;
         h.on = false;
         h.modulation = "off";
@@ -168,6 +187,12 @@ QByteArrayList genCommands(const GenConfig &w, AppliedGen &h, const ModelDesc &m
     if (w.levelKnown && h.levelDbm != port) {
         cmds << "level " + num(port);
         h.levelDbm = port;
+    }
+    // the unit's CTCSS tone (its config, any signal type): before `modulation fm`, which then
+    // starts with the right table
+    if (w.ctcss && h.ctcss != w.ctcss) {
+        cmds << (*w.ctcss ? "modulation ctcss on" : "modulation ctcss off");
+        h.ctcss = w.ctcss;
     }
     if (known) {
         const double change = sweep && path == GenPath::Low ? w.levelChangeDb : 0;
@@ -240,6 +265,7 @@ void forgetGenCommand(const QByteArray &cmd, AppliedGen &h)
     else if (a == "modulation" && b == "period") h.burstPeriodS.reset();
     else if (a == "modulation" && b == "ontime") h.burstOnS.reset();
     else if (a == "modulation" && b == "count") h.burstCount.reset();
+    else if (a == "modulation" && b == "ctcss") h.ctcss.reset();
     else if (a == "modulation" && b != "trigger") h.modulation.reset();  // a trigger is no setting
 }
 
@@ -248,6 +274,7 @@ GenConfig adoptUnitGenerator(GenConfig c, const DeviceInfo &d, AppliedGen *have)
     const UnitGenerator &u = d.gen;
     c.path = u.high ? GenPath::High : GenPath::Low;
     c.mixer = true;  // cannot be read: the unit's default after a mode switch
+    c.ctcss = d.ctcssTone;  // read at connect (or unknown)
     const ScanGrid &grid = d.deviceGrid;
     const double span = grid.points > 0 ? std::max(0.0, grid.stopHz - grid.startHz) : 0;
     const double unitHz = grid.points > 0 ? (grid.startHz + grid.stopHz) / 2 : c.freqHz;
