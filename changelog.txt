@@ -1,3 +1,10 @@
+2.0.0-53 2026-11-19
+- External gain for the analyzer: Ext. gain in the Receiver group is the gain of an external amplifier (+) or attenuator (-) in front of the tinySA. Levels are then shown at the device under test, and the level axis says so (e.g. "dBm, ext. gain +20.0 dB"). Average and hold start again when it changes
+- The external gain is one setting for analyzer and generator, as on the tinySA: changing it on one page changes it on the other (the generator's output level stays, the level shown moves). The app sets its value on the tinySA when it connects and says so when the tinySA had another one. A tinySA that is already generating keeps its own, and the app takes it over
+- Fixed: the generator's external gain stayed on the tinySA and shifted the analyzer's levels without showing it
+- Signal generator: "+ 1 kHz tone" for FM below 255 Hz (tinySA Ultra firmware v1.4-341 or newer) shows and switches the tinySA's CTCSS + 1 kHz setting. It adds a tone near 1 kHz (the harmonic of the rate nearest 1 kHz) at the full deviation and keeps the CTCSS tone at a seventh of it. The info line says what is added, the status bar shows "+ 1000 Hz tone". The tinySA keeps the setting until it restarts, for good after Save config on the tinySA
+- With firmware v1.4-220 to v1.4-340, which has the 1 kHz tone but cannot report it, FM below 255 Hz shows a hint to check CTCSS + 1 kHz in the tinySA's MODULATION menu
+
 2.0.0-48 2026-11-12
 - Tracking generator: a second tinySA, connected in the new "Tracking generator" group, generates while this one analyses, for the frequency response of filters, amplifiers and cables. Every point is measured with the generator set to that frequency. Track switches it on, Level sets the generator's output level. Normalize with a cable in place of the device under test shows the response relative to the cable
 - The tracking generator's frequency error against the analyzer is measured once at 3 GHz and corrected (shown in ppb next to its name), so narrow RBWs can be used. RBW Auto means 30 kHz while tracking. The sweep range and the level are limited to what the generator can do
