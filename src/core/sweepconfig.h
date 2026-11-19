@@ -13,6 +13,10 @@ struct SweepConfig {
     int atten = -1;     // dB, -1 = auto
     bool lna = false;   // models with hasLna
     InputMode input = InputMode::Low;  // models with hasInputMode
+    // external amplifier (+) or attenuator (-): the unit's `ext_gain`, which shifts the levels
+    // it reports. One value for analyzer and generator, as on the unit (kept over mode switches
+    // and restarts); the session keeps GenConfig::extGainDb equal to it.
+    double extGainDb = 0;
     bool operator==(const SweepConfig &) const = default;
 };
 Q_DECLARE_METATYPE(SweepConfig)
@@ -23,6 +27,7 @@ struct AppliedConfig {
     std::optional<bool> lna;
     std::optional<int> atten;
     std::optional<double> rbwKHz;
+    std::optional<double> extGainDb;  // unknown after a mode switch: the generator sets its own
     std::optional<std::pair<qint64, qint64>> sweep;  // device display range
 };
 

@@ -15,7 +15,8 @@ struct GenConfig {
     double levelDbm = -40;        // at the DUT: port level + extGainDb
     bool levelKnown = true;       // false: taken over from a unit (the level cannot be read back);
                                   // levelDbm is then only where an edit starts from
-    double extGainDb = 0;         // external amplifier (+) or attenuator (-) between unit and DUT
+    double extGainDb = 0;         // external amplifier (+) or attenuator (-) between unit and DUT;
+                                  // shared with SweepConfig::extGainDb (Session keeps them equal)
     std::optional<bool> on;       // RF output; nullopt = unknown (taken over from a generating unit)
     std::optional<GenType> type;  // nullopt = unknown (set on the unit)
     double spanHz = 10e6;         // Sweep

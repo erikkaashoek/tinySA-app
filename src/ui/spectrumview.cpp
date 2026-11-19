@@ -110,7 +110,10 @@ void SpectrumView::setLinear(bool on)
         t->setTickCount(10);
         yAxis->setTicker(t);
     }
-    yAxis->setLabel(on ? (m_normalized ? "Ratio" : "Power (W)") : (m_normalized ? "dB" : "dBm"));
+    QString label = on ? (m_normalized ? "Ratio" : "Power (W)") : (m_normalized ? "dB" : "dBm");
+    if (m_extGainDb != 0 && !m_normalized)  // absolute levels: at the device under test
+        label += QString(", ext. gain %1 dB").arg(QString::asprintf("%+.1f", m_extGainDb));
+    yAxis->setLabel(label);
     for (int i = 0; i < kTraces; ++i)
         redraw(i);
     applyLevels();
@@ -120,6 +123,14 @@ void SpectrumView::setNormalized(bool on)
 {
     m_normalized = on;
     setLinear(m_view.linear);  // labels and values change meaning
+}
+
+void SpectrumView::setExtGain(double db)
+{
+    if (db == m_extGainDb)
+        return;
+    m_extGainDb = db;
+    setLinear(m_view.linear);  // the level label
 }
 
 void SpectrumView::setSpan(double startHz, double stopHz)

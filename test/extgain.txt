@@ -1,0 +1,76 @@
+# External gain, one value for analyzer and generator as on the unit (simulated Ultra+): it
+# reaches the unit and shifts the levels to the device under test, the level axis names it, the
+# generator page shows and edits the same value (its port level stays), a unit with another
+# value at connect gets the app's with a message, and a generating unit's value is taken over.
+#   del test\out\extgain.ini & tinySA-App.exe --sim --ini test\out\extgain.ini --script test\extgain.txt --out test\out\extgain
+do connect sim:ultra
+waitfor connected == 1
+check extgain == 0.0
+check ylabel == dBm
+set startEdit 99
+set stopEdit 101
+set rbwCombo 10 kHz
+click onceButton
+waitfor sweeps >= 1 20000
+waitfor idle == 1 5000
+check peak.dbm ~ -30 1
+# an amplifier of +20 dB in front of the input: levels at the device under test, 20 dB lower
+do clearsent
+set analyzerGainSpin 20
+check extgain == 20.0
+check gen.extgain == 20.0
+check ylabel == dBm, ext. gain +20.0 dB
+do mark
+click onceButton
+waitfor sweeps.new >= 1 20000
+waitfor idle == 1 5000
+check sent contains ext_gain 20
+check peak.dbm ~ -50 1
+shot extgain_analyzer.png
+# the generator page: the same value; edited there (an attenuator of -6 dB), the analyzer's too
+click generatorButton
+waitfor activity == generator
+waitfor idle == 1 5000
+check @extGainSpin == 20.0 dB
+set levelDisplay -30
+do clearsent
+set extGainSpin -6
+waitfor sent contains "ext_gain -6" 5000
+check gen.extgain == -6.0
+check extgain == -6.0
+check gen.level == -56.0
+check sent !contains level
+shot extgain_generator.png
+# back to the analyzer: -6 there too
+click analyzerButton
+waitfor activity == analyzer
+check @analyzerGainSpin == -6.0 dB
+check ylabel == dBm, ext. gain -6.0 dB
+do mark
+click onceButton
+waitfor sweeps.new >= 1 20000
+waitfor idle == 1 5000
+check peak.dbm ~ -24 1
+# a new unit (the sim starts at 0 dB): the app sets its own and says so
+click connectButton
+waitfor connected == 0
+do connect sim:ultra
+waitfor connected == 1
+waitfor messages contains "external gain was +0.0 dB" 5000
+check messages contains the app sets its own, -6.0 dB
+# a unit that generates is followed: its 10 dB is the app's now (both pages)
+click connectButton
+waitfor connected == 0
+do connect sim:ultra:gen:extgain=10
+waitfor connected == 1
+waitfor activity == generator
+check gen.extgain == 10.0
+check extgain == 10.0
+check messages !contains external gain was +10.0
+click analyzerButton
+waitfor activity == analyzer
+check @analyzerGainSpin == 10.0 dB
+set analyzerGainSpin 0
+check gen.extgain == 0.0
+check ylabel == dBm
+quit

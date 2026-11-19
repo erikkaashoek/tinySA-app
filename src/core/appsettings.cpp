@@ -18,6 +18,11 @@ void AppSettings::load(QSettings &s)
             field = s.value(key, QVariant::fromValue(field)).template value<T>();
     });
     config.input = m_highInput ? InputMode::High : InputMode::Low;
+    // one external gain for analyzer and generator, as the unit has; ini files from before
+    // only have the generator's
+    if (!s.contains("device/ext_gain_db") && s.contains("generator/ext_gain_db"))
+        config.extGainDb = s.value("generator/ext_gain_db").toDouble();
+    gen.extGainDb = config.extGainDb;
     gen.path = m_genHigh ? GenPath::High : GenPath::Low;
     gen.type = genTypeFromName(m_genType).value_or(GenType::CW);
     gen.on = false;
@@ -38,6 +43,7 @@ void AppSettings::save(QSettings &s)
         else
             s.setValue(key, QVariant::fromValue(field));
     });
+    s.remove("generator/ext_gain_db");  // now device/ext_gain_db, shared
 }
 
 void AppSettings::storeGenerator()

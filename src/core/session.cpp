@@ -53,6 +53,7 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink), m_t
     connect(m_link, &DeviceLink::generatorAdopted, this, [this](const GenConfig &g) {
         m_gen = g;
         emit generatorChanged(m_gen);
+        syncExtGain();  // the generating unit's external gain is the app's now
     });
     connect(m_link, &DeviceLink::activityChanged, this, [this](int a) {
         if (a != m_activity) {
@@ -73,6 +74,11 @@ Session::Session(QObject *parent) : QObject(parent), m_link(new DeviceLink), m_t
         emit busyChanged(busy);
     });
     connect(m_link, &DeviceLink::frame, this, [this](const SweepFrame &f) {
+        if (m_restartAfterSeq && f.seq != *m_restartAfterSeq) {  // a sweep after an ext gain change
+            m_traces.restartAverage();
+            m_restartAfterSeq.reset();
+        }
+        m_lastSeq = f.seq;
         m_traces.add(f);
         emit frame(f);
         emit tracesChanged(f.complete);
@@ -142,10 +148,18 @@ void Session::setConfig(const SweepConfig &c)
                                 : isTracking() ? clampToTracker(c, *m_info.model, m_trackerInfo)
                                                : clampConfig(c, *m_info.model);
     const bool changed = !(clamped == m_config);
+    if (clamped.extGainDb != m_config.extGainDb)  // the levels jump: average and hold start again
+        m_restartAfterSeq = m_lastSeq;           // with the first sweep that has the new gain
     m_config = clamped;
     QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setConfig(clamped); });
     if (changed || !(clamped == c))
         emit configChanged(m_config);
+    if (m_gen.extGainDb != m_config.extGainDb) {  // one external gain: the generator's too
+        GenConfig g = m_gen;
+        g.levelDbm += m_config.extGainDb - g.extGainDb;  // as on its page: the port level stays
+        g.extGainDb = m_config.extGainDb;
+        setGenerator(g);
+    }
 }
 
 void Session::setGenerator(const GenConfig &want)
@@ -159,6 +173,18 @@ void Session::setGenerator(const GenConfig &want)
     QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setGenerator(clamped); });
     if (changed || !(clamped == want))
         emit generatorChanged(m_gen);
+    syncExtGain();
+}
+
+// One external gain for analyzer and generator, as on the unit: the generator's (edited on its
+// page or taken over from a generating unit) becomes the analyzer's
+void Session::syncExtGain()
+{
+    if (m_config.extGainDb == m_gen.extGainDb)
+        return;
+    SweepConfig c = m_config;
+    c.extGainDb = m_gen.extGainDb;
+    setConfig(c);  // equal now: no way back
 }
 
 void Session::setScreenOffWhileScanning(bool on)

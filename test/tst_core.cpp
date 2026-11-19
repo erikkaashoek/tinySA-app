@@ -1,4 +1,5 @@
 // Unit tests for src/core. One executable, one test class per module.
+#include "appsettings.h"
 #include "csvio.h"
 #include "dfufile.h"
 #include "dfuse.h"
@@ -16,7 +17,9 @@
 #include <QElapsedTimer>
 #include <QPointer>
 #include <QRandomGenerator>
+#include <QSettings>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 #include <cmath>
 
@@ -350,15 +353,27 @@ private slots:
         SweepConfig c;
         c.grid = {100e6, 200e6, 450};
         QCOMPARE(configCommands(c, have, basic),
-                 QByteArrayList({"mode low input", "attenuate auto", "rbw auto",
+                 QByteArrayList({"mode low input", "attenuate auto", "rbw auto", "ext_gain 0",
                                  "sweep start 100000000", "sweep stop 200000000"}));
         QVERIFY(configCommands(c, have, basic).isEmpty());
         c.rbwKHz = 30;
         QCOMPARE(configCommands(c, have, basic), QByteArrayList({"rbw 30"}));
-        c.input = InputMode::High;  // mode switch reloads rbw/atten/range on the unit
+        c.extGainDb = 20;  // an amplifier in front of the input
+        QCOMPARE(configCommands(c, have, basic), QByteArrayList({"ext_gain 20"}));
+        c.extGainDb = -6.5;
+        QCOMPARE(configCommands(c, have, basic), QByteArrayList({"ext_gain -6.5"}));
+        c.input = InputMode::High;  // mode switch reloads rbw/atten/range on the unit; it keeps
+        // the external gain (only the generator sets its own: the link forgets it then)
         QCOMPARE(configCommands(c, have, basic),
                  QByteArrayList({"mode high input", "attenuate auto", "rbw 30",
                                  "sweep start 100000000", "sweep stop 200000000"}));
+        have.extGainDb.reset();
+        QCOMPARE(configCommands(c, have, basic), QByteArrayList({"ext_gain -6.5"}));
+        c.extGainDb = 150.04;  // `ext_gain -100.0..+100.0`, 0.1 dB
+        QCOMPARE(clampConfig(c, basic).extGainDb, 100.0);
+        c.extGainDb = -12.34;
+        QCOMPARE(clampConfig(c, basic).extGainDb, -12.3);
+        c.extGainDb = -6.5;
         const ModelDesc &ultra = *detectModel("tinySA ULTRA ZS405", "");
         AppliedConfig u;
         c.lna = true;
@@ -1008,6 +1023,98 @@ private slots:
         const QByteArrayList rx = sim->received();
         QCOMPARE(rx.count("modulation ctcss off"), 1);
         QCOMPARE(rx.count("modulation ctcss"), 1);  // the read at connect
+    }
+
+    void extGainOneValue()
+    {
+        // the unit has one ext_gain for both modes, so has the app (the session keeps the
+        // generator's equal to the analyzer's); the link sends it again after mode switches
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), message(&link, &DeviceLink::message),
+            frames(&link, &DeviceLink::frame);
+        SweepConfig cfg;
+        cfg.grid = {99e6, 101e6, 101};
+        cfg.extGainDb = 20;  // the app's, from its ini: replaces the unit's 0
+        link.setConfig(cfg);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        QCOMPARE(opened.first().first().value<DeviceInfo>().extGainDb, std::optional(0.0));
+        QVERIFY(std::any_of(message.begin(), message.end(), [](const QList<QVariant> &m) {
+            return m.first().toString().contains("external gain was +0.0 dB: the app sets its own, +20.0 dB");
+        }));
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        auto peak = [&] {  // of the last complete sweep: the sim's 100 MHz carrier is -30 dBm
+            frames.clear();
+            link.setScan(DeviceLink::Once);
+            const bool ok = QTest::qWaitFor([&] {
+                return std::any_of(frames.begin(), frames.end(), [](const QList<QVariant> &f) {
+                    return f.first().value<SweepFrame>().complete;
+                });
+            }, 5000);
+            const SweepFrame f = frames.last().first().value<SweepFrame>();
+            return ok ? *std::max_element(f.dBm.begin(), f.dBm.end()) : 0.0;
+        };
+        QCOMPARE(std::round(peak()), -50.0);  // at the device under test: 20 dB less
+        QCOMPARE(sim->extGain(), 20.0);
+
+        GenConfig g = carrier(100e6, -40);
+        g.extGainDb = 20;
+        link.setGenerator(g);
+        link.setActivity(DeviceLink::Generator);
+        QTRY_COMPARE_WITH_TIMEOUT(sim->modulation(), QByteArray("off"), 3000);
+        QTRY_COMPARE_WITH_TIMEOUT(sim->generating(), true, 3000);
+        g.extGainDb = cfg.extGainDb = -6;  // edited on the generator page: both, as the session does
+        link.setGenerator(g);
+        link.setConfig(cfg);
+        QTRY_COMPARE_WITH_TIMEOUT(sim->extGain(), -6.0, 3000);
+        link.setActivity(DeviceLink::Analyzer);
+        QCOMPARE(std::round(peak()), -24.0);  // an attenuator: levels 6 dB higher at the DUT
+        QCOMPARE(sim->extGain(), -6.0);
+        cfg.extGainDb = 0;
+        link.setConfig(cfg);
+        QCOMPARE(std::round(peak()), -30.0);
+
+        // a generating unit is followed: its external gain is taken, without a message
+        DeviceLink gen;
+        QSignalSpy genOpened(&gen, &DeviceLink::opened), adopted(&gen, &DeviceLink::generatorAdopted),
+            genMessage(&gen, &DeviceLink::message);
+        gen.setConfig(cfg);  // the app's 0
+        gen.open("sim:ultra:gen:extgain=10");
+        QVERIFY(genOpened.wait(3000));
+        QCOMPARE(genOpened.first().first().value<DeviceInfo>().extGainDb, std::optional(10.0));
+        QCOMPARE(adopted.count(), 1);
+        QCOMPARE(adopted.first().first().value<GenConfig>().extGainDb, 10.0);
+        QVERIFY(std::none_of(genMessage.begin(), genMessage.end(), [](const QList<QVariant> &m) {
+            return m.first().toString().contains("external gain");
+        }));
+    }
+
+    void extGainOneKeyInTheIni()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("t.ini");
+        {
+            QSettings old(path, QSettings::IniFormat);  // from before: only the generator's
+            old.setValue("generator/ext_gain_db", 7.5);
+        }
+        AppSettings a;
+        {
+            QSettings s(path, QSettings::IniFormat);
+            a.load(s);
+        }
+        QCOMPARE(a.config.extGainDb, 7.5);
+        QCOMPARE(a.gen.extGainDb, 7.5);
+        a.config.extGainDb = a.gen.extGainDb = -3;
+        {
+            QSettings s(path, QSettings::IniFormat);
+            a.save(s);
+        }
+        QSettings s(path, QSettings::IniFormat);
+        QCOMPARE(s.value("device/ext_gain_db").toDouble(), -3.0);
+        QVERIFY(!s.contains("generator/ext_gain_db"));
+        AppSettings b;
+        b.load(s);
+        QCOMPARE(b.gen.extGainDb, -3.0);
     }
 
     void lostCommandIsSentAgain()

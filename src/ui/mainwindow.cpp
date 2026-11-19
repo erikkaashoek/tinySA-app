@@ -61,6 +61,9 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     connect(ui->lnaCheck, &QCheckBox::clicked, this, [this](bool on) {
         editConfig([on](SweepConfig &c) { c.lna = on; });
     });
+    connect(ui->analyzerGainSpin, &QDoubleSpinBox::valueChanged, this, [this](double db) {
+        editConfig([db](SweepConfig &c) { c.extGainDb = db; });
+    });
     connect(ui->deviceRangeButton, &QPushButton::clicked, this, [this] {
         const ScanGrid g = m_session.device().deviceGrid;
         if (g.points > 1)
@@ -393,6 +396,11 @@ void MainWindow::showConfig(const SweepConfig &c)
     ui->attenCombo->setCurrentIndex(std::max(0, ui->attenCombo->findData(c.atten)));
     ui->inputCombo->setCurrentIndex(c.input == InputMode::High ? 1 : 0);
     ui->lnaCheck->setChecked(c.lna);
+    {
+        const QSignalBlocker block(ui->analyzerGainSpin);
+        ui->analyzerGainSpin->setValue(c.extGainDb);
+    }
+    ui->spectrum->setExtGain(c.extGainDb);
     ui->spectrum->setSpan(c.grid.startHz, c.grid.stopHz);
     m_stepLabel->setText("Step " + formatHz(c.grid.step(), std::max(1.0, c.grid.step() / 1000)));
 }

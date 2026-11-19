@@ -10,7 +10,9 @@ QByteArrayList configCommands(const SweepConfig &want, AppliedConfig &have, cons
     const InputMode input = m.hasInputMode ? want.input : InputMode::Low;
     if (have.input != input) {
         cmds << (input == InputMode::High ? "mode high input" : "mode low input");
-        have = AppliedConfig{input};  // mode switch reloads the device settings
+        const std::optional<double> extGain = have.extGainDb;  // kept by the unit (back from the
+        have = AppliedConfig{input};  // generator the link forgets it); the rest is reloaded
+        have.extGainDb = extGain;
     }
     if (m.hasLna && have.lna != want.lna) {
         cmds << (want.lna ? "lna on" : "lna off");
@@ -25,6 +27,10 @@ QByteArrayList configCommands(const SweepConfig &want, AppliedConfig &have, cons
         cmds << (want.rbwKHz <= 0 ? QByteArray("rbw auto")
                                   : "rbw " + QByteArray::number(want.rbwKHz));
         have.rbwKHz = want.rbwKHz;
+    }
+    if (have.extGainDb != want.extGainDb) {
+        cmds << "ext_gain " + QByteArray::number(want.extGainDb, 'g', 10);
+        have.extGainDb = want.extGainDb;
     }
     const std::pair<qint64, qint64> sweep{std::llround(want.grid.startHz),
                                           std::llround(want.grid.stopHz)};
@@ -54,5 +60,6 @@ SweepConfig clampConfig(SweepConfig c, const ModelDesc &m)
         c.rbwKHz = best == m.rbwKHz.end() ? 0 : *best;
     }
     c.atten = std::clamp(c.atten, -1, m.maxAtten);
+    c.extGainDb = std::clamp(std::round(c.extGainDb * 10) / 10, -100.0, 100.0);  // `ext_gain` -100.0..+100.0
     return c;
 }
