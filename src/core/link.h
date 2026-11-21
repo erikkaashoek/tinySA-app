@@ -146,6 +146,7 @@ private:
     void startSweep();
     void setMode(int mode);
     bool tracking() const;     // analyzer: a tracking generator is connected and wanted
+    bool trackerInMode() const;  // analyzer: the generator unit's output in m_track's mode
     void pumpTracking();       // analyzer: the next point of the tracking sweep
     void measureTrackPoint();  // analyzer: after tuning and settle
     void stopTracking(bool rfOff);  // analyzer: no point pending; rfOff: the generator's RF off

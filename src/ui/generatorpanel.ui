@@ -221,7 +221,7 @@
       <item row="0" column="1">
        <widget class="QComboBox" name="pathCombo">
         <property name="toolTip">
-         <string>tinySA: the LOW or HIGH output connector. Ultra: highest accuracy (mixer) or cleanest signal (synthesizer directly), as in its OUTPUT menu</string>
+         <string>tinySA: the LOW or HIGH output connector. Ultra: highest accuracy (mixer) or cleanest signal (synthesizer directly), as in its OUTPUT menu; Ultra accurate / Ultra cleanest also go above that path's maximum with the third harmonic of the LO (the unit shows HARM)</string>
         </property>
        </widget>
       </item>

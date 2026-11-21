@@ -23,8 +23,10 @@ void DeviceLink::setTracker(DeviceLink *tg)
     });
     // queued: the generator unit finishes its handshake (output mode) first
     connect(tg, &DeviceLink::opened, this, [this] {
-        if (m_tg && m_tg->m_info.model)
+        if (m_tg && m_tg->m_info.model) {
             m_track = clampTrack(m_track, m_tg->m_info);
+            m_tg->m_track = m_track;
+        }
         m_trackAligned = false;  // another unit, perhaps: its frequency error is measured again
         pump();
     }, Qt::QueuedConnection);
@@ -46,15 +48,25 @@ void DeviceLink::setTracker(DeviceLink *tg)
 void DeviceLink::setTracking(const TrackConfig &t)
 {
     const bool was = m_track.on;
+    const bool otherOutput = t.mixer != m_track.mixer || t.harmonic != m_track.harmonic;
     m_track = m_tg && m_tg->m_info.model ? clampTrack(t, m_tg->m_info) : t;
+    if (m_tg)
+        m_tg->m_track = m_track;  // the generator unit's link makes its output in this mode
     if (was && !m_track.on)
         stopTracking(true);  // the next sweep is an ordinary one
+    else if (otherOutput && m_trackNext >= 0)
+        stopTracking(false);  // the sweep starts again in the other output mode
     pump();
 }
 
 bool DeviceLink::tracking() const
 {
     return m_tg && m_track.on && m_tg->m_ready;
+}
+
+bool DeviceLink::trackerInMode() const
+{
+    return m_tg->m_gen.mixer == m_track.mixer && m_tg->m_gen.harmonic == m_track.harmonic;
 }
 
 // Windows ticks every 15.6 ms unless a process asks for a finer clock: a 10 ms settle then took
@@ -111,9 +123,9 @@ void DeviceLink::pumpTracking()
         m_emitClock.start();
     }
     const double hz = trackerHz(g.freq(m_trackNext));
-    if (!m_tg->m_trackRf || m_tg->m_gen.levelDbm != m_track.levelDbm) {
-        // RF on (it may have been anywhere, with its screen on just redrawn) or a new level:
-        // the first point waits as long as after a path change
+    if (!m_tg->m_trackRf || m_tg->m_gen.levelDbm != m_track.levelDbm || !trackerInMode()) {
+        // RF on (it may have been anywhere, with its screen on just redrawn), a new level or
+        // output mode: the first point waits as long as after a path change
         if (m_trackRestart != TrackChange::RfOn)
             m_trackRestart = !m_tg->m_trackRf ? TrackChange::RfOn : TrackChange::Path;
         m_tg->setTrackOutput(true, m_track.levelDbm, hz);
@@ -122,7 +134,7 @@ void DeviceLink::pumpTracking()
         return;  // its busyChanged(false) pumps again
     m_trackWait = true;
     const TrackChange change = m_trackRestart != TrackChange::None ? m_trackRestart
-                               : trackerPath(m_tg->m_info, m_tg->m_gen.freqHz) != trackerPath(m_tg->m_info, hz)
+                               : trackerPath(m_tg->m_info, m_track, m_tg->m_gen.freqHz) != trackerPath(m_tg->m_info, m_track, hz)
                                    ? TrackChange::Path : TrackChange::None;
     m_trackRestart = TrackChange::None;
     m_tg->tune(hz, m_trackNext == 0, [this, seq = m_frame.seq, change](bool ok) {
@@ -189,7 +201,7 @@ double DeviceLink::trackerHz(double hz) const
 void DeviceLink::pumpAlign()
 {
     if (m_alignHz.isEmpty()) {  // high, then the sweep's top (a device in between may block high)
-        const GenLimits l = trackerLimits(m_tg->m_info);
+        const GenLimits l = trackerLimits(m_tg->m_info, m_track);
         const double top = std::min(l.maxHz, m_info.model->highLimit(m_want.input));
         const double bottom = std::max(l.minHz, m_info.model->lowLimit(m_want.input));
         const double high = std::round(std::clamp(std::min(3e9, 0.9 * top), bottom, top));
@@ -198,7 +210,7 @@ void DeviceLink::pumpAlign()
             m_alignHz << std::round(m_want.grid.stopHz);
     }
     const double hz = m_alignHz.first();
-    if (!m_tg->m_trackRf || m_tg->m_gen.freqHz != hz || m_tg->m_gen.levelDbm != m_track.levelDbm)
+    if (!m_tg->m_trackRf || m_tg->m_gen.freqHz != hz || m_tg->m_gen.levelDbm != m_track.levelDbm || !trackerInMode())
         m_tg->setTrackOutput(true, m_track.levelDbm, hz);  // as set, uncorrected
     if (!m_tg->readyToTune())
         return;  // its busyChanged(false) pumps again
@@ -295,7 +307,7 @@ void DeviceLink::setTrackOutput(bool rf, double levelDbm, double hz)
     if (rf)
         m_trackTouched = false;  // the analyzer scans again: the screen off again
     m_trackRf = rf;
-    m_gen = trackerGen(m_gen, m_info, hz, levelDbm, rf);
+    m_gen = trackerGen(m_gen, m_info, m_track, hz, levelDbm, rf);
     if (m_ready && m_activity != Generator)
         setActivity(Generator);  // stops its own scanning first
     pump();

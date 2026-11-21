@@ -830,14 +830,69 @@ private slots:
         QCOMPARE(c.sweepS, 5.0);
         QVERIFY(genCommands(c, h, *d.model).isEmpty());
 
-        d.deviceGrid = {6e9, 6e9, 450};  // an LO harmonic, outside the app's range: moved inside
+        d.deviceGrid = {6e9, 6e9, 450};  // the LO's harmonic: an Ultra output mode, kept
         d.gen.extGainDb.reset();         // not read (no reply): the app's own goes out
         GenConfig stored = carrier();
         stored.extGainDb = 10;
         c = adoptUnitGenerator(stored, d, &h);
-        QCOMPARE(c.freqHz, 5.327e9);
+        QCOMPARE(c.freqHz, 6e9);
+        QVERIFY(c.harmonic && c.mixer);
+        QCOMPARE(genCommands(c, h, *d.model), QByteArrayList({"output mixer", "ext_gain 10"}));
+
+        d.deviceGrid = {13e9, 13e9, 450};  // above even that (harmonic 4 or 5 on the unit): moved inside
+        c = adoptUnitGenerator(stored, d, &h);
+        QCOMPARE(c.freqHz, 12.0726e9);
         QCOMPARE(genCommands(c, h, *d.model),
-                 QByteArrayList({"output mixer", "ext_gain 10", "sweep cw 5327000000"}));
+                 QByteArrayList({"output mixer", "ext_gain 10", "sweep cw 12072600000"}));
+    }
+
+    void ultraOutputModes()
+    {
+        const DeviceInfo zs405 = unit("tinySA ULTRA ZS405");
+        const DeviceInfo zs407 = unit("tinySA ULTRA+ ZS407");
+        const QVector<UltraOutput> modes = ultraOutputs(zs405);
+        QCOMPARE(modes.size(), 4);
+        QCOMPARE(modes[0].text, QString("Accurate, max 5.33 GHz"));
+        QCOMPARE(modes[1].text, QString("Cleanest, max 4.35 GHz"));
+        QCOMPARE(modes[2].text, QString("Ultra accurate, max 12.07 GHz"));  // 3 x 4.35 GHz - 977.4 MHz
+        QCOMPARE(modes[3].text, QString("Ultra cleanest, max 13.05 GHz"));  // 3 x 4.35 GHz
+        QCOMPARE(modes[2].key, QString("ultra mixer"));
+        QVERIFY(ultraOutputs(unit("tinySA v0.3ZS304")).isEmpty());  // the basic: LOW / HIGH port
+
+        GenConfig u = carrier(20e9, -40);
+        u.harmonic = true;
+        QCOMPARE(clampGen(u, zs405).freqHz, 12.0726e9);
+        QCOMPARE(clampGen(u, zs407).freqHz, 17.9226e9);  // MAX2871: LO up to 6.3 GHz
+        u.mixer = false;
+        QCOMPARE(clampGen(u, zs407).freqHz, 18.9e9);
+        u.mixer = true;
+        u.freqHz = 8e9;  // no command for it: the unit takes those frequencies after its mode switch
+        AppliedGen h;
+        QCOMPARE(genCommands(u, h, *zs405.model),
+                 QByteArrayList({"mode low output", "ext_gain 0", "sweep cw 8000000000", "level -40"}));
+        QCOMPARE(outputPathText(u, zs405), QString("Square wave, Mixer, LO harmonic"));
+        QCOMPARE(outputPathText(carrier(5e9), zs405), QString("Square wave, Mixer"));
+        GenConfig basic = u;  // the basic has none
+        QVERIFY(!clampGen(basic, unit("tinySA v0.3ZS304")).harmonic);
+
+        TrackConfig t;
+        QCOMPARE(trackerLimits(zs405, t).maxHz, 5.327e9);
+        t.harmonic = true;
+        QCOMPARE(trackerLimits(zs405, t).maxHz, 12.0726e9);
+        QCOMPARE(trackerPath(zs405, t, 5e9), 2);
+        QCOMPARE(trackerPath(zs405, t, 6e9), 3);  // the LO's harmonic: another path, settles longer
+        t.mixer = false;
+        QCOMPARE(trackerPath(zs405, t, 5e9), 3);  // above the direct path's 4.35 GHz
+        const GenConfig g = trackerGen(carrier(), zs405, t, 13e9, -30, true);
+        QVERIFY(!g.mixer && g.harmonic);
+        QCOMPARE(g.freqHz, 13e9);
+        QVERIFY(clampTrack(t, unit("tinySA v0.3ZS304")).mixer);  // the basic: one LOW output
+        QVERIFY(!clampTrack(t, unit("tinySA v0.3ZS304")).harmonic);
+        SweepConfig c;
+        c.grid = {1e9, 9e9, 101};
+        QCOMPARE(clampToTracker(c, *zs405.model, zs405, t).grid.stopHz, 9e9);
+        t.harmonic = false;
+        QCOMPARE(clampToTracker(c, *zs405.model, zs405, t).grid.stopHz, 4.35e9);
     }
 
     void burstCommands()
@@ -1904,11 +1959,11 @@ private slots:
         QVERIFY(basic.model && ultra.model);
         SweepConfig c;
         c.grid = {1e6, 800e6, 101};
-        const SweepConfig clamped = clampToTracker(c, *ultra.model, basic);  // basic LOW output
+        TrackConfig t{true, -10, -1};
+        const SweepConfig clamped = clampToTracker(c, *ultra.model, basic, t);  // basic LOW output
         QCOMPARE(clamped.grid.startHz, std::max(1e6, basic.model->gen.minHz));
         QCOMPARE(clamped.grid.stopHz, basic.model->gen.maxHz);
-        QCOMPARE(clampToTracker(c, *ultra.model, DeviceInfo{}).grid.stopHz, 800e6);  // none connected
-        TrackConfig t{true, -10, -1};
+        QCOMPARE(clampToTracker(c, *ultra.model, DeviceInfo{}, t).grid.stopHz, 800e6);  // none connected
         QCOMPARE(clampTrack(t, ultra).levelDbm, ultra.model->gen.maxDbm);
         t.levelDbm = -200;
         QCOMPARE(clampTrack(t, basic).levelDbm, basic.model->gen.minDbm);
@@ -1917,10 +1972,10 @@ private slots:
         QCOMPARE(trackSettleMs(t, true), 10);
         QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 32);  // across 823 MHz / 1130 MHz
         QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 32);
-        QCOMPARE(trackerPath(ultra, 800e6), 0);
-        QCOMPARE(trackerPath(ultra, 900e6), 1);
-        QCOMPARE(trackerPath(ultra, 1.2e9), 2);
-        QCOMPARE(trackerPath(basic, 300e6), 0);
+        QCOMPARE(trackerPath(ultra, t, 800e6), 0);
+        QCOMPARE(trackerPath(ultra, t, 900e6), 1);
+        QCOMPARE(trackerPath(ultra, t, 1.2e9), 2);
+        QCOMPARE(trackerPath(basic, t, 300e6), 0);
         t.settleMs = 20;
         QCOMPARE(trackSettleMs(t, true), 20);
         QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 20);

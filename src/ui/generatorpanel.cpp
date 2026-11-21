@@ -49,8 +49,9 @@ GeneratorPanel::GeneratorPanel(QWidget *parent)
     connect(ui->pathCombo, &QComboBox::activated, this, [this] {
         const QString key = ui->pathCombo->currentData().toString();
         edit([key](GenConfig &c) {
-            if (key == "mixer" || key == "normal") {
-                c.mixer = key == "mixer";
+            if (key.endsWith("mixer") || key.endsWith("normal")) {  // Ultra: path, harmonic
+                c.mixer = key.endsWith("mixer");
+                c.harmonic = key.startsWith("ultra");
             } else if ((key == "high") != (c.path == GenPath::High)) {
                 c.path = key == "high" ? GenPath::High : GenPath::Low;
                 c.on = false;  // the other connector: RF off, as the unit does on a mode switch
@@ -140,15 +141,9 @@ void GeneratorPanel::setDevice(const DeviceInfo *d)
     {
         QSignalBlocker block(ui->pathCombo);
         ui->pathCombo->clear();
-        auto upTo = [this](bool mixer) {  // the unit's own words: "Highest accuracy, max 5.4GHz"
-            GenConfig c = m_config;
-            c.path = GenPath::Low;
-            c.mixer = mixer;
-            return formatHz(genLimits(c, m_device).maxHz, 1e7);
-        };
-        if (g && g->hasMixer) {
-            ui->pathCombo->addItem("Accurate, max " + upTo(true), "mixer");
-            ui->pathCombo->addItem("Cleanest, max " + upTo(false), "normal");
+        if (g && g->hasMixer) {  // the unit's own words: "Highest accuracy, max 5.4GHz"
+            for (const UltraOutput &o : ultraOutputs(m_device))
+                ui->pathCombo->addItem(o.text, o.key);
         } else if (g) {
             ui->pathCombo->addItem("LOW port, max " + formatHz(g->maxHz, 1e6), "low");
             if (g->highMaxHz > 0)
@@ -198,7 +193,7 @@ void GeneratorPanel::showConfig(const GenConfig &c)
     ui->rfButton->style()->unpolish(ui->rfButton);  // the style sheet follows the property
     ui->rfButton->style()->polish(ui->rfButton);
 
-    const QString path = g && g->hasMixer ? (c.mixer ? "mixer" : "normal") : c.path == GenPath::High ? "high" : "low";
+    const QString path = g && g->hasMixer ? ultraOutputKey(c.mixer, c.harmonic) : c.path == GenPath::High ? "high" : "low";
     ui->pathCombo->setCurrentIndex(std::max(0, ui->pathCombo->findData(path)));
     const QString signal = outputPathText(c, m_device);
     ui->pathInfoLabel->setText(signal.isEmpty() ? QString(QChar(0x2014)) : signal);

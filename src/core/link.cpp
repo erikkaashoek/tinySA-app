@@ -194,7 +194,7 @@ void DeviceLink::handshake()
         emit opened(m_info);
         adoptGenerator();
         if (m_isTracker) {  // its role: output mode, RF off until the analyzer scans
-            m_gen = trackerGen(m_gen, m_info, m_gen.freqHz, m_gen.levelDbm, m_trackRf);
+            m_gen = trackerGen(m_gen, m_info, m_track, m_gen.freqHz, m_gen.levelDbm, m_trackRf);
             if (m_activity != Generator)
                 setActivity(Generator);
         }

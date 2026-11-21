@@ -5,17 +5,48 @@
 
 // The Ultra's output paths (sa_core.c update_min_max_freq, the unit's OUTPUT menu): the mixer
 // path ("highest accuracy") reaches the LO maximum plus the first IF, the direct PLL path
-// ("cleanest signal") the LO maximum. Above that the unit uses LO harmonics, not offered here.
-static double ultraMaxHz(const QString &hw, bool mixer)
+// ("cleanest signal") the LO maximum. Above that the unit uses the LO's harmonic (3 after a
+// mode switch): mixer up to 3 x LO maximum - DEFAULT_IF (977.4 MHz on every Ultra), direct up
+// to 3 x LO maximum.
+static double ultraMaxHz(const QString &hw, bool mixer, bool harmonic)
 {
     static const QRegularExpression zs(R"(ZS(\d{3}))");
     const auto m = zs.match(hw);
     const int id = m.hasMatch() ? m.captured(1).toInt() : 0;
-    if (id >= 407 || hw.contains("max2871", Qt::CaseInsensitive))  // MAX2871 synthesizer
+    const bool max2871 = id >= 407 || hw.contains("max2871", Qt::CaseInsensitive);  // else ADF4351
+    if (harmonic) {
+        const double lo = max2871 ? 6.3e9 : 4.35e9;  // MAX_LO_FREQ (main.c set_freq_boundaries)
+        return mixer ? 3 * lo - 977.4e6 : 3 * lo;
+    }
+    if (max2871)
         return mixer ? 7.37e9 : 6.3e9;
     if (!mixer)
-        return 4.35e9;  // ADF4351
+        return 4.35e9;
     return id == 406 || hw.contains("V0.4.6") ? 5.42e9 : 5.327e9;
+}
+
+double ultraFundamentalMaxHz(const DeviceInfo &d, bool mixer)
+{
+    return ultraMaxHz(d.hardware, mixer, false);
+}
+
+QString ultraOutputKey(bool mixer, bool harmonic)
+{
+    return QString(harmonic ? "ultra " : "") + (mixer ? "mixer" : "normal");
+}
+
+QVector<UltraOutput> ultraOutputs(const DeviceInfo &d)
+{
+    if (!d.model || !d.model->gen.hasMixer)
+        return {};
+    QVector<UltraOutput> out;
+    for (const bool harmonic : {false, true})
+        for (const bool mixer : {true, false}) {
+            const QString name = harmonic ? (mixer ? "Ultra accurate" : "Ultra cleanest") : (mixer ? "Accurate" : "Cleanest");
+            out.append({mixer, harmonic, ultraOutputKey(mixer, harmonic),
+                        name + ", max " + formatHz(ultraMaxHz(d.hardware, mixer, harmonic), 1e7)});
+        }
+    return out;
 }
 
 GenLimits genLimits(const GenConfig &c, const DeviceInfo &d)
@@ -26,7 +57,7 @@ GenLimits genLimits(const GenConfig &c, const DeviceInfo &d)
         if (c.path == GenPath::High && g.highMaxHz > 0)
             l = {g.highMinHz, g.highMaxHz, g.highMinDbm, g.highMaxDbm};
         else
-            l = {g.minHz, g.hasMixer ? ultraMaxHz(d.hardware, c.mixer) : g.maxHz, g.minDbm, g.maxDbm};
+            l = {g.minHz, g.hasMixer ? ultraMaxHz(d.hardware, c.mixer, c.harmonic) : g.maxHz, g.minDbm, g.maxDbm};
     }
     l.minDbm += c.extGainDb;
     l.maxDbm += c.extGainDb;
@@ -50,6 +81,8 @@ GenConfig clampGen(GenConfig c, const DeviceInfo &d)
         const GenDesc &g = m->gen;
         if (g.highMaxHz <= 0)
             c.path = GenPath::Low;
+        if (!g.hasMixer)
+            c.harmonic = false;
         const QVector<GenType> types = genTypes(d);
         if (c.type && !types.contains(*c.type)) {  // a type of the other model or firmware: nearest one
             const auto fm = std::find_if(types.begin(), types.end(), isFm);
@@ -279,6 +312,8 @@ GenConfig adoptUnitGenerator(GenConfig c, const DeviceInfo &d, AppliedGen *have)
     const double span = grid.points > 0 ? std::max(0.0, grid.stopHz - grid.startHz) : 0;
     const double unitHz = grid.points > 0 ? (grid.startHz + grid.stopHz) / 2 : c.freqHz;
     c.freqHz = unitHz;
+    // above the mixer path's maximum: the LO's harmonic, an Ultra output mode
+    c.harmonic = d.model && d.model->gen.hasMixer && unitHz + span / 2 > ultraFundamentalMaxHz(d, true);
     if (u.extGainDb)
         c.extGainDb = *u.extGainDb;
     c.levelKnown = false;  // `attenuate` reports the attenuator, several dB off the level
@@ -337,6 +372,8 @@ QString outputPathText(const GenConfig &c, const DeviceInfo &d)
         parts << "Square wave";
     if (stop > 1130e6 && c.mixer)
         parts << "Mixer";
+    if (stop > ultraFundamentalMaxHz(d, c.mixer))  // the unit's HARM
+        parts << "LO harmonic";
     return parts.join(", ");
 }
 

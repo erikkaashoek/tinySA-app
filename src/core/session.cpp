@@ -133,19 +133,20 @@ void Session::disconnectTracker()
 void Session::setTrack(const TrackConfig &t)
 {
     const TrackConfig clamped = m_trackerInfo.model ? clampTrack(t, m_trackerInfo) : t;
-    const bool changed = !(clamped == m_track), switched = clamped.on != m_track.on;
+    const bool changed = !(clamped == m_track);
+    const bool switched = clamped.on != m_track.on || clamped.mixer != m_track.mixer || clamped.harmonic != m_track.harmonic;
     m_track = clamped;
     QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setTracking(clamped); });
     if (changed || !(clamped == t))
         emit trackChanged(m_track);
     if (switched)
-        setConfig(m_config);  // tracking: the range inside the generator's
+        setConfig(m_config);  // tracking: the range inside the generator's (in its output mode)
 }
 
 void Session::setConfig(const SweepConfig &c)
 {
     const SweepConfig clamped = !m_info.model ? c
-                                : isTracking() ? clampToTracker(c, *m_info.model, m_trackerInfo)
+                                : isTracking() ? clampToTracker(c, *m_info.model, m_trackerInfo, m_track)
                                                : clampConfig(c, *m_info.model);
     const bool changed = !(clamped == m_config);
     if (clamped.extGainDb != m_config.extGainDb)  // the levels jump: average and hold start again
