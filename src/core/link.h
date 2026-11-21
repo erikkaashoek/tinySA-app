@@ -120,6 +120,7 @@ private:
         bool generator = false;  // from genCommands(): obsolete once back in analyzer mode
         int points = 0;          // scanraw: values it returns unless aborted
         bool align = false;      // measuring the tracking generator's frequency (not a sweep)
+        bool sweep = false;      // a sweep's scanraw (a log sweep: one of its pieces)
     };
     void enqueue(Cmd c);
     // Reports refusals ("cmd?", "usage: ..."). Generator commands without a reply are
@@ -192,6 +193,7 @@ private:
     bool m_screenOffWanted = true;
     bool m_aborting = false;  // we sent abort for the scan in flight
     int m_scanExpect = 0;     // values the scanraw in flight returns when not aborted
+    int m_sweepPiece = -1;    // the piece of the sweep in progress (log: one scanraw each); -1 = none
     QPointer<DeviceLink> m_tg;   // analyzer: the generator unit's link
     TrackConfig m_track;
     int m_trackNext = -1;        // next point of the tracking sweep in progress; -1 = none

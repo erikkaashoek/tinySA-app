@@ -52,6 +52,7 @@ private:
     void editRange(QLineEdit *edit);
     void editConfig(const std::function<void(SweepConfig &)> &change);
     void applyRangeOp(SpectrumView::RangeOp op, double a, double b);
+    FreqRange rangeOf(const SweepConfig &c) const;
 
     void renderTraces(bool memories);  // TraceSet -> SpectrumView
     void showAverage();                // "Avg 3/16" in the status bar while averaging

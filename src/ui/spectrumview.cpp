@@ -35,6 +35,42 @@ QString SiTicker::getTickLabel(double tick, const QLocale &, QChar, int)
     return QString::number(tick / m_unit, 'f', decimals) + m_prefix;
 }
 
+double LogSiTicker::getTickStep(const QCPRange &range)
+{
+    m_linear = range.lower <= 0 || range.upper / range.lower < std::sqrt(10.0);
+    return m_linear ? SiTicker::getTickStep(range) : 1;
+}
+
+int LogSiTicker::getSubTickCount(double tickStep)
+{
+    return m_linear ? SiTicker::getSubTickCount(tickStep) : 0;
+}
+
+QVector<double> LogSiTicker::createTickVector(double tickStep, const QCPRange &range)
+{
+    if (m_linear)
+        return SiTicker::createTickVector(tickStep, range);
+    const double decades = std::log10(range.upper / range.lower);
+    const QVector<double> mantissas = decades <= 3 ? QVector<double>{1, 2, 5} : QVector<double>{1};
+    QVector<double> ticks;
+    for (double p = std::pow(10.0, std::floor(std::log10(range.lower))); p <= range.upper; p *= 10)
+        for (double m : mantissas)
+            if (m * p >= range.lower * (1 - 1e-9) && m * p <= range.upper * (1 + 1e-9))
+                ticks << m * p;
+    return ticks;
+}
+
+QString LogSiTicker::getTickLabel(double tick, const QLocale &locale, QChar formatChar, int precision)
+{
+    if (m_linear)
+        return SiTicker::getTickLabel(tick, locale, formatChar, precision);
+    static const struct { double unit; const char *prefix; } kPrefixes[] = {{1e9, "G"}, {1e6, "M"}, {1e3, "k"}, {1, ""}};
+    for (const auto &p : kPrefixes)
+        if (tick >= p.unit * (1 - 1e-9) || p.unit == 1)
+            return QString::number(tick / p.unit, 'g', 6) + QString::fromUtf8(p.prefix);
+    return {};
+}
+
 SpectrumView::SpectrumView(QWidget *parent) : QCustomPlot(parent)
 {
     xAxis->setTicker(QSharedPointer<SiTicker>::create());
@@ -133,10 +169,19 @@ void SpectrumView::setExtGain(double db)
     setLinear(m_view.linear);  // the level label
 }
 
-void SpectrumView::setSpan(double startHz, double stopHz)
+void SpectrumView::setSpan(double startHz, double stopHz, bool log)
 {
     if (m_drag == Zone::XStart || m_drag == Zone::XPan || m_drag == Zone::XStop)
         return;  // the user is dragging the axis
+    log = log && startHz > 0;
+    if (log != m_logX) {
+        m_logX = log;
+        if (log)
+            xAxis->setTicker(QSharedPointer<LogSiTicker>::create());
+        else
+            xAxis->setTicker(QSharedPointer<SiTicker>::create());
+        xAxis->setScaleType(log ? QCPAxis::stLogarithmic : QCPAxis::stLinear);
+    }
     xAxis->setRange(startHz, stopHz);
     for (int i = 0; i < kTraces; ++i)
         redraw(i);  // spline density depends on the span
@@ -195,7 +240,7 @@ void SpectrumView::redraw(int i)
             const double p0 = p(k - 1), p1 = p(k), p2 = p(k + 1), p3 = p(k + 2);
             for (int s = 0; s < sub; ++s) {
                 const double u = double(s) / sub;
-                x << t.grid.freq(k) + t.grid.step() * u;
+                x << t.grid.freqAt(k + u);
                 y << 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u
                             + (3 * p1 - p0 - 3 * p2 + p3) * u * u * u);
             }
@@ -279,7 +324,7 @@ void SpectrumView::updateHover(QPointF p)
     const Trace &t = m_trace[ref];
     const int k = t.grid.nearest(xAxis->pixelToCoord(p.x()));
     const double f = t.grid.freq(k);
-    QString text = formatHz(f, t.grid.step());
+    QString text = formatHz(f, t.grid.stepAt(k));
     for (int i = 0; i < kTraces; ++i)
         if (m_graph[i]->visible())
             text += QString("   %1 %2").arg(kTraceNames[i], levelText(i == ref ? t.dBm[k] : m_trace[i].at(f)));
@@ -328,7 +373,7 @@ QImage SpectrumView::image(const QString &header)
 QList<QAction *> SpectrumView::menuActions(QPointF pos, QObject *owner)
 {
     const double hz = xAxis->pixelToCoord(pos.x());
-    const double res = niceStep(xAxis->range().size() / 1000);
+    const double res = niceStep((m_logX ? hz : xAxis->range().size()) / 1000);
     QList<QAction *> list;
     auto add = [&](const QString &text, auto fn) {
         auto *a = new QAction(text, owner);

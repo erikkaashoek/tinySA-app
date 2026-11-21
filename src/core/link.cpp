@@ -247,6 +247,7 @@ void DeviceLink::shutdown(const QString &reason)
     m_cur.reset();
     m_rx.reset();
     m_ready = m_paused = m_draining = m_remote = m_uiOff = m_trackRf = false;
+    m_sweepPiece = -1;
     stopTracking(true);  // analyzer: the generator's RF off
     m_touchTimer.stop();
     m_pendingTouch.clear();
@@ -287,6 +288,7 @@ void DeviceLink::setMode(int mode)
             m_io->write("abort\r");
         }
         stopTracking(true);
+        m_sweepPiece = -1;
         dropQueued("pause");
         dropQueued("ui off");
         if (m_uiOff)  // the unit's screen and its own sweeping back
@@ -474,7 +476,8 @@ void DeviceLink::pumpStep()
         want.rbwKHz = kTrackAutoRbwKHz;
     const QByteArrayList cmds = configCommands(want, m_have, *m_info.model);
     if (!cmds.isEmpty()) {
-        stopTracking(false);  // a tracking sweep starts again with the new settings
+        m_sweepPiece = -1;    // a sweep starts again with the new settings
+        stopTracking(false);  // a tracking sweep too
         return queueChecked(cmds);
     }
     if (m_trackWait || m_aligning)  // the generator unit is being tuned or measured
@@ -501,25 +504,47 @@ void DeviceLink::queueChecked(const QByteArrayList &lines, bool generator)
     pump();
 }
 
+// A sweep is one `scanraw`, a log sweep one per linear piece (ScanGrid): the pieces fill one
+// frame in turn, with queued commands (not settings: they start the sweep again) in between.
 void DeviceLink::startSweep()
 {
     m_aborting = false;
-    const ScanGrid g = m_want.grid;
-    m_frame = SweepFrame{m_frame.seq + 1, g, QVector<double>(g.points, qQNaN())};
-    m_sweepClock.start();
-    m_emitClock.start();
+    ScanGrid g = m_want.grid;
+    if (g.log)
+        g.pieces = logPieces(g.startHz, g.stopHz, g.points);
+    if (m_sweepPiece < 0 || !(m_frame.grid == g) || m_frame.complete) {  // a new sweep
+        m_frame = SweepFrame{m_frame.seq + 1, g, QVector<double>(g.points, qQNaN())};
+        m_sweepPiece = 0;
+        m_sweepClock.start();
+        m_emitClock.start();
+    }
+    const int k = m_sweepPiece;
+    const ScanGrid p = g.piece(k);
+    m_frame.received = g.pieceStart(k);  // its values land from here on
     Cmd c;
-    c.line = QString("scanraw %1 %2 %3").arg(std::llround(g.startHz)).arg(g.scanrawStop())
-                 .arg(g.points).toLatin1();
+    c.line = QString("scanraw %1 %2 %3").arg(std::llround(p.startHz)).arg(p.scanrawStop())
+                 .arg(p.points).toLatin1();
     c.body = RxParser::Body::ScanRaw;
-    c.points = g.points;
+    c.points = p.points;
+    c.sweep = true;
     c.timeoutMs = 15000;  // inactivity watchdog, restarted by every data chunk
-    c.done = [this](bool, const QStringList &lines) {
-        if (m_frame.received == 0 && !lines.isEmpty()) {  // refused, e.g. range invalid
+    c.done = [this, k, seq = m_frame.seq](bool, const QStringList &lines) {
+        if (seq != m_frame.seq || m_sweepPiece != k)
+            return;
+        const ScanGrid &g = m_frame.grid;
+        if (m_frame.received == g.pieceStart(k) && !lines.isEmpty()) {  // refused, e.g. range invalid
+            m_sweepPiece = -1;
             emit message("Scan failed: " + lines.join(' '));
             setMode(Off);
-        } else if (m_mode == Once) {
-            setMode(Off);
+        } else if (m_frame.received < g.pieceStart(k + 1)) {  // stopped or lost: from the start again
+            m_sweepPiece = -1;
+        } else if (k + 1 < g.pieceCount()) {  // the next piece
+            m_sweepPiece = k + 1;
+            emit frame(m_frame);
+        } else {
+            m_sweepPiece = -1;
+            if (m_mode == Once)
+                setMode(Off);
         }
     };
     transmit(c);
@@ -636,7 +661,7 @@ void DeviceLink::handle(const RxEvent &e)
             }
             finish(true);
         } else {
-            if (m_scanExpect == m_frame.grid.points && !m_alignScan) {  // a whole sweep (tracking: one point)
+            if (m_cur->sweep && m_frame.received >= m_frame.grid.points) {  // a whole sweep (its last piece)
                 m_frame.complete = true;
                 m_frame.seconds = m_sweepClock.elapsed() / 1000.0;
                 emit frame(m_frame);

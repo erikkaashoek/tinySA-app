@@ -94,7 +94,7 @@ QVector<SpectrumView::Mark> SpectrumView::markLayout() const
         const double x = xAxis->coordToPixel(pk.x());
         const double y = std::clamp(yAxis->coordToPixel(plotValue(pk.y())), double(r.top()), double(r.bottom()));
         const QString text = QString("%1 %2 %3").arg(max ? "max" : "min",
-            formatHz(pk.x(), std::max(1.0, m_trace[0].grid.step() / 100)), levelText(pk.y()));
+            formatHz(pk.x(), std::max(1.0, m_trace[0].grid.stepAt(m_trace[0].grid.nearest(pk.x())) / 100)), levelText(pk.y()));
         add(text, {x, y}, max ? y - 13 : y + 13, max, m_theme.trace[0], max ? Mark::Max : Mark::Min);
     }
     return out;

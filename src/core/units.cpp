@@ -63,11 +63,122 @@ void FreqRange::pan(double deltaHz)
     place(m_start + deltaHz, span());
 }
 
+void FreqRange::zoomLog(double factor, double aboutHz)
+{
+    if (m_start <= 0 || aboutHz <= 0)
+        return zoom(factor, aboutHz);
+    const double a = aboutHz * std::pow(m_start / aboutHz, factor), b = aboutHz * std::pow(m_stop / aboutHz, factor);
+    if (b - a < m_minSpan)
+        return place(std::sqrt(a * b) - m_minSpan / 2, m_minSpan);
+    // kept inside the limits as one ratio: shifted (in ratio) rather than squeezed
+    const double ratio = std::min(b / a, m_min > 0 ? m_max / m_min : b / a);
+    double lo = a;
+    if (lo * ratio > m_max)
+        lo = m_max / ratio;
+    if (lo < m_min)
+        lo = m_min;
+    set(lo, lo * ratio);
+}
+
+void FreqRange::setCenterLog(double hz)
+{
+    if (m_start <= 0 || hz <= 0)
+        return setCenter(hz);
+    const double half = std::sqrt(m_stop / m_start);
+    double lo = hz / half;
+    if (lo * half * half > m_max)
+        lo = m_max / (half * half);
+    set(std::max(lo, m_min), std::max(lo, m_min) * half * half);
+}
+
+static bool isLog(const ScanGrid &g)
+{
+    return g.log && g.startHz > 0 && g.stopHz > g.startHz && g.points > 1;
+}
+
+int logPieces(double startHz, double stopHz, int points)
+{
+    if (startHz <= 0 || stopHz <= startHz || points < 5)
+        return 1;
+    const int octaves = int(std::ceil(std::log2(stopHz / startHz) - 1e-9));
+    return std::clamp(octaves, 1, (points - 1) / 2);
+}
+
+int ScanGrid::pieceStart(int k) const
+{
+    const int n = pieceCount();
+    return k >= n ? points : int(std::lround(double(k) * (points - 1) / n));
+}
+
+double ScanGrid::step() const
+{
+    if (points < 2)
+        return 0;
+    return isLog(*this) ? freq(1) - freq(0) : (stopHz - startHz) / (points - 1);
+}
+
+double ScanGrid::freqAt(double x) const
+{
+    if (points < 2)
+        return startHz;
+    const int last = points - 1;
+    if (!isLog(*this))
+        return startHz + (stopHz - startHz) / last * x;
+    auto exact = [&](double i) { return startHz * std::pow(stopHz / startHz, i / last); };
+    if (pieces <= 0)
+        return exact(x);
+    // the piece holding x (the last one past the end), linear between its exact ends
+    const int n = pieceCount();
+    int k = std::clamp(int(std::floor(x * n / last)), 0, n - 1);
+    while (k > 0 && x < pieceStart(k))
+        --k;
+    while (k < n - 1 && x >= pieceStart(k + 1))
+        ++k;
+    const int a = pieceStart(k), b = std::min(pieceStart(k + 1), last);
+    const double fa = exact(a), fb = exact(b);
+    return fa + (fb - fa) * (x - a) / (b - a);
+}
+
+double ScanGrid::index(double hz) const
+{
+    if (points < 2)
+        return 0;
+    const int last = points - 1;
+    if (!isLog(*this))
+        return stopHz > startHz ? (hz - startHz) / (stopHz - startHz) * last : 0;
+    if (hz <= 0)
+        return -1e9;
+    const double x = std::log(hz / startHz) / std::log(stopHz / startHz) * last;  // exact log
+    if (pieces <= 0)
+        return x;
+    // the pieces start at exact log frequencies: x lies in the same piece
+    const int n = pieceCount();
+    int k = std::clamp(int(std::floor(x * n / last)), 0, n - 1);
+    while (k > 0 && x < pieceStart(k))
+        --k;
+    while (k < n - 1 && x >= pieceStart(k + 1))
+        ++k;
+    const int a = pieceStart(k), b = std::min(pieceStart(k + 1), last);
+    const double fa = freqAt(a), fb = freqAt(b);
+    return a + (hz - fa) / (fb - fa) * (b - a);
+}
+
 int ScanGrid::nearest(double hz) const
 {
-    if (points < 2 || step() <= 0)
+    if (points < 2 || stopHz <= startHz)
         return 0;
-    return std::clamp(int(std::lround((hz - startHz) / step())), 0, points - 1);
+    if (!isLog(*this))
+        return std::clamp(int(std::lround(index(hz))), 0, points - 1);
+    const int i = std::clamp(int(std::floor(index(hz))), 0, points - 1);  // the closer neighbour
+    return i < points - 1 && std::abs(freq(i + 1) - hz) < std::abs(hz - freq(i)) ? i + 1 : i;
+}
+
+ScanGrid ScanGrid::piece(int k) const
+{
+    if (!isLog(*this))
+        return {startHz, stopHz, points};
+    const int a = pieceStart(k), b = pieceStart(k + 1) - 1;  // its points a..b
+    return {freq(a), freq(b), b - a + 1};
 }
 
 qint64 ScanGrid::scanrawStop() const

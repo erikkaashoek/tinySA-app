@@ -45,14 +45,17 @@ void SpectrumView::mouseMoveEvent(QMouseEvent *e)
     }
     if (m_drag != Zone::None) {  // grab and drag: the grabbed value follows the mouse
         const QRect r = axisRect()->rect();
-        const double dx = (p.x() - m_pressPos.x()) * m_pressX.size() / r.width();
+        // frequencies as drawn (log axis: ln Hz), so the grabbed point stays under the mouse
+        const double lo = toAxis(m_pressX.lower), hi = toAxis(m_pressX.upper);
+        const double dx = (p.x() - m_pressPos.x()) * (hi - lo) / r.width();
         const double dy = (p.y() - m_pressPos.y()) * m_pressY.size() / r.height();
-        const double minX = m_pressX.size() * 0.01, minY = m_pressY.size() * 0.01;
-        const QCPRange &x = m_pressX, &y = m_pressY;
+        const double minX = (hi - lo) * 0.01, minY = m_pressY.size() * 0.01;
+        const QCPRange &y = m_pressY;
+        auto setX = [this](double a, double b) { xAxis->setRange(fromAxis(a), fromAxis(b)); };
         switch (m_drag) {
-        case Zone::XStart: xAxis->setRange(std::min(x.lower - dx, x.upper - minX), x.upper); break;
-        case Zone::XStop: xAxis->setRange(x.lower, std::max(x.upper - dx, x.lower + minX)); break;
-        case Zone::XPan: xAxis->setRange(x.lower - dx, x.upper - dx); break;
+        case Zone::XStart: setX(std::min(lo - dx, hi - minX), hi); break;
+        case Zone::XStop: setX(lo, std::max(hi - dx, lo + minX)); break;
+        case Zone::XPan: setX(lo - dx, hi - dx); break;
         case Zone::YMax: yAxis->setRange(y.lower, std::max(y.upper + dy, y.lower + minY)); break;
         case Zone::YMin: yAxis->setRange(std::min(y.lower + dy, y.upper - minY), y.upper); break;
         case Zone::YPan: yAxis->setRange(y.lower + dy, y.upper + dy); break;
@@ -120,7 +123,7 @@ void SpectrumView::wheelEvent(QWheelEvent *e)
 
 void SpectrumView::keyPressEvent(QKeyEvent *e)
 {
-    const double c = xAxis->range().center();
+    const double c = fromAxis((toAxis(xAxis->range().lower) + toAxis(xAxis->range().upper)) / 2);  // as drawn
     switch (e->key()) {
     case Qt::Key_PageUp: emit rangeRequested(RangeOp::Zoom, 1 / 1.5, c); break;
     case Qt::Key_PageDown: emit rangeRequested(RangeOp::Zoom, 1.5, c); break;

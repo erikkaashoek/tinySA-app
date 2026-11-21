@@ -14,6 +14,7 @@
 #include "appsettings.h"
 #include "traces.h"
 #include "qcustomplot.h"
+#include <cmath>
 
 // A user marker as the controller wants it drawn.
 struct MarkerMark {
@@ -39,7 +40,8 @@ public:
     void setNormalized(bool on);           // levels are dB relative to the reference
     void setLinear(bool on);
     void setExtGain(double db);            // named on the level axis while not 0
-    void setSpan(double startHz, double stopHz);
+    void setSpan(double startHz, double stopHz, bool log = false);  // log: logarithmic axis
+    bool logFrequency() const { return m_logX; }
     void setMarkers(const QList<MarkerMark> &marks);
     void autoScale();                      // once, from the visible traces
     QImage image(const QString &header);   // graph as shown (without hover), header on top
@@ -85,6 +87,9 @@ private:
     void applyLevels();        // y range from the view settings, auto ends from the data
     void storeLevels();        // y range -> view settings
     double plotValue(double dBm) const;
+    // the frequency axis as drawn: linear, or ln(Hz) on the log axis
+    double toAxis(double hz) const { return m_logX ? std::log(hz) : hz; }
+    double fromAxis(double u) const { return m_logX ? std::exp(u) : u; }
     QString levelText(double dBm) const;
     void updateHover(QPointF p);
     void hideHover();
@@ -100,6 +105,7 @@ private:
     Theme m_theme;
     ViewSettings m_view;
     bool m_normalized = false;
+    bool m_logX = false;  // logarithmic frequency axis
     double m_extGainDb = 0;
     Trace m_trace[kTraces];
     QCPGraph *m_graph[kTraces];
@@ -119,7 +125,19 @@ protected:
     double getTickStep(const QCPRange &range) override;
     QString getTickLabel(double tick, const QLocale &locale, QChar formatChar, int precision) override;
 
-private:
     double m_step = 1, m_unit = 1;
     QString m_prefix;
+};
+
+// The log frequency axis: ticks at 1, 2, 5 x 10^n (up to 3 decades) or 10^n, each labelled
+// with its own prefix (10k, 1M, 2G); spans under half a decade get linear ticks.
+class LogSiTicker : public SiTicker {
+protected:
+    double getTickStep(const QCPRange &range) override;
+    int getSubTickCount(double tickStep) override;
+    QString getTickLabel(double tick, const QLocale &locale, QChar formatChar, int precision) override;
+    QVector<double> createTickVector(double tickStep, const QCPRange &range) override;
+
+private:
+    bool m_linear = false;
 };

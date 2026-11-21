@@ -25,6 +25,10 @@ public:
     void setSpan(double hz);                   // keeps center
     void zoom(double factor, double aboutHz);  // span *= factor; aboutHz stays in place
     void pan(double deltaHz);
+    // log axis (start > 0): the same in ratios. zoomLog: stop/start to the power factor;
+    // setCenterLog: hz in the middle of the axis, stop/start kept
+    void zoomLog(double factor, double aboutHz);
+    void setCenterLog(double hz);
 
     bool operator==(const FreqRange &o) const { return m_start == o.m_start && m_stop == o.m_stop; }
 
@@ -38,16 +42,35 @@ private:
 // Sweep grid. Firmware scanraw steps by (stop-start)/points (sa_cmd.c cmd_scanraw),
 // so the last point is one step short of the requested stop. To get points exactly
 // at start..stop we request stop' = start + span*N/(N-1): see scanrawStop().
+// The points of a sweep: linear, or logarithmic (startHz > 0). The firmware's `scanraw` only
+// sweeps linearly, so an analyzer sweep makes a log grid of `pieces` linear pieces, one
+// `scanraw` each: the pieces start at exact log frequencies (piece k at point
+// round(k (points - 1) / pieces)), the points in between are linear. pieces = 0 is exact log
+// (a tracking sweep measures point by point; a SweepConfig asks for a log sweep with 0 and the
+// link chooses). freq() is always what is measured.
 struct ScanGrid {
     double startHz = 0, stopHz = 0;
     int points = 0;
+    bool log = false;
+    int pieces = 0;  // log only: 0 = exact log, else linear pieces (logPieces())
 
-    double step() const { return points > 1 ? (stopHz - startHz) / (points - 1) : 0; }
-    double freq(int i) const { return startHz + step() * i; }
-    int nearest(double hz) const;  // index of the point closest to hz, clamped
-    qint64 scanrawStop() const;
+    double step() const;  // linear: the step; log: the smallest step (the first)
+    double stepAt(int i) const { return points < 2 ? 0 : i < points - 1 ? freq(i + 1) - freq(i) : freq(i) - freq(i - 1); }
+    double freq(int i) const { return freqAt(i); }
+    double freqAt(double x) const;  // at a fractional point index (interpolation, peaks)
+    double index(double hz) const;  // the fractional point index of hz (freqAt's inverse), unclamped
+    int nearest(double hz) const;   // index of the point closest to hz, clamped
+    qint64 scanrawStop() const;     // linear grid: the stop that `scanraw` needs for it
+    int pieceCount() const { return log && pieces > 0 ? pieces : 1; }
+    int pieceStart(int k) const;    // first point of piece k (pieceCount(): points)
+    ScanGrid piece(int k) const;    // piece k as a linear grid (the whole grid when linear)
     bool operator==(const ScanGrid &o) const = default;
 };
+
+constexpr double kLogMinHz = 10e3;  // a log sweep starts here at the lowest
+// Linear pieces of a log sweep: one per octave (the step grows at most 2x from one piece to the
+// next), at least 2 points each.
+int logPieces(double startHz, double stopHz, int points);
 
 double roundTo(double v, double step);
 double niceStep(double minStep);  // smallest {1, 2, 2.5, 5} x 10^n >= minStep

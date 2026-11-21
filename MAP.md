@@ -303,6 +303,52 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     (`waitfor scan == 0`) and passed 3 of 3 alone. Hardware hw_extgain.txt (ZS407 COM21
     measuring the ZS405's 10 MHz -20 dBm): PASS, 0 dB -19.63, +20 dB -39.59, -6 set on the
     generator page -> analyzer -13.63 dBm; the unit left at 0.
+- Branch `ultra-out` (2026-11-21, user request "select the ultra output mode both in generator and
+  tracking generator"): the LO-harmonic range, undoing the 2026-11-10 "no LO-harmonic range" decision.
+  - **Firmware fact:** no command. `output` only takes on|off|normal|mixer; a mode switch sets
+    setting.harmonic = 3 (reset_settings), and update_min_max_freq then lets M_GENLOW go to
+    3 x MAX_LO_FREQ - DEFAULT_IF (mixer) or 3 x MAX_LO_FREQ (normal); the unit shows HARM above
+    ULTRA_MAX_FREQ (mixer) / MAX_LO_FREQ (normal). DEFAULT_IF is 977.4 MHz on every Ultra.
+  - **Model:** GenConfig::harmonic and TrackConfig::mixer/harmonic; `ultraOutputs()` lists the four
+    modes with their tops: ZS405 Accurate 5.33, Cleanest 4.35, Ultra accurate 12.07, Ultra cleanest
+    13.05 GHz; ZS407 7.37 / 6.30 / 17.92 / 18.90 GHz. Only the app's limits change (genLimits);
+    outputPathText adds "LO harmonic". Take-over: a unit above the mixer path's top gets harmonic.
+  - **UI:** generator page Path combo has the four (keys "mixer", "normal", "ultra mixer",
+    "ultra normal"); tracking group row trackOutputCombo, shown for an Ultra generator unit. ini
+    generator/harmonic, tracker/mixer, tracker/harmonic.
+  - **Tracking:** trackerLimits/clampToTracker/trackerPath/trackerGen take the TrackConfig; the
+    analyzer's link copies m_track into the generator unit's link, which makes its output in that
+    mode. A mode change restarts the sweep (and re-clamps the range: Session::setTrack). Path 3 =
+    the LO harmonic (32 ms auto settle after a step into it, a guess: not measured).
+  - **Tests:** tst_core ultraOutputModes, adoptKeepsTheUnitAsItIs (6 GHz now kept); sim
+    gen_ultra.txt and track.txt sections; full regression PASS.
+  - **Not verified on hardware** (no unit connected on 2026-11-21): output level and purity in the
+    harmonic range, the settle time into it.
+- Branch `logscan` (2026-11-21, user request "scan with a log frequency scale"): log sweeps.
+  - **Decided (user):** the plain analyzer sweeps in linear pieces (firmware `scanraw` is linear only),
+    tracking with exact log points.
+  - **Grid:** ScanGrid::log + pieces (units.h). pieces = logPieces(): one per octave, >= 2 points
+    each; piece k starts at the exact log point round(k (n-1) / pieces), linear in between, so
+    freq(i) is exactly what `scanraw` measures. pieces 0 = exact log (tracking; a SweepConfig always
+    asks with 0, clampConfig sets it, the link chooses: DeviceLink::startSweep). freqAt / index
+    (inverse) / nearest / stepAt replace step() arithmetic in traces (at), markers (peak),
+    spline, hover, CSV (reads linear, then log pieces, then exact log). Log starts at kLogMinHz 10 kHz.
+  - **Link:** startSweep sends one piece per call, all into one frame (m_sweepPiece); queued commands
+    may go between pieces, a config change starts the sweep again. The frame completes on the last
+    piece (Cmd::sweep), Once stops after it.
+  - **Graph:** SpectrumView::setSpan(start, stop, log) switches QCP's log scale and LogSiTicker
+    (1-2-5 per decade up to 3 decades, else decades; linear ticks below half a decade). Drags work in
+    ln(Hz) (toAxis/fromAxis); wheel, PgUp/PgDn and "Center here" use FreqRange::zoomLog /
+    setCenterLog; graph edits round each end to a thousandth of itself. Typed center/span stay linear
+    (stop - start about their mean).
+  - **UI:** "Log" check box in the Scan/Once row (logCheck; an extra column in the Points row
+    squeezed the edits), ini sweep/log; status bar "Step 446 Hz to 128.1 MHz".
+  - **Tests:** tst_core logGridInLinearPieces, logZoomAndCentre, logGridsRoundTrip,
+    logSweepInPieces; sim logscan.txt, track.txt log section; full regression PASS (23 scripts).
+  - **Sim artefact:** the sim's auto RBW is 1.5 x each scanraw's step, so the first point of the next
+    (twice as wide) piece shows a carrier just below a piece boundary about 10 dB down. **Check on
+    hardware** whether the firmware's auto RBW / sub-stepping does the same; also the cost per piece
+    (expected ~10-20 ms per scanraw).
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -347,13 +393,13 @@ build a release from a clean, committed tree.
 ## Files
 | File | Role |
 |---|---|
-| src/core/units.h | `FreqRange` (all range edits/zoom/pan + clamping), `ScanGrid` (firmware-correct grid), `niceStep`, `formatHz`, `parseHz` |
+| src/core/units.h | `FreqRange` (all range edits/zoom/pan + clamping, log zoom/centre), `ScanGrid` (firmware-correct grid; log in linear pieces, `logPieces`), `niceStep`, `formatHz`, `parseHz` |
 | src/core/model.h | `ModelDesc` table (basic / Ultra / Ultra+), `detectModel(info, version)`, `DeviceInfo`, help/zero parsing |
 | src/core/protocol.h | `RxParser`: bytes → events (echo, lines, prompt, scanraw data, capture pixels, refresh regions); RGB565 BE decoders |
 | src/core/sweepconfig.h | `SweepConfig` value + `configCommands()` diff vs `AppliedConfig`, `clampConfig()` |
-| src/core/genconfig.h | `GenConfig` (generator) + `genCommands()` diff vs `AppliedGen` in firmware order, `clampGen()`/`genLimits()` (Ultra limits per ZS405/406/407), `adoptUnitGenerator()`, `outputPathText()` |
+| src/core/genconfig.h | `GenConfig` (generator) + `genCommands()` diff vs `AppliedGen` in firmware order, `clampGen()`/`genLimits()` (Ultra limits per ZS405/406/407), `ultraOutputs()` (the four Ultra output modes), `adoptUnitGenerator()`, `outputPathText()` |
 | src/core/link.h | `DeviceLink` (own thread): handshake, 1 command in flight, per-sweep scanraw loop, battery poll, timeouts/resync, `SweepFrame`; linkgen.cpp = analyzer/generator activity, GenConfig diff, mode probe + follow |
-| src/core/tracking.h | `TrackConfig` (tracking generator), range/level clamps, settle rules, `trackerPath`; linktrack.cpp = the point-by-point sweep + the generator's ppb measurement |
+| src/core/tracking.h | `TrackConfig` (tracking generator, its Ultra output mode), range/level clamps, settle rules, `trackerPath`; linktrack.cpp = the point-by-point sweep + the generator's ppb measurement |
 | src/core/simdevice.h | `SimTransport` QIODevice: firmware-exact simulated tinySA (carriers 100/250/433.92/868 MHz, 2.4/5.8 GHz; bench: `:thru`/`:lpf` input sees the other sim units' output) |
 | src/core/session.h | GUI-thread facade owning the link thread; the only API controllers use |
 | src/core/appsettings.h | `AppSettings` (+ `ViewSettings`, `Theme`): every persistent setting listed once in `visit()` |

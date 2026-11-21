@@ -44,6 +44,16 @@ waitfor sweeps.new >= 2 20000
 check level@50000000 ~ -40 2
 click scanButton
 waitfor idle == 1 10000
+# a log sweep: exact log points (10 MHz x 30^(i/50)), one at a time
+set logCheck 1
+do clearsent
+click onceButton
+waitfor idle == 1 15000
+check tracker.sent contains "sweep cw 5477225"
+check level@50000000 ~ -40 2
+check level@150000000 ~ -43 2
+shot track_log.png
+set logCheck 0
 # the Ultra's output modes: the sweep ends at the path's maximum, Ultra goes beyond it
 check @trackOutputCombo == Accurate, max 7.37 GHz
 set stopEdit 9000

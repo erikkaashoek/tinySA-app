@@ -1,0 +1,58 @@
+# Log frequency sweep, simulated Ultra+ ZS407: the sweep in linear pieces (one scanraw per
+# octave), a log axis, zoom / pan / centre in ratios, back to linear.
+#   del test\out\log.ini & build\tinySA-App.exe --sim --ini test\out\log.ini --script test\logscan.txt --out test\out\logscan
+do connect sim:ultra
+waitfor connected == 1
+set startEdit 0
+set stopEdit 3000
+set pointsCombo 290
+set logCheck 1
+# 0 Hz cannot be on a log axis: from 10 kHz
+check start == 10000
+check stop == 3000000000
+do clearsent
+click onceButton
+waitfor idle == 1 15000
+check points == 290
+# the sim's strongest carrier: 100 MHz at -30 dBm
+check peak.hz ~ 100000000 10000000
+check peak.dbm > -40
+check xmin == 10000
+check xmax == 3000000000
+shot log_sweep.png
+# wheel: zooms in ratios about the cursor (10 kHz / 100 MHz and 30 / 1 to the power 1/1.2)
+do mouse wheelup plot 100000000 -50
+check start ~ 46400 100
+check stop ~ 1702000000 2000000
+# frequency strip, middle third: the grabbed 8.9 MHz follows the mouse to where 17.8 MHz was =
+# everything / 2
+do mouse press xaxis 8900000
+do mouse move xaxis 17800000
+do mouse release xaxis 17800000
+check start ~ 23200 100
+check stop ~ 851000000 2000000
+# context menu: 10 MHz in the middle of the axis, the ratio kept
+do menu 10000000 -50 Center here
+check start ~ 52200 300
+check stop ~ 1915000000 5000000
+click onceButton
+waitfor idle == 1 15000
+shot log_zoomed.png
+# a typed span: stop - start as the edits show them, about their mean (958.0261 MHz)
+set spanEdit 1000
+check start == 458026100
+check stop == 1458026100
+# PgUp zooms in about the middle of the axis
+key spectrum PgUp
+check start > 458026100
+check stop < 1458026100
+# back to linear: the range stays
+set logCheck 0
+check start > 458026100
+set startEdit 0.0522
+set stopEdit 1916
+check start ~ 52200 300
+click onceButton
+waitfor idle == 1 15000
+check points == 290
+quit

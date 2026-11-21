@@ -71,6 +71,7 @@ struct AppSettings {
         v("sweep/start_hz", config.grid.startHz);
         v("sweep/stop_hz", config.grid.stopHz);
         v("sweep/points", config.grid.points);
+        v("sweep/log", config.grid.log);
         v("device/rbw_khz", config.rbwKHz);
         v("device/atten_db", config.atten);
         v("device/lna", config.lna);

@@ -38,7 +38,7 @@ QPointF interpolatePeak(const Trace &t, int k)
     if (std::abs(c) < 1e-12)
         return {f, top};
     const double d = std::clamp(-b / (2 * c), -1.0, 1.0);  // vertex offset in points
-    return {f + d * t.grid.step(), a + b * d + c * d * d};
+    return {t.grid.freqAt(k + d), a + b * d + c * d * d};
 }
 
 QPointF tracePeak(const Trace &t, bool max)
