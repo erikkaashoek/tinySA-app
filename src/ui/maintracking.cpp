@@ -33,6 +33,16 @@ void MainWindow::setupTracking()
         showTrackerLabel();  // its top frequency
     });
     ui->trackOutputCombo->hide();  // an Ultra connected as tracking generator
+    connect(ui->trackOffsetEdit, &QLineEdit::editingFinished, this, [this] {
+        const QString text = ui->trackOffsetEdit->text().trimmed();
+        const auto hz = text.isEmpty() ? std::optional<double>(0) : parseHz(text, 1e6);
+        TrackConfig t = m_session.track();
+        if (hz)
+            t.offsetHz = *hz;
+        m_session.setTrack(t);  // invalid input: shows the offset again
+        showTrack(m_session.track());
+        showTrackerLabel();
+    });
     connect(&m_session, &Session::trackChanged, this, &MainWindow::showTrack);
     connect(&m_session, &Session::trackerConnected, this, [this](const DeviceInfo &info) {
         m_settings.trackerPort = info.port;
@@ -46,8 +56,10 @@ void MainWindow::setupTracking()
         {
             QSignalBlocker block2(ui->trackOutputCombo);
             ui->trackOutputCombo->clear();
-            for (const UltraOutput &o : ultraOutputs(info))
-                ui->trackOutputCombo->addItem(o.text, o.key);
+            for (const UltraOutput &o : ultraOutputs(info)) {  // the name; its top in the label above
+                ui->trackOutputCombo->addItem(o.text.section(',', 0, 0), o.key);
+                ui->trackOutputCombo->setItemData(ui->trackOutputCombo->count() - 1, o.text, Qt::ToolTipRole);
+            }
             ui->trackOutputCombo->setVisible(ui->trackOutputCombo->count() > 0);
         }
         showTrackerLabel();
@@ -96,6 +108,8 @@ void MainWindow::showTrack(const TrackConfig &t)
     ui->trackCheck->setEnabled(m_session.isTrackerConnected());
     ui->trackLevelSpin->setValue(t.levelDbm);
     ui->trackOutputCombo->setCurrentIndex(std::max(0, ui->trackOutputCombo->findData(ultraOutputKey(t.mixer, t.harmonic))));
+    ui->trackOffsetEdit->setText(t.offsetHz == 0 ? QString()  // "+500 MHz"; empty = none (placeholder "Offset MHz")
+                                                 : (t.offsetHz > 0 ? "+" : "") + formatMHz(t.offsetHz) + " MHz");
 }
 
 void MainWindow::connectTrackerTo(const QString &port)

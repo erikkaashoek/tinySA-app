@@ -22,9 +22,13 @@ public:
 
     // Bench: the input cabled to the outputs of the other simulated units (a tracking
     // generator), directly or through a 5th-order Butterworth low-pass at 150 MHz; no antenna
-    // carriers then. None: the antenna (the carriers below).
-    enum class Dut { None, Thru, LowPass };
+    // carriers then. None: the antenna (the carriers below). Mixer: a mixer with its LO at
+    // mixerLoHz, the input sees |f - LO| and f + LO at 7 dB conversion loss (a tracking
+    // generator with an offset).
+    enum class Dut { None, Thru, LowPass, Mixer };
     Dut dut = Dut::None;
+    double mixerLoHz = 0;
+    static constexpr double kMixerLossDb = 7;
     static double dutGainDb(Dut d, double hz);
     qint64 bytesAvailable() const override { return m_out.size() + QIODevice::bytesAvailable(); }
 

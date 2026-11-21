@@ -55,10 +55,10 @@ check level@150000000 ~ -43 2
 shot track_log.png
 set logCheck 0
 # the Ultra's output modes: the sweep ends at the path's maximum, Ultra goes beyond it
-check @trackOutputCombo == Accurate, max 7.37 GHz
+check @trackOutputCombo == Accurate
 set stopEdit 9000
 check stop == 7370000000
-set trackOutputCombo Ultra accurate, max 17.92 GHz
+set trackOutputCombo Ultra accurate
 check @trackerLabel contains to 17.9
 set stopEdit 9000
 check stop == 9000000000
@@ -66,14 +66,14 @@ do clearsent
 click onceButton
 waitfor idle == 1 30000
 check tracker.sent contains "sweep cw 8999999"
-set trackOutputCombo Cleanest, max 6.30 GHz
+set trackOutputCombo Cleanest
 check stop == 6300000000
 do clearsent
 click onceButton
 waitfor idle == 1 30000
 check tracker.sent contains "output normal"
 check tracker.sent contains "sweep cw 6299999"
-set trackOutputCombo Accurate, max 7.37 GHz
+set trackOutputCombo Accurate
 set stopEdit 300
 # a tinySA basic as generator: its LOW output ends at 350 MHz, the sweep with it
 click trackerConnectButton

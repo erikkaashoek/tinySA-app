@@ -1,0 +1,48 @@
+# Tracking generator with a frequency offset (mixer test), two simulated units: the analyzer's
+# input through a mixer with its LO at 500 MHz (sees |f - LO| and f + LO, 7 dB loss).
+#   del test\out\trackoff.ini & build\tinySA-App.exe --sim --script test\track_offset.txt --out test\out\trackoff --ini test\out\trackoff.ini
+do connect sim:ultra:mixer=500
+waitfor connected == 1 5000
+set stopEdit 100
+set startEdit 10
+set pointsCombo 51
+do trackerconnect sim:ultra
+waitfor tracker.connected == 1 5000
+check @trackOffsetEdit ==
+# RF = IF + LO: the generator 500 MHz above the swept IF
+set trackOffsetEdit 500
+check @trackOffsetEdit == +500 MHz
+set trackLevelSpin -30
+set trackCheck 1
+waitfor tracking == 1 2000
+do clearsent
+click onceButton
+waitfor idle == 1 15000
+check level@10000000 ~ -37 2
+check level@55000000 ~ -37 2
+check level@100000000 ~ -37 2
+check tracker.sent contains "sweep cw 510000000"
+check tracker.sent contains "sweep cw 600000000"
+check tracker.sent !contains "sweep cw 3000000000"
+shot track_offset.png
+# the sweep stays where the generator can follow: 7.37 GHz - 500 MHz
+set stopEdit 9000
+check stop == 6870000000
+set stopEdit 100
+# RF = IF - LO (the sum product): offset -500 MHz, the sweep from 500 MHz + 10 kHz up
+set trackOffsetEdit -500
+set stopEdit 690
+set startEdit 600
+do clearsent
+click onceButton
+waitfor idle == 1 15000
+check level@600000000 ~ -37 2
+check level@690000000 ~ -37 2
+check tracker.sent contains "sweep cw 100000000"
+set startEdit 10
+check start == 500010000
+# 0 (or empty) = no offset, shown empty
+set trackOffsetEdit 0
+check @trackOffsetEdit ==
+set trackCheck 0
+quit

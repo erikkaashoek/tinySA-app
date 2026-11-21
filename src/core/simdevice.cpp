@@ -204,8 +204,13 @@ double SimTransport::levelAt(double hz, double rbwHz) const
         in = carriers();
     } else {  // cabled: what the other units generate, through the DUT
         for (const SimTransport *u : bench())
-            if (u != this && u->m_outMode && u->m_rfOn)
-                in.append({u->outputHz(), u->m_level + dutGainDb(dut, u->outputHz())});
+            if (u != this && u->m_outMode && u->m_rfOn) {
+                if (dut == Dut::Mixer) {  // the difference and the sum frequency
+                    in.append({std::abs(u->outputHz() - mixerLoHz), u->m_level - kMixerLossDb});
+                    in.append({u->outputHz() + mixerLoHz, u->m_level - kMixerLossDb});
+                } else
+                    in.append({u->outputHz(), u->m_level + dutGainDb(dut, u->outputHz())});
+            }
     }
     for (const Carrier &c : in) {
         if (m_kind == Kind::Basic && c.hz > 960e6)

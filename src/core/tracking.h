@@ -12,6 +12,10 @@ struct TrackConfig {
     int settleMs = -1;      // wait between tuning and measuring; -1 = auto (trackSettleMs)
     bool mixer = true;      // Ultra output mode, as GenConfig: accurate (mixer) / cleanest path,
     bool harmonic = false;  //   "Ultra" also above the path's maximum (ultraOutputs())
+    // The generator at the analyzer's frequency + offsetHz (+ or -): a mixer under test with an
+    // external LO converts it to the analyzer's frequency (RF = IF + offset). With an offset the
+    // generator's frequency error is not measured (the analyzer does not see the generator).
+    double offsetHz = 0;
     bool operator==(const TrackConfig &) const = default;
 };
 Q_DECLARE_METATYPE(TrackConfig)
@@ -26,8 +30,12 @@ constexpr double kTrackAutoRbwKHz = 30;
 GenLimits trackerLimits(const DeviceInfo &tg, const TrackConfig &t);
 TrackConfig clampTrack(TrackConfig t, const DeviceInfo &tg);
 
-// The analyzer's sweep, clamped to the analyzer and to the generator unit's frequencies.
+// The analyzer's sweep, clamped to the analyzer and to the generator unit's frequencies (minus
+// the offset: the generator sweeps start + offset .. stop + offset).
 SweepConfig clampToTracker(SweepConfig c, const ModelDesc &analyzer, const DeviceInfo &tg, const TrackConfig &t);
+
+// The generator's frequency for the analyzer's hz (+ offset).
+inline double trackerFreq(const TrackConfig &t, double hz) { return hz + t.offsetHz; }
 
 // The generator unit's output path at hz: the Ultra makes a sine below 823 MHz, a square wave
 // up to 1.13 GHz, the chosen path above (0, 1, 2) and the LO's harmonic above that path's

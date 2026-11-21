@@ -71,7 +71,8 @@ void DeviceLink::open(const QString &port)
     // sim:basic, sim:ultra; ":old" = v1.4-220 ZS405, ":gen" = left generating; ":thru" / ":lpf" =
     // input cabled to the other simulated unit's output (directly / through a 150 MHz low-pass);
     // ":ppb=N" = its output frequency N ppb off; ":ctcss" = its CTCSS tone on, ":noctcss" =
-    // firmware without `modulation ctcss` (v1.4-317); ":extgain=N" = its ext_gain N dB
+    // firmware without `modulation ctcss` (v1.4-317); ":extgain=N" = its ext_gain N dB;
+    // ":mixer=M" = input through a mixer with its LO at M MHz (sees |f - LO| and f + LO, 7 dB loss)
     if (port.startsWith("sim:")) {
         auto *sim = new SimTransport(port.contains("basic") ? SimTransport::Kind::Basic
                                                             : SimTransport::Kind::Ultra, this);
@@ -83,6 +84,11 @@ void DeviceLink::open(const QString &port)
             sim->setExtGain(m.captured(1).toDouble());
         sim->dut = port.contains(":lpf") ? SimTransport::Dut::LowPass
                    : port.contains(":thru") ? SimTransport::Dut::Thru : SimTransport::Dut::None;
+        static const QRegularExpression mixer(R"(:mixer=(\d+(?:\.\d+)?))");  // through a mixer, LO in MHz
+        if (const auto m = mixer.match(port); m.hasMatch()) {
+            sim->dut = SimTransport::Dut::Mixer;
+            sim->mixerLoHz = m.captured(1).toDouble() * 1e6;
+        }
         static const QRegularExpression ppb(R"(:ppb=(-?\d+))");  // its generator's frequency error
         if (const auto m = ppb.match(port); m.hasMatch())
             sim->ppb = m.captured(1).toDouble();
