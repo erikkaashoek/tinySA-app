@@ -133,20 +133,24 @@ void SpectrumView::setTheme(const Theme &t)
 void SpectrumView::setView(const ViewSettings &v)
 {
     m_view = v;
-    setLinear(v.linear);
+    setUnit(v.unit);
 }
 
-void SpectrumView::setLinear(bool on)
+void SpectrumView::setUnit(LevelUnit u)
 {
-    m_view.linear = on;
-    if (on) {
+    m_view.unit = u;
+    if (u == LevelUnit::W || u == LevelUnit::V) {  // SI prefixes on the ticks: 2.5µ
         yAxis->setTicker(QSharedPointer<SiTicker>::create());
     } else {
         auto t = QSharedPointer<QCPAxisTicker>::create();
-        t->setTickCount(10);
+        t->setTickCount(isDbUnit(u) ? 10 : 5);
         yAxis->setTicker(t);
     }
-    QString label = on ? (m_normalized ? "Ratio" : "Power (W)") : (m_normalized ? "dB" : "dBm");
+    QString label = isDbUnit(u) ? levelAxisUnit(u, m_normalized)
+                    : m_normalized ? (isVoltUnit(u) ? "Voltage ratio" : "Power ratio")
+                                   : QString("%1 (%2)").arg(isVoltUnit(u) ? "Voltage" : "Power", levelUnitName(u));
+    if (isVoltUnit(u) && !m_normalized)
+        label += ", 50 Ω";
     if (m_extGainDb != 0 && !m_normalized)  // absolute levels: at the device under test
         label += QString(", ext. gain %1 dB").arg(QString::asprintf("%+.1f", m_extGainDb));
     yAxis->setLabel(label);
@@ -158,7 +162,7 @@ void SpectrumView::setLinear(bool on)
 void SpectrumView::setNormalized(bool on)
 {
     m_normalized = on;
-    setLinear(m_view.linear);  // labels and values change meaning
+    setUnit(m_view.unit);  // labels and values change meaning
 }
 
 void SpectrumView::setExtGain(double db)
@@ -166,7 +170,7 @@ void SpectrumView::setExtGain(double db)
     if (db == m_extGainDb)
         return;
     m_extGainDb = db;
-    setLinear(m_view.linear);  // the level label
+    setUnit(m_view.unit);  // the level label
 }
 
 void SpectrumView::setSpan(double startHz, double stopHz, bool log)
@@ -206,25 +210,35 @@ void SpectrumView::setShown(int i, bool on)
 
 double SpectrumView::plotValue(double dBm) const
 {
-    if (!m_view.linear)
-        return dBm;
-    return std::pow(10.0, (m_normalized ? dBm : dBm - 30) / 10);  // ratio, or W
+    return levelFromDbm(dBm, m_view.unit, m_normalized);
 }
 
 QString SpectrumView::levelText(double dBm) const
 {
-    if (std::isnan(dBm))
-        return "-";
-    if (!m_view.linear)
-        return QString("%1 %2").arg(dBm, 0, 'f', 1).arg(m_normalized ? "dB" : "dBm");
-    const double v = plotValue(dBm);
-    static const struct { double unit; const char *prefix; } kPrefixes[] = {
-        {1, ""}, {1e-3, "m"}, {1e-6, "µ"}, {1e-9, "n"}, {1e-12, "p"}, {1e-15, "f"}, {1e-18, "a"}};
-    for (const auto &p : kPrefixes)
-        if (v >= p.unit || p.unit == 1e-18)
-            return QString("%1 %2%3").arg(v / p.unit, 0, 'g', 3).arg(QString::fromUtf8(p.prefix))
-                .arg(m_normalized ? "" : "W");
-    return {};
+    return formatLevel(dBm, m_view.unit, m_normalized);
+}
+
+// Graph levels are kept in dBm (dB units) and W (linear units; normalised: dB and power
+// ratio), so a unit change keeps the levels shown. The axis has the unit's values.
+double SpectrumView::axisLevel(double kept) const
+{
+    const LevelUnit u = m_view.unit;
+    if (isDbUnit(u))
+        return levelFromDbm(kept, u, m_normalized);
+    if (!isVoltUnit(u))
+        return m_normalized || u == LevelUnit::W ? kept : kept * 1e3;
+    const double v = std::copysign(std::sqrt(std::abs(kept) * (m_normalized ? 1 : 50)), kept);  // below 0: dragged there
+    return m_normalized || u == LevelUnit::V ? v : v * 1e3;
+}
+
+double SpectrumView::keptLevel(double axis) const
+{
+    const LevelUnit u = m_view.unit;
+    if (isDbUnit(u))
+        return axis - levelFromDbm(0, u, m_normalized);  // an offset
+    const double scale = m_normalized || u == LevelUnit::W || u == LevelUnit::V ? 1 : 1e-3;
+    const double v = axis * scale;
+    return isVoltUnit(u) ? std::copysign(v * v / (m_normalized ? 1 : 50), v) : v;
 }
 
 void SpectrumView::redraw(int i)
@@ -273,8 +287,9 @@ void SpectrumView::redraw(int i)
 
 void SpectrumView::applyLevels()
 {
-    double lo = m_view.linear ? m_view.linMin : m_view.logMin;
-    double hi = m_view.linear ? m_view.linMax : m_view.logMax;
+    const bool linear = m_view.linear();
+    double lo = axisLevel(linear ? m_view.linMin : m_view.logMin);
+    double hi = axisLevel(linear ? m_view.linMax : m_view.logMax);
     if (m_view.autoMin || m_view.autoMax) {
         double vmin = qInf(), vmax = -qInf();
         for (int i = 0; i < kTraces; ++i)
@@ -286,13 +301,13 @@ void SpectrumView::applyLevels()
                     }
         if (vmin <= vmax) {
             if (m_view.autoMax)
-                hi = m_view.linear ? vmax * 1.1 : std::ceil(vmax / 5) * 5 + 5;
+                hi = linear ? vmax * 1.1 : std::ceil(vmax / 5) * 5 + 5;
             if (m_view.autoMin)
-                lo = m_view.linear ? 0 : std::floor(vmin / 5) * 5 - 5;
+                lo = linear ? 0 : std::floor(vmin / 5) * 5 - 5;
         }
     }
     if (!(hi > lo))
-        hi = m_view.linear ? lo * 2 + 1e-12 : lo + 10;
+        hi = linear ? lo * 2 + 1e-12 : lo + 10;
     yAxis->setRange(lo, hi);
     storeLevels();
     replot(rpQueuedReplot);
@@ -300,8 +315,9 @@ void SpectrumView::applyLevels()
 
 void SpectrumView::storeLevels()
 {
-    (m_view.linear ? m_view.linMin : m_view.logMin) = yAxis->range().lower;
-    (m_view.linear ? m_view.linMax : m_view.logMax) = yAxis->range().upper;
+    const bool linear = m_view.linear();
+    (linear ? m_view.linMin : m_view.logMin) = keptLevel(yAxis->range().lower);
+    (linear ? m_view.linMax : m_view.logMax) = keptLevel(yAxis->range().upper);
 }
 
 void SpectrumView::autoScale()
@@ -422,11 +438,11 @@ QList<QAction *> SpectrumView::menuActions(QPointF pos, QObject *owner)
     toggle("Auto scale top", m_view.autoMax);
     toggle("Auto scale bottom", m_view.autoMin);
     auto askLevel = [this](bool top) {
-        const QString unit = m_view.linear ? "W" : m_normalized ? "dB" : "dBm";
+        const QString unit = levelAxisUnit(m_view.unit, m_normalized);
         bool ok = false;
         const double cur = top ? yAxis->range().upper : yAxis->range().lower;
         const double v = QInputDialog::getDouble(this, top ? "Graph top" : "Graph bottom", unit, cur,
-                                                 -1e9, 1e9, m_view.linear ? 12 : 1, &ok);
+                                                 -1e9, 1e9, m_view.linear() ? 12 : 1, &ok);
         if (!ok)
             return;
         (top ? m_view.autoMax : m_view.autoMin) = false;

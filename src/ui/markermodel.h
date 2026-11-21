@@ -1,6 +1,7 @@
 #pragma once
 // Table model for the marker list. Holds only the readings the controller hands it;
 // edits to the frequency column come back as frequencyEdited().
+#include "levelunit.h"
 #include "markers.h"
 #include <QAbstractTableModel>
 
@@ -10,7 +11,7 @@ public:
     enum Column { Name, Frequency, Level, DeltaFrequency, DeltaLevel, Columns };
     using QAbstractTableModel::QAbstractTableModel;
 
-    void setReadings(const QList<MarkerReading> &rows, double resolutionHz, const QString &unit);
+    void setReadings(const QList<MarkerReading> &rows, double resolutionHz, LevelUnit unit, bool normalized);
 
     int rowCount(const QModelIndex &parent = {}) const override { return parent.isValid() ? 0 : int(m_rows.size()); }
     int columnCount(const QModelIndex &parent = {}) const override { return parent.isValid() ? 0 : Columns; }
@@ -25,5 +26,6 @@ signals:
 private:
     QList<MarkerReading> m_rows;
     double m_resolution = 1;
-    QString m_unit = "dBm";
+    LevelUnit m_unit = LevelUnit::dBm;
+    bool m_normalized = false;
 };

@@ -1,0 +1,68 @@
+# Level units, simulated Ultra (100 MHz carrier at -30 dBm): the axis, the hover readout and the
+# markers in dBm, dBmV, dBµV, dBW, W, mW, V, mV (50 ohm); the graph levels kept over a change;
+# the unit kept in the ini (unitsb.txt checks it after a restart).
+#   del test\out\units.ini & tinySA-App.exe --sim --ini test\out\units.ini --script test\units.txt --out test\out\units
+do connect sim:ultra
+waitfor connected == 1
+set startEdit 50
+set stopEdit 150
+set pointsCombo 101
+click onceButton
+waitfor idle == 1 10000
+do levels -110 -10
+check unit == dBm
+check ylabel == dBm
+do mouse hover plot 100000000 -50
+check hover contains -30.0 dBm
+do mouse dblclick plot 100000000 -30
+check marker1.level == -30.0 dBm
+# dB units: an offset; the graph shows the same levels (-110..-10 dBm = -63..37 dBmV)
+set scaleCombo dBmV
+check ylabel == dBmV
+check ymin ~ -63.0 0.1
+check ymax ~ 37.0 0.1
+do mouse hover plot 100000000 0
+check hover contains 17.0 dBmV
+check marker1.level == 17.0 dBmV
+set scaleCombo dBµV
+check ymax ~ 97.0 0.1
+do mouse hover plot 100000000 0
+check hover contains 77.0 dBµV
+set scaleCombo dBW
+do mouse hover plot 100000000 -100
+check hover contains -60.0 dBW
+# linear: -30 dBm = 1 µW = 0.001 mW = 7.07 mV across 50 ohm
+set scaleCombo W
+check linear == 1
+check ylabel == Power (W)
+do mouse hover plot 100000000 0.0000005
+check hover contains 1 µW
+check marker1.level == 1 µW
+do levels 0 0.000002
+set scaleCombo mW
+check ymax ~ 0.002 0.00001
+do mouse hover plot 100000000 0.001
+check hover contains 0.001 mW
+set scaleCombo V
+check ylabel contains Voltage (V), 50
+check ymax ~ 0.01 0.0001
+do mouse hover plot 100000000 0.005
+check hover contains 7.07 mV
+set scaleCombo mV
+check ymax ~ 10 0.1
+do mouse hover plot 100000000 5
+check hover contains 7.07 mV
+check marker1.level == 7.07 mV
+shot units_mv.png
+# normalised: a voltage ratio of 1 at the carrier
+click normButton
+click onceButton
+waitfor idle == 1 10000
+check ylabel == Voltage ratio
+do levels 0 4
+check ymax ~ 2 0.01
+do mouse hover plot 100000000 1
+check hover contains x 1
+click normButton
+set scaleCombo dBµV
+quit

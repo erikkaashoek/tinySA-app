@@ -9,6 +9,7 @@ void AppSettings::load(QSettings &s)
 {
     m_highInput = config.input == InputMode::High;
     m_csvSeparator = csv.separator;
+    m_unitName = levelUnitName(view.unit);
     storeGenerator();
     visit([&](const char *key, auto &field) {
         using T = std::decay_t<decltype(field)>;
@@ -18,6 +19,8 @@ void AppSettings::load(QSettings &s)
             field = s.value(key, QVariant::fromValue(field)).template value<T>();
     });
     config.input = m_highInput ? InputMode::High : InputMode::Low;
+    // the level unit; ini files from before only have view/linear (W)
+    view.unit = !s.contains("view/unit") && s.value("view/linear").toBool() ? LevelUnit::W : levelUnitFromName(m_unitName);
     // one external gain for analyzer and generator, as the unit has; ini files from before
     // only have the generator's
     if (!s.contains("device/ext_gain_db") && s.contains("generator/ext_gain_db"))
@@ -35,6 +38,7 @@ void AppSettings::load(QSettings &s)
 void AppSettings::save(QSettings &s)
 {
     m_highInput = config.input == InputMode::High;
+    m_unitName = levelUnitName(view.unit);
     m_csvSeparator = csv.separator == '\t' ? QString("\\t") : QString(csv.separator);
     storeGenerator();
     visit([&](const char *key, auto &field) {
@@ -44,6 +48,7 @@ void AppSettings::save(QSettings &s)
             s.setValue(key, QVariant::fromValue(field));
     });
     s.remove("generator/ext_gain_db");  // now device/ext_gain_db, shared
+    s.remove("view/linear");            // now view/unit
 }
 
 void AppSettings::storeGenerator()

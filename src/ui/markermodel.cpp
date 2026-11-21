@@ -2,7 +2,7 @@
 #include "units.h"
 #include <cmath>
 
-void MarkerModel::setReadings(const QList<MarkerReading> &rows, double resolutionHz, const QString &unit)
+void MarkerModel::setReadings(const QList<MarkerReading> &rows, double resolutionHz, LevelUnit unit, bool normalized)
 {
     const bool reshape = rows.size() != m_rows.size();
     if (reshape)
@@ -10,6 +10,7 @@ void MarkerModel::setReadings(const QList<MarkerReading> &rows, double resolutio
     m_rows = rows;
     m_resolution = std::max(1.0, resolutionHz);
     m_unit = unit;
+    m_normalized = normalized;
     if (reshape)
         endResetModel();
     else if (!rows.isEmpty())
@@ -22,10 +23,10 @@ QVariant MarkerModel::data(const QModelIndex &index, int role) const
         return {};
     const MarkerReading &r = m_rows[index.row()];
     const bool delta = !std::isnan(r.dDb);
-    auto level = [&](double v, bool sign) {
-        return std::isnan(v) ? QString("-")
-                             : QString("%1%2 %3").arg(sign && v >= 0 ? "+" : "").arg(v, 0, 'f', 1)
-                                   .arg(sign ? "dB" : m_unit);
+    auto level = [&](double v, bool delta) {  // a difference stays in dB
+        if (!delta || std::isnan(v))
+            return formatLevel(v, m_unit, m_normalized);
+        return QString("%1%2 dB").arg(v >= 0 ? "+" : "").arg(v, 0, 'f', 1);
     };
     if (role == Qt::TextAlignmentRole)
         return index.column() == Name ? int(Qt::AlignCenter) : int(Qt::AlignRight | Qt::AlignVCenter);

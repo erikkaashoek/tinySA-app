@@ -6,6 +6,7 @@
 #include "digitedit.h"
 #include "generatorpanel.h"
 #include "firmwaredialog.h"
+#include "markermodel.h"
 #include "screenview.h"
 #include "screenwindow.h"
 #include <QApplication>
@@ -95,7 +96,8 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
     if (name == "ymax") return QString::number(ui->spectrum->yAxis->range().upper, 'g', 6);
     if (name == "xmin") return num(ui->spectrum->xAxis->range().lower);
     if (name == "xmax") return num(ui->spectrum->xAxis->range().upper);
-    if (name == "linear") return v.linear ? "1" : "0";
+    if (name == "linear") return v.linear() ? "1" : "0";
+    if (name == "unit") return levelUnitName(v.unit);
     if (name == "recording") return num(m_recorder.count());
     if (name.startsWith("mem") && name.size() == 4) {  // mem1..mem3: points stored
         const int m = name.back().digitValue() - 1;
@@ -132,6 +134,8 @@ std::optional<QString> MainWindow::testQuery(const QString &name)
             return QString("none");
         const MarkerReading r = m_session.markers().read(i, live);
         const QString f = name.section('.', 1);
+        if (f == "level")  // as the marker table shows it (in the unit)
+            return m_markerModel->data(m_markerModel->index(i, MarkerModel::Level), Qt::DisplayRole).toString();
         return f == "hz" ? num(r.hz) : f == "dbm" ? num(r.dBm, 2) : f == "dhz" ? num(r.dHz) : num(r.dDb, 2);
     }
     if (name.startsWith("level@")) {  // level of the shown live trace at a frequency
@@ -217,8 +221,8 @@ bool MainWindow::testAction(const QString &name, const QStringList &args)
     } else if (name == "levels") {  // levels <bottom> <top>: fixed graph levels
         ViewSettings v = ui->spectrum->view();
         v.autoMin = v.autoMax = false;
-        (v.linear ? v.linMin : v.logMin) = a0.toDouble();
-        (v.linear ? v.linMax : v.logMax) = a1.toDouble();
+        (v.linear() ? v.linMin : v.logMin) = a0.toDouble();  // as kept: dBm or W
+        (v.linear() ? v.linMax : v.logMax) = a1.toDouble();
         ui->spectrum->setView(v);
         ui->spectrum->replot(QCustomPlot::rpImmediateRefresh);
     } else if (name == "mouse") {

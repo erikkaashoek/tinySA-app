@@ -1,0 +1,6 @@
+# Level units part B (second process, same --ini as units.txt): the unit survived the restart.
+#   tinySA-App.exe --sim --ini test\out\units.ini --script test\unitsb.txt --out test\out\unitsb
+check unit == dBµV
+check @scaleCombo == dBµV
+check ylabel == dBµV
+quit

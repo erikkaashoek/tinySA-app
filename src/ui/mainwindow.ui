@@ -715,22 +715,15 @@
             <item row="1" column="0">
              <widget class="QLabel" name="scaleLabel">
               <property name="text">
-               <string>Scale</string>
+               <string>Unit</string>
               </property>
              </widget>
             </item>
             <item row="1" column="1" colspan="4">
              <widget class="QComboBox" name="scaleCombo">
-              <item>
-               <property name="text">
-                <string>Log (dBm)</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Linear (W)</string>
-               </property>
-              </item>
+              <property name="toolTip">
+               <string>Unit of the levels on the graph and in the marker readouts: dBm, dBmV, dBµV, dBW (log), W, mW, V, mV (linear; voltages across 50 Ω). CSV files stay in dBm</string>
+              </property>
              </widget>
             </item>
             <item row="2" column="0" colspan="5">

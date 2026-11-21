@@ -38,7 +38,7 @@ public:
     void setTrace(int i, const Trace &t);  // already normalised when normalising
     void setShown(int i, bool on);
     void setNormalized(bool on);           // levels are dB relative to the reference
-    void setLinear(bool on);
+    void setUnit(LevelUnit u);             // the levels' unit: axis, readouts
     void setExtGain(double db);            // named on the level axis while not 0
     void setSpan(double startHz, double stopHz, bool log = false);  // log: logarithmic axis
     bool logFrequency() const { return m_logX; }
@@ -87,6 +87,8 @@ private:
     void applyLevels();        // y range from the view settings, auto ends from the data
     void storeLevels();        // y range -> view settings
     double plotValue(double dBm) const;
+    double axisLevel(double kept) const;  // a graph level as kept in m_view -> the axis value
+    double keptLevel(double axis) const;  // and back
     // the frequency axis as drawn: linear, or ln(Hz) on the log axis
     double toAxis(double hz) const { return m_logX ? std::log(hz) : hz; }
     double fromAxis(double u) const { return m_logX ? std::exp(u) : u; }

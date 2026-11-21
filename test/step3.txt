@@ -25,9 +25,9 @@ waitfor sweeps.new >= 2
 check level@100000000 ~ 0 3
 check level@90000000 ~ 0 4
 click normButton
-set scaleCombo Linear (W)
+set scaleCombo W
 check linear == 1
-set scaleCombo Log (dBm)
+set scaleCombo dBm
 
 # frequency strip: drag the middle third 10 MHz to the left = pan up 10 MHz
 do mouse press xaxis 100000000

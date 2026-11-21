@@ -70,7 +70,8 @@ void MainWindow::renderMarkers()
 {
     const MarkerSet &ms = m_session.markers();
     const Trace &live = ui->spectrum->trace(0);
-    const QString unit = m_session.traces().normalized() ? "dB" : "dBm";
+    const bool normalized = m_session.traces().normalized();
+    const LevelUnit unit = ui->spectrum->view().unit;
     const double res = live.isEmpty() ? 1 : live.grid.step();
     QList<MarkerMark> marks;
     QList<MarkerReading> rows;
@@ -81,12 +82,12 @@ void MainWindow::renderMarkers()
         const QString readout = delta ? QString("%1: %2%3  %4%5 dB").arg(r.name, r.dHz >= 0 ? "+" : "",
                                             formatHz(r.dHz, res), r.dDb >= 0 ? "+" : "")
                                             .arg(r.dDb, 0, 'f', 1)
-                                      : QString("%1: %2  %3 %4").arg(r.name, formatHz(r.hz, res))
-                                            .arg(r.dBm, 0, 'f', 1).arg(unit);
+                                      : QString("%1: %2  %3").arg(r.name, formatHz(r.hz, res),
+                                                                    formatLevel(r.dBm, unit, normalized));
         marks << MarkerMark{r.hz, r.dBm, r.name, readout, i == ms.selected()};
     }
     ui->spectrum->setMarkers(marks);
-    m_markerModel->setReadings(rows, res, unit);
+    m_markerModel->setReadings(rows, res, unit, normalized);
     QSignalBlocker block(ui->markerTable->selectionModel());
     if (ms.selected() >= 0)
         ui->markerTable->selectRow(ms.selected());
