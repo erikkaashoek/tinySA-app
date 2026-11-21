@@ -63,7 +63,7 @@ int trackSettleMs(const TrackConfig &t, bool screenOff, TrackChange change)
         return t.settleMs;
     if (!screenOff)
         return change == TrackChange::RfOn ? 300 : 150;
-    return change == TrackChange::None ? 10 : 32;
+    return 10;  // a change of path or RF on is waited for before (DeviceLink::tune, sync)
 }
 
 GenConfig trackerGen(GenConfig g, const DeviceInfo &tg, const TrackConfig &t, double hz, double levelDbm, bool rf)

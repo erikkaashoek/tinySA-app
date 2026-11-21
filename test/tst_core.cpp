@@ -1881,6 +1881,35 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!b.a->uiOff(), 3000);
     }
 
+    void pathChangeIsWaitedFor()
+    {
+        // the cleanest path above 1.13 GHz: the unit resets its Si4468 after the prompt of the
+        // `sweep cw` (180-190 ms on a ZS407); a bare `sweep` is answered once that is done
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra"));
+        SweepConfig c;
+        c.grid = {1.1e9, 1.2e9, 11};
+        b.analyzer.setConfig(c);
+        TrackConfig t{true, -30, -1};
+        t.mixer = false;
+        b.analyzer.setTracking(t);
+        b.analyzer.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 10000);
+        QByteArrayList g;
+        for (const QByteArray &l : b.g->received())  // the sweep's own commands
+            if (l.startsWith("sweep") || l.startsWith("output"))
+                g << l;
+        QVERIFY(g.contains("output normal"));
+        auto hz = [](const QByteArray &l) { return l.startsWith("sweep cw ") ? l.mid(9).toLongLong() : 0; };
+        // the sweep: from its first point (after the frequency error was measured at 3 GHz)
+        g = g.mid(int(std::find_if(g.begin(), g.end(), [&](const QByteArray &l) { return hz(l) > 1.09e9 && hz(l) < 1.2e9; }) - g.begin()));
+        const int at = int(std::find_if(g.begin(), g.end(), [&](const QByteArray &l) { return hz(l) > 1130000000; }) - g.begin());
+        QVERIFY(at < g.size() - 1);
+        QCOMPARE(g[at + 1], QByteArray("sweep"));  // into the leakage path: waited for
+        QCOMPARE(g[1], QByteArray("sweep"));       // the first point (from 3 GHz, another path) too
+        QCOMPARE(g.count("sweep"), 2);             // not every step
+    }
+
     void sweepFollowsTheGenerator()
     {
         Bench b;
@@ -2077,8 +2106,8 @@ private slots:
         QCOMPARE(trackSettleMs(t, false), 150);  // its screen redraws before the frequency changes
         QCOMPARE(trackSettleMs(t, false, TrackChange::RfOn), 300);
         QCOMPARE(trackSettleMs(t, true), 10);
-        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 32);  // across 823 MHz / 1130 MHz
-        QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 32);
+        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 10);  // the path change waited for (sync)
+        QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 10);
         QCOMPARE(trackerPath(ultra, t, 800e6), 0);
         QCOMPARE(trackerPath(ultra, t, 900e6), 1);
         QCOMPARE(trackerPath(ultra, t, 1.2e9), 2);

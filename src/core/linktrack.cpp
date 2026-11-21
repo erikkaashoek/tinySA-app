@@ -137,6 +137,7 @@ void DeviceLink::pumpTracking()
                                : trackerPath(m_tg->m_info, m_track, m_tg->m_gen.freqHz) != trackerPath(m_tg->m_info, m_track, hz)
                                    ? TrackChange::Path : TrackChange::None;
     m_trackRestart = TrackChange::None;
+    // into another output path or with RF just on: answered once the output is set (sync)
     m_tg->tune(hz, m_trackNext == 0, [this, seq = m_frame.seq, change](bool ok) {
         if (!m_trackWait || seq != m_frame.seq)
             return;  // stopped or started again meanwhile
@@ -150,7 +151,7 @@ void DeviceLink::pumpTracking()
             m_trackSettle.start(settle);
         else
             measureTrackPoint();
-    });
+    }, change != TrackChange::None);
 }
 
 void DeviceLink::measureTrackPoint()
@@ -241,8 +242,14 @@ void DeviceLink::pumpAlign()
             });
         });
     };
-    // its output there first (it may have been anywhere, RF off)
-    QTimer::singleShot(trackSettleMs(m_track, m_tg->m_uiOff, TrackChange::RfOn), this, scans);
+    // its output there first (it may have been anywhere, RF off): waited for (sync), then settled
+    m_tg->tune(hz, false, [this, id, scans](bool ok) {
+        if (id != m_aligning)
+            return;
+        if (!ok)
+            return alignFailed();
+        QTimer::singleShot(trackSettleMs(m_track, m_tg->m_uiOff, TrackChange::RfOn), this, scans);
+    }, true);
 }
 
 void DeviceLink::alignScan(double centerHz, double halfSpanHz, double rbwKHz, double stepHz, double minRiseDb,
@@ -329,26 +336,29 @@ bool DeviceLink::readyToTune() const
     return genCommands(m_gen, have, *m_info.model).isEmpty();
 }
 
-void DeviceLink::tune(double hz, bool withLevel, std::function<void(bool ok)> done)
+void DeviceLink::tune(double hz, bool withLevel, std::function<void(bool ok)> done, bool sync)
 {
     m_gen.freqHz = hz;
     m_gen = clampGen(m_gen, m_info);
     const qint64 f = std::llround(m_gen.freqHz);
-    if (m_genHave.freq == std::pair<qint64, qint64>{f, 0})
-        return done(true);  // there already: its RF was just switched on at this frequency
-    m_genHave.freq = std::pair<qint64, qint64>{f, 0};
-    Cmd tuneCmd{"sweep cw " + QByteArray::number(f)};
-    tuneCmd.generator = true;
-    auto reply = [done](bool ok, const QStringList &) { done(ok); };
-    if (!withLevel) {
-        tuneCmd.done = reply;
-        return enqueue(tuneCmd);
+    QList<Cmd> cmds;
+    if (m_genHave.freq != std::pair<qint64, qint64>{f, 0}) {  // else there already (RF just on there)
+        m_genHave.freq = std::pair<qint64, qint64>{f, 0};
+        cmds << Cmd{"sweep cw " + QByteArray::number(f)};
+        if (withLevel) {
+            const double port = m_gen.levelDbm - m_gen.extGainDb;  // as genCommands
+            m_genHave.levelDbm = port;
+            cmds << Cmd{"level " + QByteArray::number(port, 'g', 10)};
+        }
     }
-    const double port = m_gen.levelDbm - m_gen.extGainDb;  // as genCommands
-    m_genHave.levelDbm = port;
-    Cmd levelCmd{"level " + QByteArray::number(port, 'g', 10)};
-    levelCmd.generator = true;
-    levelCmd.done = reply;
-    m_queue.append(tuneCmd);
-    enqueue(levelCmd);
+    if (sync)  // answered once the sweep thread has set the output
+        cmds << Cmd{"sweep"};
+    if (cmds.isEmpty())
+        return done(true);
+    for (Cmd &c : cmds)
+        c.generator = true;
+    cmds.last().done = [done](bool ok, const QStringList &) { done(ok); };
+    const Cmd last = cmds.takeLast();
+    m_queue.append(cmds);
+    enqueue(last);
 }

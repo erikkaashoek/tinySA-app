@@ -219,6 +219,15 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     session, 2026-11-12; two points per sweep). Auto uses 32 ms there, also when RF has just
     gone on. My PowerShell timings had hidden
     ~15 ms of sleep granularity, so 0 ms looked fine there.
+    **Replaced 2026-11-21 (branch `logscan`):** a path change or RF on is now waited for with a
+    bare `sweep` (CMD_WAIT_MUTEX: answered once the sweep thread has set the output), then 10 ms
+    (DeviceLink::tune sync). Measured with raw commands (ZS407 generating, screen off): the query
+    answers in 9 ms for a plain step, 29 ms across 1.13 GHz on the mixer path, 180-190 ms into the
+    cleanest path's leakage output above 1.13 GHz (SI4463_init_rx resets the Si4468: 10 + 10 +
+    100 ms of delays); 0 ms after the query the level is right. The fixed 32 ms lost that point
+    (user report: a hole at 1.1301 GHz with Cleanest; 150 ms lost it too). hw: gap gone
+    (1-1.2 GHz, 450 points, Cleanest), hw_track_ultra PASS (Accurate 2.07 against 2.04 s).
+    Raw-timing lesson: a pyserial read(4096) with a 0.2 s timeout hid the wait; read in_waiting.
   - **Known:**
     - **Narrow RBW (1-3 kHz):** with the frequency corrected, 5-15 % of the points above about
       1.1 GHz read about 10 dB low, at random frequencies. Correcting on the analyzer side
@@ -319,7 +328,7 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   - **Tracking:** trackerLimits/clampToTracker/trackerPath/trackerGen take the TrackConfig; the
     analyzer's link copies m_track into the generator unit's link, which makes its output in that
     mode. A mode change restarts the sweep (and re-clamps the range: Session::setTrack). Path 3 =
-    the LO harmonic (32 ms auto settle after a step into it, a guess: not measured).
+    the LO harmonic (a step into it is waited for like any path change; raw: no extra delay).
   - **Tests:** tst_core ultraOutputModes, adoptKeepsTheUnitAsItIs (6 GHz now kept); sim
     gen_ultra.txt and track.txt sections; full regression PASS.
   - **Hardware (2026-11-21, ZS406 COM9 + ZS407 COM21 RF to RF, v1.4-342):** both units take
