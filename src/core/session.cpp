@@ -134,7 +134,8 @@ void Session::setTrack(const TrackConfig &t)
 {
     const TrackConfig clamped = m_trackerInfo.model ? clampTrack(t, m_trackerInfo) : t;
     const bool changed = !(clamped == m_track);
-    const bool switched = clamped.on != m_track.on || clamped.mixer != m_track.mixer || clamped.harmonic != m_track.harmonic;
+    const bool switched = clamped.on != m_track.on || clamped.mixer != m_track.mixer || clamped.harmonic != m_track.harmonic
+                          || clamped.offsetHz != m_track.offsetHz;
     m_track = clamped;
     QMetaObject::invokeMethod(m_link, [l = m_link, clamped] { l->setTracking(clamped); });
     if (changed || !(clamped == t))

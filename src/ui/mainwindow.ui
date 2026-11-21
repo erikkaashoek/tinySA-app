@@ -596,8 +596,30 @@
               </property>
              </widget>
             </item>
-            <item row="3" column="0" colspan="3">
+            <item row="3" column="2">
+             <widget class="QLineEdit" name="trackOffsetEdit">
+              <property name="maximumSize">
+               <size>
+                <width>80</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Frequency offset of the tracking generator in MHz (+ or -): it generates at the swept frequency + offset. For a mixer with an external LO: the generator on its RF port, this tinySA on its IF port, offset = RF - IF (+LO when RF = IF + LO, -LO when RF = IF - LO). The generator's frequency error is not measured while an offset is set</string>
+              </property>
+              <property name="placeholderText">
+               <string>Offset MHz</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0" colspan="2">
              <widget class="QComboBox" name="trackOutputCombo">
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon</enum>
+              </property>
+              <property name="minimumContentsLength">
+               <number>8</number>
+              </property>
               <property name="toolTip">
                <string>Output of a tinySA Ultra as tracking generator, as on the generator page: highest accuracy (mixer) or cleanest signal; Ultra accurate / Ultra cleanest also go above that path's maximum with the third harmonic of the LO</string>
               </property>

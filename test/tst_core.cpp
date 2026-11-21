@@ -1962,6 +1962,44 @@ private slots:
         QCOMPARE(g.count("sweep"), 2);             // not every step
     }
 
+    void offsetForMixers()
+    {
+        DeviceInfo ultra;
+        ultra.model = detectModel("tinySA ULTRA+ ZS407", {});
+        ultra.hardware = "ZS407";
+        TrackConfig t{true, -30, -1};
+        t.offsetHz = 500e6;  // the generator 500 MHz above the analyzer
+        SweepConfig c;
+        c.grid = {1e6, 9e9, 101};
+        QCOMPARE(clampToTracker(c, *ultra.model, ultra, t).grid.stopHz, 7.37e9 - 500e6);
+        t.offsetHz = -500e6;  // below: the sweep starts where the generator can
+        QCOMPARE(clampToTracker(c, *ultra.model, ultra, t).grid.startHz, 500e6 + 10e3);
+        QCOMPARE(trackerFreq(t, 600e6), 100e6);
+        t.offsetHz = 1e12;
+        QCOMPARE(clampTrack(t, ultra).offsetHz, 7.37e9);
+
+        // a mixer with its LO at 500 MHz between the units: the generator at f + 500 MHz (RF = IF + LO)
+        for (const double offset : {500e6, -500e6}) {  // and RF = IF - LO (the sum product)
+            Bench b;
+            QVERIFY(b.open("sim:ultra:mixer=500", "sim:ultra"));
+            SweepConfig s;
+            s.grid = offset > 0 ? ScanGrid{10e6, 100e6, 10} : ScanGrid{600e6, 690e6, 10};
+            b.analyzer.setConfig(s);
+            TrackConfig tc{true, -30, -1};
+            tc.offsetHz = offset;
+            b.analyzer.setTracking(tc);
+            b.analyzer.setScan(DeviceLink::Once);
+            QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 10000);
+            const SweepFrame f = b.last();
+            for (int i = 0; i < f.grid.points; ++i)  // -30 dBm minus the 7 dB conversion loss
+                QVERIFY2(std::abs(f.dBm[i] - -37) < 2, qPrintable(QString("%1 MHz: %2 dBm").arg(f.grid.freq(i) / 1e6).arg(f.dBm[i])));
+            const QByteArrayList g = b.g->received();
+            QVERIFY(g.contains("sweep cw " + QByteArray::number(qint64(s.grid.startHz + offset))));
+            QVERIFY(!g.contains("sweep cw 3000000000"));  // its frequency error not measured
+            QVERIFY(b.msg.isEmpty() || !b.msg.last().first().toString().contains("No signal"));
+        }
+    }
+
     void sweepFollowsTheGenerator()
     {
         Bench b;

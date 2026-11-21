@@ -28,6 +28,7 @@ TrackConfig clampTrack(TrackConfig t, const DeviceInfo &tg)
     const GenLimits l = trackerLimits(tg, t);
     t.levelDbm = std::clamp(std::round(t.levelDbm * 10) / 10, l.minDbm, l.maxDbm);
     t.settleMs = std::clamp(t.settleMs, -1, 5000);
+    t.offsetHz = std::clamp(std::round(t.offsetHz), -l.maxHz, l.maxHz);
     return t;
 }
 
@@ -37,9 +38,9 @@ SweepConfig clampToTracker(SweepConfig c, const ModelDesc &analyzer, const Devic
     if (!tg.model)
         return c;
     const GenLimits l = trackerLimits(tg, t);
-    const double lo = std::max(analyzer.lowLimit(c.input), l.minHz);
-    const double hi = std::min(analyzer.highLimit(c.input), l.maxHz);
-    if (hi - lo < 10e3)  // no common range (e.g. the basic's HIGH input): the analyzer's
+    const double lo = std::max(analyzer.lowLimit(c.input), l.minHz - t.offsetHz);
+    const double hi = std::min(analyzer.highLimit(c.input), l.maxHz - t.offsetHz);
+    if (hi - lo < 10e3)  // no common range (e.g. the basic's HIGH input, or a huge offset): the analyzer's
         return c;
     FreqRange r(c.grid.startHz, c.grid.stopHz);
     r.setLimits(lo, hi);

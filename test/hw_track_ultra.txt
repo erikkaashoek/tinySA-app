@@ -15,7 +15,7 @@ set trackSettleSpin -1
 click settingsOk
 do trackerconnect COM21
 waitfor tracker.connected == 1 10000
-set trackOutputCombo Ultra accurate, max 17.92 GHz
+set trackOutputCombo Ultra accurate
 set stopEdit 9900
 set startEdit 1000
 set pointsCombo 101
@@ -41,20 +41,20 @@ do savecsv tu_ultra_accurate_100ms.csv
 click actionSettings
 set trackSettleSpin -1
 click settingsOk
-set trackOutputCombo Ultra cleanest, max 18.90 GHz
+set trackOutputCombo Ultra cleanest
 click onceButton
 waitfor idle == 1 120000
 check tracker.sent contains "output normal"
 do savecsv tu_ultra_cleanest.csv
 shot ultra_cleanest.png
-set trackOutputCombo Ultra accurate, max 17.92 GHz
+set trackOutputCombo Ultra accurate
 set logCheck 1
 click onceButton
 waitfor idle == 1 120000
 do savecsv tu_ultra_accurate_log.csv
 shot ultra_log.png
 set logCheck 0
-set trackOutputCombo Accurate, max 7.37 GHz
+set trackOutputCombo Accurate
 check stop == 7370000000
 set trackCheck 0
 set attenCombo Auto

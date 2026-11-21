@@ -28,6 +28,7 @@ void DeviceLink::setTracker(DeviceLink *tg)
             m_tg->m_track = m_track;
         }
         m_trackAligned = false;  // another unit, perhaps: its frequency error is measured again
+        m_trackPpb = 0;          //   (not with an offset: then none)
         pump();
     }, Qt::QueuedConnection);
     connect(tg, &DeviceLink::closed, this, [this] {
@@ -48,14 +49,14 @@ void DeviceLink::setTracker(DeviceLink *tg)
 void DeviceLink::setTracking(const TrackConfig &t)
 {
     const bool was = m_track.on;
-    const bool otherOutput = t.mixer != m_track.mixer || t.harmonic != m_track.harmonic;
+    const bool otherOutput = t.mixer != m_track.mixer || t.harmonic != m_track.harmonic || t.offsetHz != m_track.offsetHz;
     m_track = m_tg && m_tg->m_info.model ? clampTrack(t, m_tg->m_info) : t;
     if (m_tg)
         m_tg->m_track = m_track;  // the generator unit's link makes its output in this mode
     if (was && !m_track.on)
         stopTracking(true);  // the next sweep is an ordinary one
     else if (otherOutput && m_trackNext >= 0)
-        stopTracking(false);  // the sweep starts again in the other output mode
+        stopTracking(false);  // the sweep starts again in the other output mode (or offset)
     pump();
 }
 
@@ -113,7 +114,9 @@ void DeviceLink::stopTracking(bool rfOff)
 void DeviceLink::pumpTracking()
 {
     setFineTimer(true);  // the settle times are a few ms
-    if (!m_trackAligned)
+    // its frequency error, measured where the analyzer sees the generator: not through a mixer
+    // (offset), then it stays as it is (measured before, or none); measured once the offset is 0
+    if (!m_trackAligned && m_track.offsetHz == 0)
         return pumpAlign();
     const ScanGrid &g = m_want.grid;
     if (m_trackNext < 0 || !(m_frame.grid == g)) {  // a new sweep (or the grid changed)
@@ -122,7 +125,7 @@ void DeviceLink::pumpTracking()
         m_sweepClock.start();
         m_emitClock.start();
     }
-    const double hz = trackerHz(g.freq(m_trackNext));
+    const double hz = trackerHz(trackerFreq(m_track, g.freq(m_trackNext)));
     if (!m_tg->m_trackRf || m_tg->m_gen.levelDbm != m_track.levelDbm || !trackerInMode()) {
         // RF on (it may have been anywhere, with its screen on just redrawn), a new level or
         // output mode: the first point waits as long as after a path change

@@ -384,6 +384,26 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
   - **Tests:** tst_core levelUnits (conversions, texts, ini migration); sim units.txt + unitsb.txt
     (restart), step3.txt combo texts; script query `unit`, `marker<N>.level` (the table's text);
     full regression PASS (25 scripts).
+- Release 2.0.0-62 (2026-11-21): ultra-out, logscan and units merged into main, changelog, zip.
+- Branch `track-offset` (2026-11-21, user request "a frequency offset for the tracking generator
+  to test mixers"):
+  - **Model:** TrackConfig::offsetHz (+ or -): the generator at the analyzer's frequency + offset
+    (`trackerFreq`; RF = IF + offset, i.e. +LO for RF = IF + LO, -LO for RF = IF - LO, the sum
+    product). Not covered: RF = LO - IF (inverted sweep). clampToTracker keeps start + offset ..
+    stop + offset inside the generator; clampTrack limits the offset to +- its top. ini
+    tracker/offset_hz. A change restarts the sweep and re-clamps the range (Session::setTrack).
+  - **Frequency error:** not measured while an offset is set (through a mixer the analyzer does
+    not see the generator); the ppb stays as measured before (0 for a new unit) and is measured once
+    the offset is 0 again.
+  - **UI:** trackOffsetEdit in row 3 next to trackOutputCombo (max 80 px; "+500 MHz", empty = 0,
+    placeholder "Offset MHz"); the combo now shows only the mode's name (its top is in the tracker
+    label, the full text as the item's tooltip) with a small minimum width. A separate Offset row
+    pushed the Trace group out of a 700 px window; offset next to the level squeezed the level.
+  - **Sim:** `:mixer=M` = the analyzer's input through a mixer with its LO at M MHz: |f - LO| and
+    f + LO at 7 dB conversion loss (SimTransport::Dut::Mixer).
+  - **Tests:** tst_core offsetForMixers (clamps; sim mixer both directions, -37 dBm, no ppb
+    measurement); sim track_offset.txt; track.txt / hw_track_ultra.txt combo texts; full regression
+    PASS (26 scripts). Not on hardware (needs a mixer and an LO).
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 

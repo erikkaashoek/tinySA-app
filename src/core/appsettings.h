@@ -89,6 +89,7 @@ struct AppSettings {
         v("tracker/settle_ms", track.settleMs);
         v("tracker/mixer", track.mixer);
         v("tracker/harmonic", track.harmonic);
+        v("tracker/offset_hz", track.offsetHz);
         v("generator/high_output", m_genHigh);
         v("generator/mixer", gen.mixer);
         v("generator/harmonic", gen.harmonic);
