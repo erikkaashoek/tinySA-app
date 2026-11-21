@@ -37,9 +37,12 @@ int trackerPath(const DeviceInfo &tg, const TrackConfig &t, double hz);
 // What changed on the generator unit since the last point.
 enum class TrackChange { None, Path, RfOn };  // a step / into another output path / RF just on
 
-// Auto settle after the generator's prompt (ZS407, v1.4-316/317): screen off (`ui`) 10 ms, 32 ms
-// after a step into another output path (two to three points per sweep) or with RF just on.
-// Screen on: 150 ms, the unit redraws its menu first; 300 ms with RF just on.
+// Auto settle after the generator's prompt (ZS407, v1.4-316..342): screen off (`ui`) 10 ms. A
+// step into another output path or RF just on is first waited for with a bare `sweep`, which
+// the unit answers once its sweep thread has set the output (DeviceLink::tune, sync): 29 ms
+// across 1.13 GHz on the mixer path, 180-190 ms into the cleanest path's leakage output (the
+// Si4468 is reset, SI4463_init_rx); a fixed 32 ms lost that point. Screen on: 150 ms, the unit
+// redraws its menu first; 300 ms with RF just on.
 int trackSettleMs(const TrackConfig &t, bool screenOff, TrackChange change = TrackChange::None);
 
 // What the generator unit makes as tracking generator: a carrier at hz, levelDbm, RF on/off,

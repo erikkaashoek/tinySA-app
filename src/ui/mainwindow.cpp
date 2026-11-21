@@ -67,7 +67,10 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     connect(ui->deviceRangeButton, &QPushButton::clicked, this, [this] {
         const ScanGrid g = m_session.device().deviceGrid;
         if (g.points > 1)
-            editConfig([g](SweepConfig &c) { c.grid = g; });
+            editConfig([g](SweepConfig &c) { c.grid = {g.startHz, g.stopHz, g.points, c.grid.log}; });
+    });
+    connect(ui->logCheck, &QCheckBox::clicked, this, [this](bool on) {
+        editConfig([on](SweepConfig &c) { c.grid.log = on; });
     });
 
     // --- trace and file widgets ---
@@ -125,8 +128,9 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
         return s;
     };
     const auto zoom = [this](double f) {
-        const SweepConfig c = m_session.config();
-        applyRangeOp(SpectrumView::RangeOp::Zoom, f, (c.grid.startHz + c.grid.stopHz) / 2);
+        const SweepConfig c = m_session.config();  // about the middle of the axis
+        applyRangeOp(SpectrumView::RangeOp::Zoom, f,
+                     c.grid.log ? std::sqrt(c.grid.startHz * c.grid.stopHz) : (c.grid.startHz + c.grid.stopHz) / 2);
     };
     m_analyzerShortcuts = {shortcut(Qt::Key_PageUp, [zoom] { zoom(1 / 1.5); }),
                            shortcut(Qt::Key_PageDown, [zoom] { zoom(1.5); })};
@@ -401,8 +405,12 @@ void MainWindow::showConfig(const SweepConfig &c)
         ui->analyzerGainSpin->setValue(c.extGainDb);
     }
     ui->spectrum->setExtGain(c.extGainDb);
-    ui->spectrum->setSpan(c.grid.startHz, c.grid.stopHz);
-    m_stepLabel->setText("Step " + formatHz(c.grid.step(), std::max(1.0, c.grid.step() / 1000)));
+    ui->logCheck->setChecked(c.grid.log);
+    ui->spectrum->setSpan(c.grid.startHz, c.grid.stopHz, c.grid.log);
+    auto step = [](double hz) { return formatHz(hz, std::max(1.0, hz / 1000)); };
+    m_stepLabel->setText(c.grid.log && c.grid.points > 2  // the first and the last step
+                             ? "Step " + step(c.grid.step()) + " to " + step(c.grid.stepAt(c.grid.points - 2))
+                             : "Step " + step(c.grid.step()));
 }
 
 void MainWindow::editConfig(const std::function<void(SweepConfig &)> &change)
@@ -422,17 +430,16 @@ void MainWindow::editRange(QLineEdit *edit)
                                : edit == ui->stopEdit ? SpectrumView::RangeOp::Stop
                                : edit == ui->centerEdit ? SpectrumView::RangeOp::Center
                                                         : SpectrumView::RangeOp::Zoom;
-    if (op == SpectrumView::RangeOp::Zoom) {  // span: zoom about the center to the typed span
-        const SweepConfig c = m_session.config();
-        const double span = c.grid.stopHz - c.grid.startHz;
-        return applyRangeOp(op, span > 0 ? *hz / span : 1, (c.grid.startHz + c.grid.stopHz) / 2);
+    const SweepConfig now = m_session.config();
+    if (op == SpectrumView::RangeOp::Zoom && !now.grid.log) {  // span: zoom about the center to the typed span
+        const double span = now.grid.stopHz - now.grid.startHz;
+        return applyRangeOp(op, span > 0 ? *hz / span : 1, (now.grid.startHz + now.grid.stopHz) / 2);
     }
     editConfig([&](SweepConfig &c) {  // typed values are taken as they are, no rounding
-        FreqRange r(c.grid.startHz, c.grid.stopHz);
-        const ModelDesc *m = m_session.device().model;
-        r.setLimits(m ? m->lowLimit(c.input) : 0, m ? m->highLimit(c.input) : 100e9);
+        FreqRange r = rangeOf(c);  // (center and span as shown: stop - start, about their mean)
         if (op == SpectrumView::RangeOp::Start) r.setStart(*hz);
         else if (op == SpectrumView::RangeOp::Stop) r.setStop(*hz);
+        else if (op == SpectrumView::RangeOp::Zoom) r.setSpan(*hz);
         else r.setCenter(*hz);
         c.grid.startHz = r.start();
         c.grid.stopHz = r.stop();
@@ -444,21 +451,34 @@ void MainWindow::editRange(QLineEdit *edit)
 void MainWindow::applyRangeOp(SpectrumView::RangeOp op, double a, double b)
 {
     editConfig([&](SweepConfig &c) {
-        FreqRange r(c.grid.startHz, c.grid.stopHz);
-        const ModelDesc *m = m_session.device().model;
-        r.setLimits(m ? m->lowLimit(c.input) : 0, m ? m->highLimit(c.input) : 100e9);
+        FreqRange r = rangeOf(c);
+        const bool log = c.grid.log;  // log axis: zoom and centre in ratios, as drawn
         switch (op) {
         case SpectrumView::RangeOp::Set: r.set(a, b); break;
         case SpectrumView::RangeOp::Start: r.setStart(a); break;
         case SpectrumView::RangeOp::Stop: r.setStop(a); break;
-        case SpectrumView::RangeOp::Center: r.setCenter(a); break;
-        case SpectrumView::RangeOp::Zoom: r.zoom(a, b); break;
+        case SpectrumView::RangeOp::Center: log ? r.setCenterLog(a) : r.setCenter(a); break;
+        case SpectrumView::RangeOp::Zoom: log ? r.zoomLog(a, b) : r.zoom(a, b); break;
         }
-        const double res = niceStep(r.span() / 1000);
-        r.set(roundTo(r.start(), res), roundTo(r.stop(), res));
+        if (log) {  // each end to a resolution of its own (10 kHz must not become 0)
+            r.set(roundTo(r.start(), niceStep(r.start() / 1000)), roundTo(r.stop(), niceStep(r.stop() / 1000)));
+        } else {
+            const double res = niceStep(r.span() / 1000);
+            r.set(roundTo(r.start(), res), roundTo(r.stop(), res));
+        }
         c.grid.startHz = r.start();
         c.grid.stopHz = r.stop();
     });
+}
+
+// The sweep's range with the unit's limits (a log sweep starts at kLogMinHz at the lowest)
+FreqRange MainWindow::rangeOf(const SweepConfig &c) const
+{
+    FreqRange r(c.grid.startHz, c.grid.stopHz);
+    const ModelDesc *m = m_session.device().model;
+    const double low = m ? m->lowLimit(c.input) : 0;
+    r.setLimits(c.grid.log ? std::max(kLogMinHz, low) : low, m ? m->highLimit(c.input) : 100e9);
+    return r;
 }
 
 void MainWindow::error(const QString &what)

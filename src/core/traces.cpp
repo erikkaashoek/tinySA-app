@@ -11,7 +11,7 @@ double Trace::at(double hz) const
         return qQNaN();
     if (n == 1)
         return dBm[0];
-    const double x = (hz - grid.startHz) / grid.step();
+    const double x = grid.index(hz);
     const int i = std::clamp(int(x), 0, n - 2);
     const double t = x - i;
     return dBm[i] * (1 - t) + dBm[i + 1] * t;

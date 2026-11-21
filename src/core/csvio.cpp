@@ -60,14 +60,26 @@ std::optional<Trace> readTraceCsv(const QString &path, QString *error)
         *error = "no frequency/level rows found";
         return std::nullopt;
     }
-    Trace t{{hz.first(), hz.last(), int(hz.size())}, db};
-    const double tol = std::max(1.0, t.grid.step() * 1e-3);
-    for (int i = 0; i < hz.size(); ++i)
-        if (std::abs(hz[i] - t.grid.freq(i)) > tol) {
-            *error = QString("frequencies are not evenly spaced (row %1)").arg(i + 1);
-            return std::nullopt;
-        }
-    return t;
+    // the app's grids: linear, a log sweep in linear pieces, a tracking sweep's exact log
+    const int n = int(hz.size());
+    auto firstOff = [&](const ScanGrid &g) {  // the first row off the grid, -1 = none
+        const double tol = std::max(1.0, g.step() * 1e-3);
+        for (int i = 0; i < n; ++i)
+            if (std::abs(hz[i] - g.freq(i)) > tol)
+                return i;
+        return -1;
+    };
+    const ScanGrid linear{hz.first(), hz.last(), n};
+    const int off = firstOff(linear);
+    if (off < 0)
+        return Trace{linear, db};
+    for (const int pieces : {logPieces(hz.first(), hz.last(), n), 0}) {
+        const ScanGrid g{hz.first(), hz.last(), n, true, pieces};
+        if (hz.first() > 0 && firstOff(g) < 0)
+            return Trace{g, db};
+    }
+    *error = QString("frequencies are neither evenly nor logarithmically spaced (row %1)").arg(off + 1);
+    return std::nullopt;
 }
 
 bool SweepRecorder::start(const QString &baseFolder, const CsvFormat &fmt, QString *error)

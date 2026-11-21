@@ -1,0 +1,48 @@
+# Log sweep on hardware: the analyzer (--port) sweeps 10 kHz - 3 GHz with 290 points, linear and
+# log (19 pieces, one scanraw each), screen off, RBW auto, attenuation 0. A second unit cabled to
+# its RF input generates 206 MHz -30 dBm: between the last point of piece 14 (202.73 MHz, step
+# 6.7 MHz) and the first of piece 15 (209.44 MHz, step 12.9 MHz), to see whether the wider piece
+# shows it a second time. Start the generator first (raw: mode low output, sweep cw 206000000,
+# level -30, output on).
+# CSVs go to the current folder (savecsv), so run it from the out folder:
+#   cd test\out\hwlog & ..\..\..\build\tinySA-App.exe --port COMa --ini ..\hwlog.ini --script ..\..\hw_logscan.txt --out .
+# 2026-11-21 (ZS407 COM21 analyzing, ZS406 COM9 generating, v1.4-342): PASS; linear 4.73-4.87 s,
+# log 5.12 s per sweep; 206 MHz shows at points 227 (-33.4) and 228 (-32.4 dBm): the wide piece's
+# first point covers +-6.45 MHz (firmware sub-steps span +-step/2), into the narrow piece's last.
+waitfor connected == 1 10000
+check activity == analyzer
+click actionSettings
+set screenOffCheck 1
+click settingsOk
+set startEdit 0.01
+set stopEdit 3000
+set pointsCombo 290
+set rbwCombo Auto
+set attenCombo 0 dB
+set logCheck 0
+click onceButton
+waitfor idle == 1 60000
+dump sweepms linear_sweep_ms.txt
+do savecsv linear.csv
+shot hw_linear.png
+set logCheck 1
+click onceButton
+waitfor idle == 1 60000
+dump sweepms log_sweep_ms.txt
+do savecsv log.csv
+shot hw_log.png
+check peak.hz ~ 206000000 7000000
+# a few sweeps for the rate
+click scanButton
+wait 8000
+click scanButton
+waitfor idle == 1 60000
+dump sweepms log_sweep_ms2.txt
+set logCheck 0
+click scanButton
+wait 8000
+click scanButton
+waitfor idle == 1 60000
+dump sweepms linear_sweep_ms2.txt
+set attenCombo Auto
+quit

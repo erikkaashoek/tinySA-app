@@ -331,28 +331,57 @@
               </property>
              </widget>
             </item>
-            <item row="3" column="0" colspan="2">
-             <widget class="QPushButton" name="scanButton">
-              <property name="toolTip">
-               <string>Sweep continuously (Esc stops)</string>
+            <item row="3" column="0" colspan="4">
+             <layout class="QHBoxLayout" name="scanRowLayout">
+              <property name="spacing">
+               <number>4</number>
               </property>
-              <property name="text">
-               <string>Scan</string>
-              </property>
-              <property name="checkable">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="2" colspan="2">
-             <widget class="QPushButton" name="onceButton">
-              <property name="toolTip">
-               <string>Sweep once</string>
-              </property>
-              <property name="text">
-               <string>Once</string>
-              </property>
-             </widget>
+              <item>
+               <widget class="QPushButton" name="scanButton">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>1</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="toolTip">
+                 <string>Sweep continuously (Esc stops)</string>
+                </property>
+                <property name="text">
+                 <string>Scan</string>
+                </property>
+                <property name="checkable">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="onceButton">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>1</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="toolTip">
+                 <string>Sweep once</string>
+                </property>
+                <property name="text">
+                 <string>Once</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="logCheck">
+                <property name="toolTip">
+                 <string>Logarithmic frequencies: the points and the frequency axis (from 10 kHz). The tinySA sweeps linearly, so the sweep is made of one linear piece per octave; a tracking sweep has exact log points</string>
+                </property>
+                <property name="text">
+                 <string>Log</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
            </layout>
           </widget>

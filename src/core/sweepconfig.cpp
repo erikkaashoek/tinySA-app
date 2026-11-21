@@ -49,10 +49,11 @@ SweepConfig clampConfig(SweepConfig c, const ModelDesc &m)
     if (!m.hasLna)
         c.lna = false;
     FreqRange r(c.grid.startHz, c.grid.stopHz);
-    r.setLimits(m.lowLimit(c.input), m.highLimit(c.input));
+    r.setLimits(c.grid.log ? std::max(kLogMinHz, m.lowLimit(c.input)) : m.lowLimit(c.input), m.highLimit(c.input));
     c.grid.startHz = r.start();
     c.grid.stopHz = r.stop();
     c.grid.points = std::clamp(c.grid.points, 2, 30000);
+    c.grid.pieces = 0;  // the link splits its sweeps (DeviceLink::scanGrid)
     if (c.rbwKHz > 0 && !m.rbwKHz.contains(c.rbwKHz)) {
         auto best = std::min_element(m.rbwKHz.begin(), m.rbwKHz.end(), [&](double a, double b) {
             return std::abs(std::log(a / c.rbwKHz)) < std::abs(std::log(b / c.rbwKHz));

@@ -76,6 +76,63 @@ private slots:
         QCOMPARE((g.scanrawStop() - 100e6) / 101, 1e6);
         QCOMPARE(g.nearest(150.4e6), 50);
         QCOMPARE(g.nearest(1e12), 100);
+        QCOMPARE(g.pieceCount(), 1);
+        QCOMPARE(g.piece(0), g);
+    }
+    void logGridInLinearPieces()
+    {
+        // 10 kHz - 1 GHz: 17 octaves, 101 points -> 17 pieces, starting at exact log points
+        QCOMPARE(logPieces(10e3, 1e9, 101), 17);
+        QCOMPARE(logPieces(10e3, 1e9, 11), 5);   // at least 2 points each
+        QCOMPARE(logPieces(100e6, 150e6, 101), 1);
+        const ScanGrid exact{10e3, 1e9, 101, true, 0};
+        QVERIFY(std::abs(exact.freq(20) - 100e3) < 1e-3);  // a decade every 20 points
+        QVERIFY(std::abs(exact.freq(60) - 10e6) < 1e-2);
+        QCOMPARE(exact.freq(100), 1e9);
+        QVERIFY(std::abs(exact.index(1e6) - 40) < 1e-9);
+        QCOMPARE(exact.nearest(1.05e6), 40);
+        QCOMPARE(exact.nearest(1.11e6), 41);  // 1.122 MHz is closer than 1 MHz
+        QVERIFY(exact.step() < exact.stepAt(99));
+
+        const ScanGrid g{10e3, 1e9, 101, true, logPieces(10e3, 1e9, 101)};
+        double prev = 0;
+        for (int i = 0; i < g.points; ++i) {  // rising, and freqAt / index are inverses
+            QVERIFY(g.freq(i) > prev);
+            prev = g.freq(i);
+            QVERIFY(std::abs(g.index(g.freq(i)) - i) < 1e-6);
+            QCOMPARE(g.nearest(g.freq(i) * 1.0001), i);
+        }
+        QVERIFY(std::abs(g.index(g.freqAt(37.3)) - 37.3) < 1e-6);
+        int covered = 0;
+        for (int k = 0; k < g.pieceCount(); ++k) {
+            const ScanGrid p = g.piece(k);  // one scanraw: its points are the grid's
+            QCOMPARE(g.pieceStart(k), covered);
+            QVERIFY(!p.log && p.points >= 2);
+            QVERIFY(std::abs(g.freq(covered) - exact.freq(covered)) < 1e-3);  // starts on the log grid
+            for (int i = 0; i < p.points; ++i)
+                QVERIFY(std::abs(p.freq(i) - g.freq(covered + i)) < 1e-3);
+            if (k + 1 < g.pieceCount())  // and scanraw's stop is where the next piece starts
+                QVERIFY(std::abs(p.scanrawStop() - g.freq(g.pieceStart(k + 1))) <= 1);
+            covered += p.points;
+        }
+        QCOMPARE(covered, 101);
+        QCOMPARE(g.freq(100), 1e9);
+        // a piece is linear: within one octave the step stays, the next octave's is about twice
+        QVERIFY(std::abs(g.stepAt(g.pieceStart(5)) / g.stepAt(g.pieceStart(4)) - 2) < 0.5);
+    }
+    void logZoomAndCentre()
+    {
+        FreqRange r(1e6, 100e6);
+        r.setLimits(10e3, 6e9);
+        r.zoomLog(0.5, 10e6);  // the ratio 100 becomes 10, about 10 MHz
+        QVERIFY(std::abs(r.start() - std::sqrt(10.0) * 1e6) < 1);
+        QVERIFY(std::abs(r.stop() - std::sqrt(10.0) * 10e6) < 1);
+        r.setCenterLog(100e6);  // 100 MHz in the middle: x / sqrt(10) .. x sqrt(10)
+        QVERIFY(std::abs(r.start() - 100e6 / std::sqrt(10.0)) < 1);
+        QVERIFY(std::abs(r.stop() - 100e6 * std::sqrt(10.0)) < 1);
+        r.zoomLog(10, 100e6);  // as wide as the limits allow
+        QCOMPARE(r.start(), 10e3);
+        QCOMPARE(r.stop(), 6e9);
     }
     void niceSteps()
     {
@@ -461,6 +518,43 @@ private slots:
         QVERIFY(rx.indexOf("rbw auto") < scanAt);
         QVERIFY(rx.indexOf("resume") > scanAt);
         QVERIFY(std::none_of(rx.begin(), rx.end(), [](const QByteArray &l) { return l.startsWith("ui "); }));  // no `ui`
+    }
+
+    void logSweepInPieces()
+    {
+        DeviceLink link;
+        QSignalSpy opened(&link, &DeviceLink::opened), frames(&link, &DeviceLink::frame),
+            scan(&link, &DeviceLink::scanChanged);
+        link.open("sim:ultra");
+        QVERIFY(opened.wait(3000));
+        SweepConfig c;
+        c.grid = {10e6, 1e9, 51, true};  // 7 octaves: 7 pieces, one scanraw each
+        link.setConfig(c);
+        link.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(!frames.isEmpty() && frames.last().first().value<SweepFrame>().complete, 5000);
+        const auto f = frames.last().first().value<SweepFrame>();
+        QCOMPARE(f.received, 51);
+        QVERIFY(f.grid.log);
+        QCOMPARE(f.grid.pieces, 7);
+        QCOMPARE(std::count_if(frames.begin(), frames.end(), [](const QList<QVariant> &a) {
+                     return a.first().value<SweepFrame>().complete; }), 1);  // one sweep, not 7
+        auto *sim = qobject_cast<SimTransport *>(link.transport());
+        QByteArrayList scans;
+        for (const QByteArray &l : sim->received())
+            if (l.startsWith("scanraw"))
+                scans << l;
+        QCOMPARE(scans.size(), 7);
+        for (int k = 0; k < 7; ++k) {
+            const ScanGrid p = f.grid.piece(k);
+            QCOMPARE(scans[k], QString("scanraw %1 %2 %3").arg(std::llround(p.startHz)).arg(p.scanrawStop())
+                                   .arg(p.points).toLatin1());
+        }
+        QCOMPARE(scans.first().split(' ').value(1), QByteArray("10000000"));
+        const int at = f.grid.nearest(100e6);  // the sim's 100 MHz carrier, near a point
+        QVERIFY(std::abs(f.grid.freq(at) - 100e6) < f.grid.stepAt(at));
+        QVERIFY(*std::max_element(f.dBm.begin() + at - 1, f.dBm.begin() + at + 2) > -45);
+        QVERIFY(f.dBm[2] < -80);
+        QTRY_COMPARE_WITH_TIMEOUT(scan.last().first().toInt(), int(DeviceLink::Off), 2000);
     }
 
     void screenOffWhileScanning()
@@ -1461,6 +1555,19 @@ private slots:
         QVERIFY(std::isnan(back->dBm[1]));
         QFile::remove(path);
     }
+    void logGridsRoundTrip()
+    {
+        for (const int pieces : {logPieces(10e3, 1e9, 101), 0}) {  // an analyzer's / a tracking sweep
+            Trace t{{10e3, 1e9, 101, true, pieces}, QVector<double>(101, -50.5)};
+            const QString path = QDir::tempPath() + "/tst_log.csv";
+            QString err;
+            QVERIFY(writeTraceCsv(path, t, CsvFormat{';', false}, &err, "title"));
+            const auto back = readTraceCsv(path, &err);
+            QVERIFY2(back.has_value(), qPrintable(err));
+            QCOMPARE(back->grid, t.grid);
+            QFile::remove(path);
+        }
+    }
     void rejectsUnevenFrequencies()
     {
         const QString path = QDir::tempPath() + "/tst_uneven.csv";
@@ -1774,6 +1881,35 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!b.a->uiOff(), 3000);
     }
 
+    void pathChangeIsWaitedFor()
+    {
+        // the cleanest path above 1.13 GHz: the unit resets its Si4468 after the prompt of the
+        // `sweep cw` (180-190 ms on a ZS407); a bare `sweep` is answered once that is done
+        Bench b;
+        QVERIFY(b.open("sim:ultra:thru", "sim:ultra"));
+        SweepConfig c;
+        c.grid = {1.1e9, 1.2e9, 11};
+        b.analyzer.setConfig(c);
+        TrackConfig t{true, -30, -1};
+        t.mixer = false;
+        b.analyzer.setTracking(t);
+        b.analyzer.setScan(DeviceLink::Once);
+        QTRY_VERIFY_WITH_TIMEOUT(b.complete(), 10000);
+        QByteArrayList g;
+        for (const QByteArray &l : b.g->received())  // the sweep's own commands
+            if (l.startsWith("sweep") || l.startsWith("output"))
+                g << l;
+        QVERIFY(g.contains("output normal"));
+        auto hz = [](const QByteArray &l) { return l.startsWith("sweep cw ") ? l.mid(9).toLongLong() : 0; };
+        // the sweep: from its first point (after the frequency error was measured at 3 GHz)
+        g = g.mid(int(std::find_if(g.begin(), g.end(), [&](const QByteArray &l) { return hz(l) > 1.09e9 && hz(l) < 1.2e9; }) - g.begin()));
+        const int at = int(std::find_if(g.begin(), g.end(), [&](const QByteArray &l) { return hz(l) > 1130000000; }) - g.begin());
+        QVERIFY(at < g.size() - 1);
+        QCOMPARE(g[at + 1], QByteArray("sweep"));  // into the leakage path: waited for
+        QCOMPARE(g[1], QByteArray("sweep"));       // the first point (from 3 GHz, another path) too
+        QCOMPARE(g.count("sweep"), 2);             // not every step
+    }
+
     void sweepFollowsTheGenerator()
     {
         Bench b;
@@ -1970,8 +2106,8 @@ private slots:
         QCOMPARE(trackSettleMs(t, false), 150);  // its screen redraws before the frequency changes
         QCOMPARE(trackSettleMs(t, false, TrackChange::RfOn), 300);
         QCOMPARE(trackSettleMs(t, true), 10);
-        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 32);  // across 823 MHz / 1130 MHz
-        QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 32);
+        QCOMPARE(trackSettleMs(t, true, TrackChange::Path), 10);  // the path change waited for (sync)
+        QCOMPARE(trackSettleMs(t, true, TrackChange::RfOn), 10);
         QCOMPARE(trackerPath(ultra, t, 800e6), 0);
         QCOMPARE(trackerPath(ultra, t, 900e6), 1);
         QCOMPARE(trackerPath(ultra, t, 1.2e9), 2);

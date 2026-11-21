@@ -1,0 +1,62 @@
+# Tracking generator in the Ultra output modes on hardware: two Ultras cabled RF to RF, the
+# analyzer --port, the generator unit an Ultra (pass its port to trackerconnect). 1 - 9.9 GHz,
+# 101 points, -20 dBm, attenuation 0: Ultra accurate (auto settle, then 100 ms), Ultra cleanest,
+# a log sweep, and Accurate (the sweep ends at the mixer path's top). CSVs go to the current
+# folder (savecsv), so run it from the out folder:
+#   cd test\out\hwtu & ..\..\..\build\tinySA-App.exe --port COMa --ini ..\hwtu.ini --script ..\..\hw_track_ultra.txt --out .
+# 2026-11-21 (ZS406 COM9 analyzing, ZS407 COM21 generating, v1.4-342): PASS; Ultra accurate flat
+# -21..-23 dBm to 5.3 GHz, -34..-51 dBm in the harmonic range (7.4-9.9 GHz); auto settle = 100 ms
+# within the repeatability there (0.5 dB mean, single points up to 7 dB either way).
+waitfor connected == 1 10000
+check activity == analyzer
+click actionSettings
+set screenOffCheck 1
+set trackSettleSpin -1
+click settingsOk
+do trackerconnect COM21
+waitfor tracker.connected == 1 10000
+set trackOutputCombo Ultra accurate, max 17.92 GHz
+set stopEdit 9900
+set startEdit 1000
+set pointsCombo 101
+set rbwCombo Auto
+set attenCombo 0 dB
+set logCheck 0
+set trackLevelSpin -20
+set trackCheck 1
+waitfor tracking == 1 3000
+bail
+click onceButton
+waitfor idle == 1 120000
+check stop == 9900000000
+dump sweepms ua_auto_ms.txt
+do savecsv tu_ultra_accurate_auto.csv
+shot ultra_accurate.png
+click actionSettings
+set trackSettleSpin 100
+click settingsOk
+click onceButton
+waitfor idle == 1 120000
+do savecsv tu_ultra_accurate_100ms.csv
+click actionSettings
+set trackSettleSpin -1
+click settingsOk
+set trackOutputCombo Ultra cleanest, max 18.90 GHz
+click onceButton
+waitfor idle == 1 120000
+check tracker.sent contains "output normal"
+do savecsv tu_ultra_cleanest.csv
+shot ultra_cleanest.png
+set trackOutputCombo Ultra accurate, max 17.92 GHz
+set logCheck 1
+click onceButton
+waitfor idle == 1 120000
+do savecsv tu_ultra_accurate_log.csv
+shot ultra_log.png
+set logCheck 0
+set trackOutputCombo Accurate, max 7.37 GHz
+check stop == 7370000000
+set trackCheck 0
+set attenCombo Auto
+set stopEdit 3000
+quit

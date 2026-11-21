@@ -219,6 +219,15 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     session, 2026-11-12; two points per sweep). Auto uses 32 ms there, also when RF has just
     gone on. My PowerShell timings had hidden
     ~15 ms of sleep granularity, so 0 ms looked fine there.
+    **Replaced 2026-11-21 (branch `logscan`):** a path change or RF on is now waited for with a
+    bare `sweep` (CMD_WAIT_MUTEX: answered once the sweep thread has set the output), then 10 ms
+    (DeviceLink::tune sync). Measured with raw commands (ZS407 generating, screen off): the query
+    answers in 9 ms for a plain step, 29 ms across 1.13 GHz on the mixer path, 180-190 ms into the
+    cleanest path's leakage output above 1.13 GHz (SI4463_init_rx resets the Si4468: 10 + 10 +
+    100 ms of delays); 0 ms after the query the level is right. The fixed 32 ms lost that point
+    (user report: a hole at 1.1301 GHz with Cleanest; 150 ms lost it too). hw: gap gone
+    (1-1.2 GHz, 450 points, Cleanest), hw_track_ultra PASS (Accurate 2.07 against 2.04 s).
+    Raw-timing lesson: a pyserial read(4096) with a 0.2 s timeout hid the wait; read in_waiting.
   - **Known:**
     - **Narrow RBW (1-3 kHz):** with the frequency corrected, 5-15 % of the points above about
       1.1 GHz read about 10 dB low, at random frequencies. Correcting on the analyzer side
@@ -303,6 +312,62 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     (`waitfor scan == 0`) and passed 3 of 3 alone. Hardware hw_extgain.txt (ZS407 COM21
     measuring the ZS405's 10 MHz -20 dBm): PASS, 0 dB -19.63, +20 dB -39.59, -6 set on the
     generator page -> analyzer -13.63 dBm; the unit left at 0.
+- Branch `ultra-out` (2026-11-21, user request "select the ultra output mode both in generator and
+  tracking generator"): the LO-harmonic range, undoing the 2026-11-10 "no LO-harmonic range" decision.
+  - **Firmware fact:** no command. `output` only takes on|off|normal|mixer; a mode switch sets
+    setting.harmonic = 3 (reset_settings), and update_min_max_freq then lets M_GENLOW go to
+    3 x MAX_LO_FREQ - DEFAULT_IF (mixer) or 3 x MAX_LO_FREQ (normal); the unit shows HARM above
+    ULTRA_MAX_FREQ (mixer) / MAX_LO_FREQ (normal). DEFAULT_IF is 977.4 MHz on every Ultra.
+  - **Model:** GenConfig::harmonic and TrackConfig::mixer/harmonic; `ultraOutputs()` lists the four
+    modes with their tops: ZS405 Accurate 5.33, Cleanest 4.35, Ultra accurate 12.07, Ultra cleanest
+    13.05 GHz; ZS407 7.37 / 6.30 / 17.92 / 18.90 GHz. Only the app's limits change (genLimits);
+    outputPathText adds "LO harmonic". Take-over: a unit above the mixer path's top gets harmonic.
+  - **UI:** generator page Path combo has the four (keys "mixer", "normal", "ultra mixer",
+    "ultra normal"); tracking group row trackOutputCombo, shown for an Ultra generator unit. ini
+    generator/harmonic, tracker/mixer, tracker/harmonic.
+  - **Tracking:** trackerLimits/clampToTracker/trackerPath/trackerGen take the TrackConfig; the
+    analyzer's link copies m_track into the generator unit's link, which makes its output in that
+    mode. A mode change restarts the sweep (and re-clamps the range: Session::setTrack). Path 3 =
+    the LO harmonic (a step into it is waited for like any path change; raw: no extra delay).
+  - **Tests:** tst_core ultraOutputModes, adoptKeepsTheUnitAsItIs (6 GHz now kept); sim
+    gen_ultra.txt and track.txt sections; full regression PASS.
+  - **Hardware (2026-11-21, ZS406 COM9 + ZS407 COM21 RF to RF, v1.4-342):** both units take
+    `sweep cw` up to 9.8 GHz after `mode low output` (read back unchanged) and make a carrier there;
+    RF-off control 20-80 dB lower. Set -20 dBm, measured by the other unit (attenuation 0, RBW
+    30 kHz): ZS407 mixer -24 (5 GHz), -46 (7.5), -42 (8), -44 (9); ZS406 mixer -25 (5), -36 (5.5),
+    -37 (6), -38 (7), -34 (8). Normal (leakage) path weaker: ZS407 -60..-70 above 6.5 GHz. The
+    measuring unit is in its own harmonic mode up there, so the levels are both units' error.
+    hw_track_ultra.txt PASS (ZS406 analyzing, ZS407 generating, 1-9.9 GHz, 101 points, 2.0 s):
+    Ultra accurate -21..-23 dBm to 5.3 GHz, falling from 5.7 GHz, -34..-51 in the harmonic range.
+    Auto settle (32 ms into path 3) = 100 ms within the repeatability there (0.5 dB mean, single
+    points up to 7 dB either way, the point after 7.37 GHz included).
+- Branch `logscan` (2026-11-21, user request "scan with a log frequency scale"): log sweeps.
+  - **Decided (user):** the plain analyzer sweeps in linear pieces (firmware `scanraw` is linear only),
+    tracking with exact log points.
+  - **Grid:** ScanGrid::log + pieces (units.h). pieces = logPieces(): one per octave, >= 2 points
+    each; piece k starts at the exact log point round(k (n-1) / pieces), linear in between, so
+    freq(i) is exactly what `scanraw` measures. pieces 0 = exact log (tracking; a SweepConfig always
+    asks with 0, clampConfig sets it, the link chooses: DeviceLink::startSweep). freqAt / index
+    (inverse) / nearest / stepAt replace step() arithmetic in traces (at), markers (peak),
+    spline, hover, CSV (reads linear, then log pieces, then exact log). Log starts at kLogMinHz 10 kHz.
+  - **Link:** startSweep sends one piece per call, all into one frame (m_sweepPiece); queued commands
+    may go between pieces, a config change starts the sweep again. The frame completes on the last
+    piece (Cmd::sweep), Once stops after it.
+  - **Graph:** SpectrumView::setSpan(start, stop, log) switches QCP's log scale and LogSiTicker
+    (1-2-5 per decade up to 3 decades, else decades; linear ticks below half a decade). Drags work in
+    ln(Hz) (toAxis/fromAxis); wheel, PgUp/PgDn and "Center here" use FreqRange::zoomLog /
+    setCenterLog; graph edits round each end to a thousandth of itself. Typed center/span stay linear
+    (stop - start about their mean).
+  - **UI:** "Log" check box in the Scan/Once row (logCheck; an extra column in the Points row
+    squeezed the edits), ini sweep/log; status bar "Step 446 Hz to 128.1 MHz".
+  - **Tests:** tst_core logGridInLinearPieces, logZoomAndCentre, logGridsRoundTrip,
+    logSweepInPieces; sim logscan.txt, track.txt log section; full regression PASS (23 scripts).
+  - **Piece boundaries (hardware, hw_logscan.txt, ZS407 analyzing 10 kHz-3 GHz 290 points, ZS406
+    at 206 MHz -30 dBm):** a point measures +-step/2 in sub-steps (sa_core.c update_rbw, auto RBW
+    2 x step up to 850 kHz), so the first point of the twice as wide piece covers half a narrow step
+    of the piece before: a carrier in that zone shows on both points (202.73 MHz -33.4, 209.44 MHz
+    -32.4 dBm); inside a piece and in a linear sweep it shows once. The sim shows the same.
+  - **Speed (hardware):** log 5.12 s against linear 4.73-4.87 s per sweep (19 pieces: ~20 ms each).
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -347,13 +412,13 @@ build a release from a clean, committed tree.
 ## Files
 | File | Role |
 |---|---|
-| src/core/units.h | `FreqRange` (all range edits/zoom/pan + clamping), `ScanGrid` (firmware-correct grid), `niceStep`, `formatHz`, `parseHz` |
+| src/core/units.h | `FreqRange` (all range edits/zoom/pan + clamping, log zoom/centre), `ScanGrid` (firmware-correct grid; log in linear pieces, `logPieces`), `niceStep`, `formatHz`, `parseHz` |
 | src/core/model.h | `ModelDesc` table (basic / Ultra / Ultra+), `detectModel(info, version)`, `DeviceInfo`, help/zero parsing |
 | src/core/protocol.h | `RxParser`: bytes → events (echo, lines, prompt, scanraw data, capture pixels, refresh regions); RGB565 BE decoders |
 | src/core/sweepconfig.h | `SweepConfig` value + `configCommands()` diff vs `AppliedConfig`, `clampConfig()` |
-| src/core/genconfig.h | `GenConfig` (generator) + `genCommands()` diff vs `AppliedGen` in firmware order, `clampGen()`/`genLimits()` (Ultra limits per ZS405/406/407), `adoptUnitGenerator()`, `outputPathText()` |
+| src/core/genconfig.h | `GenConfig` (generator) + `genCommands()` diff vs `AppliedGen` in firmware order, `clampGen()`/`genLimits()` (Ultra limits per ZS405/406/407), `ultraOutputs()` (the four Ultra output modes), `adoptUnitGenerator()`, `outputPathText()` |
 | src/core/link.h | `DeviceLink` (own thread): handshake, 1 command in flight, per-sweep scanraw loop, battery poll, timeouts/resync, `SweepFrame`; linkgen.cpp = analyzer/generator activity, GenConfig diff, mode probe + follow |
-| src/core/tracking.h | `TrackConfig` (tracking generator), range/level clamps, settle rules, `trackerPath`; linktrack.cpp = the point-by-point sweep + the generator's ppb measurement |
+| src/core/tracking.h | `TrackConfig` (tracking generator, its Ultra output mode), range/level clamps, settle rules, `trackerPath`; linktrack.cpp = the point-by-point sweep + the generator's ppb measurement |
 | src/core/simdevice.h | `SimTransport` QIODevice: firmware-exact simulated tinySA (carriers 100/250/433.92/868 MHz, 2.4/5.8 GHz; bench: `:thru`/`:lpf` input sees the other sim units' output) |
 | src/core/session.h | GUI-thread facade owning the link thread; the only API controllers use |
 | src/core/appsettings.h | `AppSettings` (+ `ViewSettings`, `Theme`): every persistent setting listed once in `visit()` |

@@ -86,8 +86,11 @@ public:
     // screen is off as long as it is the tracking generator (firmware with `ui`).
     void setTrackOutput(bool rf, double levelDbm, double hz);
     bool readyToTune() const;  // the output as asked for, nothing queued or in flight
-    // `sweep cw hz` (and `level` again, withLevel), then done(ok) once the unit has replied
-    void tune(double hz, bool withLevel, std::function<void(bool ok)> done);
+    // `sweep cw hz` (and `level` again, withLevel), then done(ok) once the unit has replied.
+    // The reply comes before the unit's sweep thread has set the output; sync: then a bare
+    // `sweep` too, which waits for that thread (CMD_WAIT_MUTEX), so done() means the output is
+    // set (into another output path: up to 190 ms, the Si4468 reset into the leakage path).
+    void tune(double hz, bool withLevel, std::function<void(bool ok)> done, bool sync = false);
     bool isReady() const { return m_ready; }
     const DeviceInfo &info() const { return m_info; }
 
@@ -120,6 +123,7 @@ private:
         bool generator = false;  // from genCommands(): obsolete once back in analyzer mode
         int points = 0;          // scanraw: values it returns unless aborted
         bool align = false;      // measuring the tracking generator's frequency (not a sweep)
+        bool sweep = false;      // a sweep's scanraw (a log sweep: one of its pieces)
     };
     void enqueue(Cmd c);
     // Reports refusals ("cmd?", "usage: ..."). Generator commands without a reply are
@@ -192,6 +196,7 @@ private:
     bool m_screenOffWanted = true;
     bool m_aborting = false;  // we sent abort for the scan in flight
     int m_scanExpect = 0;     // values the scanraw in flight returns when not aborted
+    int m_sweepPiece = -1;    // the piece of the sweep in progress (log: one scanraw each); -1 = none
     QPointer<DeviceLink> m_tg;   // analyzer: the generator unit's link
     TrackConfig m_track;
     int m_trackNext = -1;        // next point of the tracking sweep in progress; -1 = none
