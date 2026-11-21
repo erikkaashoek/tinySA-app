@@ -87,7 +87,11 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
         m_session.traces().restartAverage();
         showAverage();
     });
-    connect(ui->scaleCombo, &QComboBox::activated, this, [this](int i) { ui->spectrum->setLinear(i == 1); });
+    ui->scaleCombo->addItems(levelUnitNames());  // in LevelUnit order
+    connect(ui->scaleCombo, &QComboBox::activated, this, [this](int i) {
+        ui->spectrum->setUnit(LevelUnit(i));
+        renderMarkers();  // their readouts in the new unit
+    });
     connect(ui->liveButton, &QToolButton::toggled, this, [this](bool on) { ui->spectrum->setShown(0, on); });
     setupMemoryButton(0, ui->m1Button);
     setupMemoryButton(1, ui->m2Button);
@@ -162,7 +166,7 @@ MainWindow::MainWindow(bool simulators, const QString &settingsPath, QWidget *pa
     restoreGeometry(qs.value("window/geometry").toByteArray());
     ui->splitter->restoreState(qs.value("window/splitter").toByteArray());
     ui->spectrum->setView(m_settings.view);
-    ui->scaleCombo->setCurrentIndex(m_settings.view.linear ? 1 : 0);
+    ui->scaleCombo->setCurrentIndex(int(m_settings.view.unit));
     ui->liveButton->setChecked(m_settings.view.show[0]);
     ui->m1Button->setChecked(m_settings.view.show[1]);
     ui->m2Button->setChecked(m_settings.view.show[2]);

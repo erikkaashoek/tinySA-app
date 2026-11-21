@@ -3,6 +3,7 @@
 // both load() and save(), so adding a setting is one line.
 #include "csvio.h"
 #include "genconfig.h"
+#include "levelunit.h"
 #include "sweepconfig.h"
 #include "tracking.h"
 #include <QColor>
@@ -13,7 +14,10 @@ class QSettings;
 
 // Graph view state (SpectrumView applies and reports it).
 struct ViewSettings {
-    bool linear = false;       // linear power (W) instead of dBm
+    LevelUnit unit = LevelUnit::dBm;  // the levels shown (levelunit.h)
+    bool linear() const { return !isDbUnit(unit); }
+    // graph levels, whatever the unit: dBm (dB units) and W (linear units), so a unit change
+    // keeps the levels shown; normalised: dB and power ratio
     double logMin = -110, logMax = -10, linMin = 0, linMax = 1e-6;
     bool autoMin = false, autoMax = false;
     bool spline = false, points = false;
@@ -102,7 +106,7 @@ struct AppSettings {
         v("generator/burst_count", gen.burstCount);
         v("trace/hold", hold);
         v("trace/average", average);
-        v("view/linear", view.linear);
+        v("view/unit", m_unitName);
         v("view/log_min", view.logMin);
         v("view/log_max", view.logMax);
         v("view/lin_min", view.linMin);
@@ -154,6 +158,7 @@ private:
     void storeGenerator();     // gen -> the stored forms below
     bool m_highInput = false;  // stored forms of enum / char fields
     QString m_csvSeparator = ";";
+    QString m_unitName = "dBm";  // view.unit; older ini files: view/linear (W)
     bool m_genHigh = false;
     QString m_genType = "CW";
 };

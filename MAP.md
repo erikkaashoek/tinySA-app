@@ -368,6 +368,22 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     of the piece before: a carrier in that zone shows on both points (202.73 MHz -33.4, 209.44 MHz
     -32.4 dBm); inside a piece and in a linear sweep it shows once. The sim shows the same.
   - **Speed (hardware):** log 5.12 s against linear 4.73-4.87 s per sweep (19 pieces: ~20 ms each).
+- Branch `units` (2026-11-21, on top of `logscan`; user request "show the measured values in other
+  units like dBmV, dBuV, Watt, mWatt"): level units.
+  - **Model:** core levelunit.h: LevelUnit dBm, dBmV, dBµV, dBW, W, mW, V, mV (the tinySA's UNIT
+    menu plus dBW, mW, mV), 50 ohm; levelFromDbm / formatLevel / levelAxisUnit. Display only: traces,
+    markers, CSV and recordings stay dBm. Normalised: dB units show dB, power units a power ratio,
+    voltage units a voltage ratio ("x 2"). W and V get SI prefixes (ticks 2.5µ, "1 µW"); mW and mV
+    stay in that unit. Marker deltas stay dB.
+  - **View:** ViewSettings::unit replaces `linear` (linear() = not a dB unit). The graph levels stay
+    kept in dBm (logMin/Max) and W (linMin/Max), converted to the axis (SpectrumView::axisLevel /
+    keptLevel), so a unit change keeps what is shown (-110..-10 dBm = -63..37 dBmV; V = sqrt(50 W)).
+    Axis label "dBmV", "Power (mW)", "Voltage (V), 50 Ω", "Voltage ratio".
+  - **UI:** the Trace group's Scale combo is now "Unit" (scaleCombo, filled from levelUnitNames());
+    ini view/unit (name); an ini with only view/linear=true loads as W, save removes view/linear.
+  - **Tests:** tst_core levelUnits (conversions, texts, ini migration); sim units.txt + unitsb.txt
+    (restart), step3.txt combo texts; script query `unit`, `marker<N>.level` (the table's text);
+    full regression PASS (25 scripts).
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
@@ -425,6 +441,7 @@ build a release from a clean, committed tree.
 | src/core/traces.h | `Trace` (grid + dBm, interpolating `at()`), `TraceSet`: average/hold/memories/normalisation |
 | src/core/csvio.h | trace CSV write/read (separator + decimal detection), `SweepRecorder` |
 | src/core/markers.h | `MarkerSet` (normal/delta, readings at nearest point), `tracePeak`/`interpolatePeak` (parabolic) |
+| src/core/levelunit.h | `LevelUnit` (dBm, dBmV, dBµV, dBW, W, mW, V, mV; 50 ohm): conversion from dBm and readout texts, display only |
 | src/ui/mainwindow.* | main window: Designer form + controller (wiring, device, config); mainfiles.cpp = traces/memories/files; maintest.cpp = TestHost; maingenerator.cpp = mode switch + generator page wiring; maintracking.cpp = tracking generator group |
 | src/ui/generatorpanel.* | generator page (own .ui, promoted into the main window's `modeStack`): shows a GenConfig, emits edits |
 | src/ui/digitedit.* | big-digit number editor (wheel/keys per digit, inline typed entry) for frequency and level |

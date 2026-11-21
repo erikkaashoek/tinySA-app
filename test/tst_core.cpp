@@ -1238,6 +1238,58 @@ private slots:
         }));
     }
 
+    void levelUnits()
+    {
+        auto near = [](double a, double b) { return std::abs(a - b) < 1e-6 * std::max(1.0, std::abs(b)); };
+        QVERIFY(near(levelFromDbm(-30, LevelUnit::dBmV), -30 + 46.9897));  // 1 mW in 50 ohm = 223.6 mV
+        QVERIFY(near(levelFromDbm(-30, LevelUnit::dBuV), -30 + 106.9897));
+        QVERIFY(near(levelFromDbm(-30, LevelUnit::dBW), -60));
+        QVERIFY(near(levelFromDbm(-30, LevelUnit::W), 1e-6));
+        QVERIFY(near(levelFromDbm(-30, LevelUnit::mW), 1e-3));
+        QVERIFY(near(levelFromDbm(0, LevelUnit::V), std::sqrt(0.05)));
+        QVERIFY(near(levelFromDbm(-30, LevelUnit::mV), std::sqrt(50e-6) * 1e3));
+        QVERIFY(near(levelFromDbm(6, LevelUnit::V, true), std::pow(10, 0.3)));  // a voltage ratio
+        QVERIFY(near(levelFromDbm(10, LevelUnit::W, true), 10));                // a power ratio
+        QVERIFY(near(levelFromDbm(3, LevelUnit::dBmV, true), 3));               // dB stays dB
+        QCOMPARE(formatLevel(-30, LevelUnit::dBm), QString("-30.0 dBm"));
+        QCOMPARE(formatLevel(-30, LevelUnit::dBmV), QString("17.0 dBmV"));
+        QCOMPARE(formatLevel(-30, LevelUnit::dBuV), QString::fromUtf8("77.0 dBµV"));
+        QCOMPARE(formatLevel(-30, LevelUnit::W), QString::fromUtf8("1 µW"));
+        QCOMPARE(formatLevel(-27, LevelUnit::W), QString::fromUtf8("2 µW"));
+        QCOMPARE(formatLevel(-30, LevelUnit::mW), QString("0.001 mW"));
+        QCOMPARE(formatLevel(-30, LevelUnit::V), QString("7.07 mV"));
+        QCOMPARE(formatLevel(20, LevelUnit::V), QString("2.24 V"));
+        QCOMPARE(formatLevel(-30, LevelUnit::mV), QString("7.07 mV"));
+        QCOMPARE(formatLevel(0, LevelUnit::V, true), QString("x 1"));
+        QCOMPARE(formatLevel(qQNaN(), LevelUnit::dBmV), QString("-"));
+        QCOMPARE(levelUnitFromName("dBuV"), LevelUnit::dBuV);
+        QCOMPARE(levelUnitFromName(QString::fromUtf8("dBµV")), LevelUnit::dBuV);
+        QCOMPARE(levelUnitFromName("nonsense"), LevelUnit::dBm);
+
+        QTemporaryDir dir;  // ini: view/unit; older files only have view/linear (W)
+        const QString path = dir.filePath("u.ini");
+        {
+            QSettings old(path, QSettings::IniFormat);
+            old.setValue("view/linear", true);
+        }
+        AppSettings a;
+        {
+            QSettings s(path, QSettings::IniFormat);
+            a.load(s);
+        }
+        QCOMPARE(a.view.unit, LevelUnit::W);
+        a.view.unit = LevelUnit::dBuV;
+        {
+            QSettings s(path, QSettings::IniFormat);
+            a.save(s);
+        }
+        QSettings s(path, QSettings::IniFormat);
+        QVERIFY(!s.contains("view/linear"));
+        AppSettings b;
+        b.load(s);
+        QCOMPARE(b.view.unit, LevelUnit::dBuV);
+    }
+
     void extGainOneKeyInTheIni()
     {
         QTemporaryDir dir;

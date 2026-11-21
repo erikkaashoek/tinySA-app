@@ -39,6 +39,7 @@ qt_add_library(tinysa_core STATIC
     src/core/traces.cpp
     src/core/csvio.cpp
     src/core/markers.cpp
+    src/core/levelunit.cpp
 )
 target_include_directories(tinysa_core PUBLIC src/core)
 target_link_libraries(tinysa_core PUBLIC Qt6::Core Qt6::Gui Qt6::SerialPort)
