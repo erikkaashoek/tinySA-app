@@ -322,8 +322,16 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     the LO harmonic (32 ms auto settle after a step into it, a guess: not measured).
   - **Tests:** tst_core ultraOutputModes, adoptKeepsTheUnitAsItIs (6 GHz now kept); sim
     gen_ultra.txt and track.txt sections; full regression PASS.
-  - **Not verified on hardware** (no unit connected on 2026-11-21): output level and purity in the
-    harmonic range, the settle time into it.
+  - **Hardware (2026-11-21, ZS406 COM9 + ZS407 COM21 RF to RF, v1.4-342):** both units take
+    `sweep cw` up to 9.8 GHz after `mode low output` (read back unchanged) and make a carrier there;
+    RF-off control 20-80 dB lower. Set -20 dBm, measured by the other unit (attenuation 0, RBW
+    30 kHz): ZS407 mixer -24 (5 GHz), -46 (7.5), -42 (8), -44 (9); ZS406 mixer -25 (5), -36 (5.5),
+    -37 (6), -38 (7), -34 (8). Normal (leakage) path weaker: ZS407 -60..-70 above 6.5 GHz. The
+    measuring unit is in its own harmonic mode up there, so the levels are both units' error.
+    hw_track_ultra.txt PASS (ZS406 analyzing, ZS407 generating, 1-9.9 GHz, 101 points, 2.0 s):
+    Ultra accurate -21..-23 dBm to 5.3 GHz, falling from 5.7 GHz, -34..-51 in the harmonic range.
+    Auto settle (32 ms into path 3) = 100 ms within the repeatability there (0.5 dB mean, single
+    points up to 7 dB either way, the point after 7.37 GHz included).
 - Branch `logscan` (2026-11-21, user request "scan with a log frequency scale"): log sweeps.
   - **Decided (user):** the plain analyzer sweeps in linear pieces (firmware `scanraw` is linear only),
     tracking with exact log points.
@@ -345,10 +353,12 @@ Units everywhere: **Hz, dBm**. Screens are Qt Designer `.ui` files (edit in Desi
     squeezed the edits), ini sweep/log; status bar "Step 446 Hz to 128.1 MHz".
   - **Tests:** tst_core logGridInLinearPieces, logZoomAndCentre, logGridsRoundTrip,
     logSweepInPieces; sim logscan.txt, track.txt log section; full regression PASS (23 scripts).
-  - **Sim artefact:** the sim's auto RBW is 1.5 x each scanraw's step, so the first point of the next
-    (twice as wide) piece shows a carrier just below a piece boundary about 10 dB down. **Check on
-    hardware** whether the firmware's auto RBW / sub-stepping does the same; also the cost per piece
-    (expected ~10-20 ms per scanraw).
+  - **Piece boundaries (hardware, hw_logscan.txt, ZS407 analyzing 10 kHz-3 GHz 290 points, ZS406
+    at 206 MHz -30 dBm):** a point measures +-step/2 in sub-steps (sa_core.c update_rbw, auto RBW
+    2 x step up to 850 kHz), so the first point of the twice as wide piece covers half a narrow step
+    of the piece before: a carrier in that zone shows on both points (202.73 MHz -33.4, 209.44 MHz
+    -32.4 dBm); inside a piece and in a linear sweep it shows once. The sim shows the same.
+  - **Speed (hardware):** log 5.12 s against linear 4.73-4.87 s per sweep (19 pieces: ~20 ms each).
 - Remaining: DFU with the libusb-win32/libusbK/STTub30 drivers on hardware (needs a unit with
   that driver bound to 0483:DF11).
 
