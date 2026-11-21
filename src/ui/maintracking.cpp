@@ -24,6 +24,15 @@ void MainWindow::setupTracking()
         t.levelDbm = dbm;
         m_session.setTrack(t);
     });
+    connect(ui->trackOutputCombo, &QComboBox::activated, this, [this] {
+        const QString key = ui->trackOutputCombo->currentData().toString();
+        TrackConfig t = m_session.track();
+        t.mixer = key.endsWith("mixer");
+        t.harmonic = key.startsWith("ultra");
+        m_session.setTrack(t);
+        showTrackerLabel();  // its top frequency
+    });
+    ui->trackOutputCombo->hide();  // an Ultra connected as tracking generator
     connect(&m_session, &Session::trackChanged, this, &MainWindow::showTrack);
     connect(&m_session, &Session::trackerConnected, this, [this](const DeviceInfo &info) {
         m_settings.trackerPort = info.port;
@@ -31,9 +40,16 @@ void MainWindow::setupTracking()
         ui->trackerConnectButton->setChecked(true);
         ui->trackerConnectButton->setText("Disconnect");
         ui->trackerPortCombo->setEnabled(false);
-        const GenLimits l = trackerLimits(info);
+        const GenLimits l = trackerLimits(info, m_session.track());
         QSignalBlocker block(ui->trackLevelSpin);
         ui->trackLevelSpin->setRange(l.minDbm, l.maxDbm);
+        {
+            QSignalBlocker block2(ui->trackOutputCombo);
+            ui->trackOutputCombo->clear();
+            for (const UltraOutput &o : ultraOutputs(info))
+                ui->trackOutputCombo->addItem(o.text, o.key);
+            ui->trackOutputCombo->setVisible(ui->trackOutputCombo->count() > 0);
+        }
         showTrackerLabel();
         showTrack(m_session.track());
     });
@@ -45,6 +61,7 @@ void MainWindow::setupTracking()
         ui->trackerPortCombo->setEnabled(true);
         ui->trackerLabel->setText("Not connected");
         ui->trackerLabel->setToolTip({});
+        ui->trackOutputCombo->hide();
         showTrack(m_session.track());
         error(reason);
     });
@@ -61,7 +78,7 @@ void MainWindow::showTrackerLabel()
     const DeviceInfo &info = m_session.tracker();
     if (!m_session.isTrackerConnected() || !info.model)
         return;
-    const GenLimits l = trackerLimits(info);
+    const GenLimits l = trackerLimits(info, m_session.track());
     const std::optional<double> ppb = m_session.trackerPpb();
     ui->trackerLabel->setText(QString("%1 %2, to %3%4").arg(info.model->name, info.hardware, formatHz(l.maxHz, 1e6),
                                                              ppb ? QString(", %1 ppb").arg(std::lround(*ppb)) : QString()));
@@ -74,10 +91,11 @@ void MainWindow::showTrackerLabel()
 
 void MainWindow::showTrack(const TrackConfig &t)
 {
-    QSignalBlocker b1(ui->trackCheck), b2(ui->trackLevelSpin);
+    QSignalBlocker b1(ui->trackCheck), b2(ui->trackLevelSpin), b3(ui->trackOutputCombo);
     ui->trackCheck->setChecked(t.on);
     ui->trackCheck->setEnabled(m_session.isTrackerConnected());
     ui->trackLevelSpin->setValue(t.levelDbm);
+    ui->trackOutputCombo->setCurrentIndex(std::max(0, ui->trackOutputCombo->findData(ultraOutputKey(t.mixer, t.harmonic))));
 }
 
 void MainWindow::connectTrackerTo(const QString &port)

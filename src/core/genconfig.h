@@ -11,6 +11,8 @@
 struct GenConfig {
     GenPath path = GenPath::Low;  // basic: LOW / HIGH output connector
     bool mixer = true;            // Ultra: `output mixer` (accurate, the unit's default) / `normal` (cleanest)
+    bool harmonic = false;        // Ultra: also above the path's maximum, with the LO's 3rd harmonic
+                                  // ("Ultra" output; no command: ultraOutputs())
     double freqHz = 433.92e6;     // carrier, the centre of a sweep
     double levelDbm = -40;        // at the DUT: port level + extGainDb
     bool levelKnown = true;       // false: taken over from a unit (the level cannot be read back);
@@ -69,6 +71,21 @@ struct GenLimits {
     double minDbm, maxDbm;  // at the DUT (port level + external gain)
 };
 GenLimits genLimits(const GenConfig &c, const DeviceInfo &d);  // no model: wide open
+
+// The Ultra's LOW output modes as the app offers them: the unit's two paths (its OUTPUT menu:
+// "Highest accuracy" = mixer, "Cleanest signal" = normal) and, as "Ultra", each path also above
+// its maximum with the LO's third harmonic (the unit shows HARM). The firmware has no command
+// for that: a mode switch sets its harmonic to 3 (reset_settings), so the unit takes those
+// frequencies anyway, and the app only widens its limits.
+struct UltraOutput {
+    bool mixer, harmonic;
+    QString key;   // "mixer", "normal", "ultra mixer", "ultra normal"
+    QString text;  // "Accurate, max 5.33 GHz", "Ultra cleanest, max 13.05 GHz"
+};
+QVector<UltraOutput> ultraOutputs(const DeviceInfo &d);  // empty: no Ultra
+QString ultraOutputKey(bool mixer, bool harmonic);
+// The Ultra path's own maximum: above it the LO's harmonic makes the output.
+double ultraFundamentalMaxHz(const DeviceInfo &d, bool mixer);
 
 // Commands that bring the unit from `have` to `want`. Updates `have`. Unknown wants
 // (on, type) send nothing.

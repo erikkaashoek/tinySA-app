@@ -50,6 +50,19 @@ set pathCombo Cleanest, max 6.30 GHz
 check gen.freq == 6300000000
 set pathCombo Accurate, max 7.37 GHz
 check @pathInfoLabel == Square wave, Mixer
+# Ultra: above the path's maximum with the LO's 3rd harmonic (no command: the unit's default)
+do clearsent
+set pathCombo Ultra accurate, max 17.92 GHz
+set freqDisplay 12G
+check gen.freq == 12000000000
+check @pathInfoLabel == Square wave, Mixer, LO harmonic
+waitfor sent contains "sweep cw 12000000000"
+set pathCombo Ultra cleanest, max 18.90 GHz
+check gen.freq == 12000000000
+waitfor sent contains "output normal"
+set pathCombo Accurate, max 7.37 GHz
+check gen.freq == 7370000000
+waitfor sent contains "output mixer"
 set freqDisplay 433.92
 check @pathInfoLabel == Sine
 # level: steps and the external gain (shown at the DUT, the port level stays)

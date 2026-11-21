@@ -10,6 +10,8 @@ struct TrackConfig {
     bool on = false;        // sweep with the tracking generator, when one is connected
     double levelDbm = -30;  // its output level
     int settleMs = -1;      // wait between tuning and measuring; -1 = auto (trackSettleMs)
+    bool mixer = true;      // Ultra output mode, as GenConfig: accurate (mixer) / cleanest path,
+    bool harmonic = false;  //   "Ultra" also above the path's maximum (ultraOutputs())
     bool operator==(const TrackConfig &) const = default;
 };
 Q_DECLARE_METATYPE(TrackConfig)
@@ -20,24 +22,26 @@ Q_DECLARE_METATYPE(TrackConfig)
 constexpr double kTrackAutoRbwKHz = 30;
 
 // The generator unit's frequencies and levels as tracking generator: LOW output, on the
-// Ultra the accurate (mixer) path. No model: wide open.
-GenLimits trackerLimits(const DeviceInfo &tg);
+// Ultra the output mode of t. No model: wide open.
+GenLimits trackerLimits(const DeviceInfo &tg, const TrackConfig &t);
 TrackConfig clampTrack(TrackConfig t, const DeviceInfo &tg);
 
 // The analyzer's sweep, clamped to the analyzer and to the generator unit's frequencies.
-SweepConfig clampToTracker(SweepConfig c, const ModelDesc &analyzer, const DeviceInfo &tg);
+SweepConfig clampToTracker(SweepConfig c, const ModelDesc &analyzer, const DeviceInfo &tg, const TrackConfig &t);
 
 // The generator unit's output path at hz: the Ultra makes a sine below 823 MHz, a square wave
-// up to 1.13 GHz and mixes above (0, 1, 2); the basic's LOW output is one path (0).
-int trackerPath(const DeviceInfo &tg, double hz);
+// up to 1.13 GHz, the chosen path above (0, 1, 2) and the LO's harmonic above that path's
+// maximum (3); the basic's LOW output is one path (0).
+int trackerPath(const DeviceInfo &tg, const TrackConfig &t, double hz);
 
 // What changed on the generator unit since the last point.
 enum class TrackChange { None, Path, RfOn };  // a step / into another output path / RF just on
 
 // Auto settle after the generator's prompt (ZS407, v1.4-316/317): screen off (`ui`) 10 ms, 32 ms
-// after a step across 823 MHz or 1130 MHz (another output path; two points per sweep) or with
-// RF just on. Screen on: 150 ms, the unit redraws its menu first; 300 ms with RF just on.
+// after a step into another output path (two to three points per sweep) or with RF just on.
+// Screen on: 150 ms, the unit redraws its menu first; 300 ms with RF just on.
 int trackSettleMs(const TrackConfig &t, bool screenOff, TrackChange change = TrackChange::None);
 
-// What the generator unit makes as tracking generator: a carrier at hz, levelDbm, RF on/off.
-GenConfig trackerGen(GenConfig g, const DeviceInfo &tg, double hz, double levelDbm, bool rf);
+// What the generator unit makes as tracking generator: a carrier at hz, levelDbm, RF on/off,
+// in the output mode of t.
+GenConfig trackerGen(GenConfig g, const DeviceInfo &tg, const TrackConfig &t, double hz, double levelDbm, bool rf);
