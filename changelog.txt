@@ -1,3 +1,7 @@
+2.0.0-65 2026-11-21
+- Tracking generator: a frequency offset (+ or -, in MHz, next to the output path) for testing mixers. The generator runs at the swept frequency plus the offset while this tinySA measures at the swept frequency: with an external LO on the mixer, the generator on its RF port and this tinySA on its IF port, enter +LO for RF = IF + LO or -LO for RF = IF - LO. The sweep range is limited to where the generator can follow. The generator's frequency error is not measured while an offset is set (the value measured before stays in use)
+- Tracking generator: the output path list shows only the name (Accurate, Cleanest, Ultra accurate, Ultra cleanest); the highest frequency is shown in the line above
+
 2.0.0-62 2026-11-21
 - Log frequency sweep: "Log" next to Scan and Once gives logarithmic frequencies, from 10 kHz, with a logarithmic frequency axis. The tinySA sweeps linearly, so the app sweeps one linear piece per octave (about 20 ms extra per piece); a tracking sweep has exact log points. Dragging, the mouse wheel, PgUp/PgDn and "Center here" work in ratios on the log axis. The status bar shows the smallest and largest step
 - Known: in a log sweep a signal just below the start of an octave piece can show on two neighbouring points, because the first point of the wider piece also covers part of the narrower one
